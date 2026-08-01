@@ -3,11 +3,13 @@
    Reemplaza estos valores por los de tu proyecto
    (Project Settings > API en tu panel de Supabase).
    ============================================================= */
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+
 const SUPABASE_URL = 'https://cibtpkpxdrykozujaqba.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_zlp4_HGpTeAQKW55c_pZQA_2HEXRpaC';
 const TABLE_NAME = 'usuarios';
 
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /*
   Estructura de tabla esperada en Supabase (SQL de referencia):
@@ -266,6 +268,13 @@ document.addEventListener('DOMContentLoaded', () => {
     usersEmpty.style.display = 'none';
     usersTableBody.innerHTML = '';
 
+    if (!supabaseClient) {
+      usersLoading.style.display = 'none';
+      usersEmpty.textContent = 'Supabase no está inicializado. Verifica la importación de la librería.';
+      usersEmpty.style.display = 'block';
+      return;
+    }
+
     const { data, error } = await supabaseClient
       .from(TABLE_NAME)
       .select('*')
@@ -293,6 +302,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!validateForm()) {
       showFeedback('Revisa los campos marcados antes de continuar.', 'error');
+      return;
+    }
+
+    if (!supabaseClient) {
+      showFeedback('No se pudo conectar con Supabase. Verifica la librería y la configuración.', 'error');
       return;
     }
 
