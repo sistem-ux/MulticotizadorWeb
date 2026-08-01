@@ -10,10 +10,16 @@ const TABLE_NAME = 'usuarios';
 let supabaseClient = null;
 
 async function initSupabase() {
+  if (window.supabase && typeof window.supabase.createClient === 'function') {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.info('Supabase inicializado desde UMD.');
+    return;
+  }
+
   try {
     const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm');
     supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    console.info('Supabase inicializado correctamente.');
+    console.info('Supabase inicializado desde ESM fallback.');
   } catch (err) {
     console.error('No se pudo importar Supabase:', err);
     const usersEmpty = document.getElementById('usersEmpty');
