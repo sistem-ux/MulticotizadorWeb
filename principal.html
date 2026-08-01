@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acceso al Sistema | MulticotizadorWeb</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <main class="page">
+    <div class="card" style="max-width: 450px; text-align: center;">
+
+      <!-- Espacio para el logo en la parte superior y centrado -->
+      <header class="page-header" style="margin-bottom: 24px;">
+        <div class="logo-container" style="margin-bottom: 16px;">
+          <!-- Puedes reemplazar esto con una etiqueta <img> cuando tengas tu logo -->
+          <div style="width: 70px; height: 70px; background-color: #001F5B; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto; font-family: 'Poppins', sans-serif; font-size: 24px; font-weight: 700;">
+            MW
+          </div>
+        </div>
+        <h1 class="page-header__title" style="font-size: 26px;">MulticotizadorWeb</h1>
+        <p class="page-header__subtitle">Selecciona tu perfil para continuar</p>
+      </header>
+
+      <form id="loginForm" novalidate>
+
+        <!-- Selector de tipo de usuario -->
+        <section class="form-section" style="text-align: left;">
+          <label for="userRole" class="form-label">Iniciar sesión como</label>
+          <select id="userRole" class="text-input" style="cursor: pointer;">
+            <option value="">Selecciona un perfil...</option>
+            <option value="Visitante">Visitante</option>
+            <option value="Asesor">Asesor</option>
+            <option value="Colaborador">Colaborador</option>
+            <option value="Administrador">Administrador</option>
+          </select>
+        </section>
+
+        <!-- Campos condicionales para roles con credenciales -->
+        <div id="credentialsFields" style="display: none; text-align: left;">
+          <section class="form-section">
+            <label for="userEmail" class="form-label">Correo electrónico</label>
+            <input 
+              type="email" 
+              id="userEmail" 
+              class="text-input" 
+              placeholder="correo@ejemplo.com"
+              autocomplete="off"
+            >
+          </section>
+
+          <section class="form-section">
+            <label for="userPassword" class="form-label">Contraseña</label>
+            <input 
+              type="password" 
+              id="userPassword" 
+              class="text-input" 
+              placeholder="Ingresa tu contraseña"
+              autocomplete="off"
+            >
+          </section>
+        </div>
+
+        <!-- Botón de acción -->
+        <section class="form-section form-section--actions" style="margin-top: 24px;">
+          <button type="submit" id="accessBtn" class="btn btn--primary" style="width: 100%;">
+            Ingresar al Sistema
+          </button>
+        </section>
+
+      </form>
+    </div>
+  </main>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const userRoleSelect = document.getElementById('userRole');
+      const credentialsFields = document.getElementById('credentialsFields');
+      const loginForm = document.getElementById('loginForm');
+
+      // Controlar la visualización de correo y contraseña según el rol
+      userRoleSelect.addEventListener('change', (e) => {
+        const selectedRole = e.target.value;
+        if (selectedRole === 'Visitante') {
+          // Si es visitante, oculta credenciales para un acceso limpio
+          credentialsFields.style.display = 'none';
+        } else if (selectedRole) {
+          // Si es Asesor, Colaborador o Administrador, muestra los campos de acceso
+          credentialsFields.style.display = 'block';
+        } else {
+          credentialsFields.style.display = 'none';
+        }
+      });
+
+      // Manejar la acción del botón de ingreso
+      loginForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const selectedRole = userRoleSelect.value;
+
+        if (!selectedRole) {
+          alert('Por favor selecciona un tipo de usuario.');
+          return;
+        }
+
+        // REQUISITO: Si selecciona Visitante, lleva directamente al cotizador.html
+        if (selectedRole === 'Visitante') {
+          window.location.href = 'cotizador.html';
+          return;
+        }
+
+        // Validación básica para roles protegidos (preparado para validar luego con Supabase)
+        const userEmail = document.getElementById('userEmail').value.trim();
+        const userPassword = document.getElementById('userPassword').value.trim();
+
+        if (!userEmail || !userPassword) {
+          alert('Por favor completa el correo electrónico y la contraseña.');
+          return;
+        }
+
+        // Guardamos temporalmente el rol y correo en la sesión del navegador
+        localStorage.setItem('userRole', selectedRole);
+        localStorage.setItem('userEmail', userEmail);
+
+        // Redirección provisional al cotizador (luego lo conectaremos con su panel respectivo)
+        alert(`Bienvenido (${selectedRole}). Accediendo al cotizador...`);
+        window.location.href = 'cotizador.html'; // Lleva a cotizador.html
+      });
+    });
+  </script>
+</body>
+</html>
