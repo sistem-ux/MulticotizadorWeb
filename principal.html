@@ -76,20 +76,47 @@
     </div>
   </main>
 
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+
+    // CONFIG: Si prefieres mantener las claves fuera del HTML, crea un archivo
+    // `supabase-config.js` en este mismo directorio que exporte dos constantes:
+    // export const SUPABASE_URL = 'https://...';
+    // export const SUPABASE_ANON_KEY = 'public-anon-key';
+    // Hay un ejemplo en `supabase-config.example.js`.
+
+    let SUPABASE_URL = '';
+    let SUPABASE_ANON_KEY = '';
+
+    async function initLogin() {
       const userRoleSelect = document.getElementById('userRole');
       const credentialsFields = document.getElementById('credentialsFields');
       const loginForm = document.getElementById('loginForm');
+
+      // Intentamos cargar un archivo local opcional `supabase-config.js`
+      try {
+        const cfg = await import('./supabase-config.js');
+        if (cfg?.SUPABASE_URL) SUPABASE_URL = cfg.SUPABASE_URL;
+        if (cfg?.SUPABASE_ANON_KEY) SUPABASE_ANON_KEY = cfg.SUPABASE_ANON_KEY;
+      } catch (err) {
+        // No hay archivo de configuración, continuamos con fallback
+      }
+
+      let supabase = null;
+      if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+        try {
+          supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        } catch (err) {
+          console.error('Error initializing Supabase client', err);
+        }
+      }
 
       // Controlar la visualización de correo y contraseña según el rol
       userRoleSelect.addEventListener('change', (e) => {
         const selectedRole = e.target.value;
         if (selectedRole === 'Visitante') {
-          // Si es visitante, oculta credenciales para un acceso limpio
           credentialsFields.style.display = 'none';
         } else if (selectedRole) {
-          // Si es Asesor, Colaborador o Administrador, muestra los campos de acceso
           credentialsFields.style.display = 'block';
         } else {
           credentialsFields.style.display = 'none';
@@ -97,7 +124,7 @@
       });
 
       // Manejar la acción del botón de ingreso
-      loginForm.addEventListener('submit', (e) => {
+      loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const selectedRole = userRoleSelect.value;
 
@@ -106,13 +133,11 @@
           return;
         }
 
-        // REQUISITO: Si selecciona Visitante, lleva directamente al cotizador.html
         if (selectedRole === 'Visitante') {
           window.location.href = 'cotizador.html';
           return;
         }
 
-        // Validación básica para roles protegidos (preparado para validar luego con Supabase)
         const userEmail = document.getElementById('userEmail').value.trim();
         const userPassword = document.getElementById('userPassword').value.trim();
 
@@ -121,15 +146,37 @@
           return;
         }
 
-        // Guardamos temporalmente el rol y correo en la sesión del navegador
+        // Si hay configuración de Supabase, intentamos autenticar contra Supabase
+        if (supabase) {
+          try {
+            const result = await supabase.auth.signInWithPassword({ email: userEmail, password: userPassword });
+            if (result.error || !result.data || !result.data.user) {
+              alert('Credenciales inválidas o usuario no encontrado en Supabase.');
+              return;
+            }
+
+            // Autenticación exitosa
+            localStorage.setItem('userRole', selectedRole);
+            localStorage.setItem('userEmail', userEmail);
+            alert(`Bienvenido (${selectedRole}). Accediendo al cotizador...`);
+            window.location.href = 'cotizador.html';
+            return;
+          } catch (err) {
+            console.error('Supabase error', err);
+            alert('Error al comunicarse con Supabase. Revisa la configuración.');
+            return;
+          }
+        }
+
+        // Fallback: si no se configuró Supabase, mantenemos el comportamiento previo
         localStorage.setItem('userRole', selectedRole);
         localStorage.setItem('userEmail', userEmail);
-
-        // Redirección provisional al cotizador (luego lo conectaremos con su panel respectivo)
         alert(`Bienvenido (${selectedRole}). Accediendo al cotizador...`);
-        window.location.href = 'cotizador.html'; // Lleva a cotizador.html
+        window.location.href = 'cotizador.html';
       });
-    });
+    }
+
+    document.addEventListener('DOMContentLoaded', initLogin);
   </script>
 </body>
 </html>
