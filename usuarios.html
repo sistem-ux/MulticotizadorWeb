@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Usuarios | Panel de Administración</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <main class="page page--users">
+    <div class="card">
+
+      <!-- Encabezado -->
+      <header class="page-header">
+        <span class="page-header__eyebrow">Administración</span>
+        <h1 class="page-header__title">👥 Usuarios</h1>
+        <p class="page-header__subtitle">Busca, registra, edita o elimina usuarios del sistema.</p>
+      </header>
+
+      <!-- Toolbar: buscador + registrar -->
+      <div class="users-toolbar">
+        <div class="search-bar">
+          <span class="search-bar__icon" aria-hidden="true">🔎</span>
+          <input
+            type="text"
+            id="searchInput"
+            class="search-bar__input"
+            placeholder="Buscar por nombre o correo..."
+            autocomplete="off"
+          >
+          <button type="button" id="clearSearchBtn" class="search-bar__clear" aria-label="Limpiar búsqueda">✕</button>
+        </div>
+
+        <button type="button" id="openModalBtn" class="btn btn--register">
+          <span aria-hidden="true">＋</span> Registrar Usuario
+        </button>
+      </div>
+
+      <!-- Listado de usuarios -->
+      <div class="users-table-wrapper">
+        <table class="users-table" id="usersTable">
+          <thead>
+            <tr>
+              <th scope="col">Nombres y Apellidos</th>
+              <th scope="col">Correo</th>
+              <th scope="col">Contraseña</th>
+              <th scope="col" class="col-actions">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="usersTableBody">
+            <!-- Filas generadas por JS -->
+          </tbody>
+        </table>
+        <div id="usersLoading" class="users-loading">Cargando usuarios...</div>
+        <div id="usersEmpty" class="users-empty" style="display:none;">No se encontraron usuarios.</div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- =========================================================
+       MODAL: REGISTRAR / EDITAR USUARIO
+       ========================================================= -->
+  <div class="modal-overlay" id="userModalOverlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal__header">
+        <h2 class="modal__title" id="modalTitle">Registrar Usuario</h2>
+        <button type="button" class="modal__close" id="modalCloseBtn" aria-label="Cerrar">✕</button>
+      </div>
+
+      <form id="userForm" novalidate>
+        <input type="hidden" id="userId" value="">
+
+        <!-- Nombres y Apellidos -->
+        <div class="modal__field" id="fieldFullName">
+          <label for="fullName" class="form-label">Nombres y Apellidos</label>
+          <input
+            type="text"
+            id="fullName"
+            class="text-input"
+            placeholder="Ej: María López Ruiz"
+            autocomplete="off"
+            required
+          >
+          <span class="field-error">Ingresa el nombre completo del usuario.</span>
+        </div>
+
+        <!-- Correo -->
+        <div class="modal__field" id="fieldEmail">
+          <label for="email" class="form-label">Correo</label>
+          <input
+            type="text"
+            id="email"
+            class="text-input"
+            placeholder="usuario@dominio.com"
+            autocomplete="off"
+            required
+          >
+          <span class="field-error">Solo minúsculas, números y caracteres especiales (@ . _ -, etc.).</span>
+        </div>
+
+        <!-- Contraseña -->
+        <div class="modal__field" id="fieldPassword">
+          <label for="password" class="form-label">Contraseña</label>
+          <div class="password-field">
+            <input
+              type="password"
+              id="password"
+              class="text-input"
+              placeholder="Mínimo 8 caracteres"
+              autocomplete="new-password"
+              required
+            >
+            <button type="button" class="password-toggle" id="togglePasswordBtn" aria-label="Mostrar contraseña">👁</button>
+          </div>
+          <span class="field-error">Alfanumérica, puede incluir caracteres especiales, mínimo 8 caracteres.</span>
+        </div>
+
+        <div class="form-feedback" id="formFeedback"></div>
+
+        <div class="modal__footer">
+          <button type="button" class="btn btn--cancel" id="cancelModalBtn">Cancelar</button>
+          <button type="submit" class="btn btn--primary" id="submitBtn">Registrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- SDK de Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="usuarios.js"></script>
+</body>
+</html>
