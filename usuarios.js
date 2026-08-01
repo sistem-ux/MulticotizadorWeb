@@ -3,13 +3,26 @@
    Reemplaza estos valores por los de tu proyecto
    (Project Settings > API en tu panel de Supabase).
    ============================================================= */
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
-
 const SUPABASE_URL = 'https://cibtpkpxdrykozujaqba.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_zlp4_HGpTeAQKW55c_pZQA_2HEXRpaC';
 const TABLE_NAME = 'usuarios';
 
-const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let supabaseClient = null;
+
+async function initSupabase() {
+  try {
+    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm');
+    supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.info('Supabase inicializado correctamente.');
+  } catch (err) {
+    console.error('No se pudo importar Supabase:', err);
+    const usersEmpty = document.getElementById('usersEmpty');
+    if (usersEmpty) {
+      usersEmpty.textContent = `No se pudo cargar Supabase: ${getErrorMessage(err)}`;
+      usersEmpty.style.display = 'block';
+    }
+  }
+}
 
 /*
   Estructura de tabla esperada en Supabase (SQL de referencia):
@@ -395,5 +408,6 @@ document.addEventListener('DOMContentLoaded', () => {
   /* =========================================================
      INICIO
      ========================================================= */
-  loadUsers();
+  await initSupabase();
+  await loadUsers();
 });
