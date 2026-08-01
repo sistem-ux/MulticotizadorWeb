@@ -148,6 +148,15 @@ document.addEventListener('DOMContentLoaded', () => {
     formFeedback.textContent = '';
   }
 
+  function getErrorMessage(error) {
+    if (!error) return 'Error desconocido.';
+    if (typeof error === 'string') return error;
+    if (error.message) return error.message;
+    if (error.details) return error.details;
+    if (error.hint) return error.hint;
+    return JSON.stringify(error);
+  }
+
   /* =========================================================
      MODAL: abrir / cerrar
      ========================================================= */
@@ -270,27 +279,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!supabaseClient) {
       usersLoading.style.display = 'none';
-      usersEmpty.textContent = 'Supabase no está inicializado. Verifica la importación de la librería.';
+      usersEmpty.textContent = 'Supabase no está inicializado. Verifica la importación de la librería y la clave.';
       usersEmpty.style.display = 'block';
       return;
     }
 
-    const { data, error } = await supabaseClient
-      .from(TABLE_NAME)
-      .select('*')
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabaseClient
+        .from(TABLE_NAME)
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    usersLoading.style.display = 'none';
+      usersLoading.style.display = 'none';
 
-    if (error) {
-      console.error('Error al cargar usuarios:', error);
-      usersEmpty.textContent = 'Ocurrió un error al cargar los usuarios.';
+      if (error) {
+        console.error('Error al cargar usuarios:', error);
+        usersEmpty.textContent = `Error al cargar usuarios: ${getErrorMessage(error)}`;
+        usersEmpty.style.display = 'block';
+        return;
+      }
+
+      allUsers = data || [];
+      applyFilter();
+    } catch (err) {
+      usersLoading.style.display = 'none';
+      console.error('Excepción al cargar usuarios:', err);
+      usersEmpty.textContent = `No se pudo conectar con Supabase: ${getErrorMessage(err)}`;
       usersEmpty.style.display = 'block';
-      return;
     }
-
-    allUsers = data || [];
-    applyFilter();
   }
 
   /* =========================================================
@@ -319,32 +335,39 @@ document.addEventListener('DOMContentLoaded', () => {
       password: passwordInput.value,
     };
 
-    let error;
+    try {
+      let error;
 
-    if (isEditMode) {
-      const id = userIdInput.value;
-      ({ error } = await supabaseClient
-        .from(TABLE_NAME)
-        .update(payload)
-        .eq('id', id));
-    } else {
-      ({ error } = await supabaseClient
-        .from(TABLE_NAME)
-        .insert([payload]));
+      if (isEditMode) {
+        const id = userIdInput.value;
+        ({ error } = await supabaseClient
+          .from(TABLE_NAME)
+          .update(payload)
+          .eq('id', id));
+      } else {
+        ({ error } = await supabaseClient
+          .from(TABLE_NAME)
+          .insert([payload]));
+      }
+
+      submitBtn.disabled = false;
+      submitBtn.textContent = isEditMode ? 'Guardar Cambios' : 'Registrar';
+
+      if (error) {
+        console.error('Error al guardar usuario:', error);
+        showFeedback(`No se pudo guardar el usuario: ${getErrorMessage(error)}`, 'error');
+        return;
+      }
+
+      showFeedback(isEditMode ? 'Usuario actualizado correctamente.' : 'Usuario registrado correctamente.', 'success');
+      await loadUsers();
+      setTimeout(closeModal, 700);
+    } catch (err) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = isEditMode ? 'Guardar Cambios' : 'Registrar';
+      console.error('Excepción al guardar usuario:', err);
+      showFeedback(`No se pudo conectar con Supabase: ${getErrorMessage(err)}`, 'error');
     }
-
-    submitBtn.disabled = false;
-    submitBtn.textContent = isEditMode ? 'Guardar Cambios' : 'Registrar';
-
-    if (error) {
-      console.error('Error al guardar usuario:', error);
-      showFeedback('No se pudo guardar el usuario. Intenta de nuevo.', 'error');
-      return;
-    }
-
-    showFeedback(isEditMode ? 'Usuario actualizado correctamente.' : 'Usuario registrado correctamente.', 'success');
-    await loadUsers();
-    setTimeout(closeModal, 700);
   });
 
   /* =========================================================
