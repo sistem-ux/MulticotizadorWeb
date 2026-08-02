@@ -33,7 +33,7 @@
           <select id="userRole" class="text-input" style="cursor: pointer;">
             <option value="">Selecciona un perfil...</option>
             <option value="Visitante">Visitante</option>
-            <option value="Usuario">Usuario</option>
+            <option value="Usuario">Usuario registrado</option>
           </select>
         </section>
 
@@ -77,50 +77,58 @@
     import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
     // CONFIG: Si prefieres mantener las claves fuera del HTML, crea un archivo
-    // `supabase-config.js` en este mismo directorio que exporte dos constantes:
+    // `supabase-config.js` en este mismo directorio (está en .gitignore) que exporte:
     // export const SUPABASE_URL = 'https://...';
     // export const SUPABASE_ANON_KEY = 'public-anon-key';
     // Hay un ejemplo en `supabase-config.example.js`.
+    //
+    // Si ese archivo no existe, se usa como respaldo la misma configuración
+    // que ya está en usuarios.js, para que el login funcione igual "out of the box".
+    let SUPABASE_URL = 'https://cibtpkpxdrykozujaqba.supabase.co';
+    let SUPABASE_ANON_KEY = 'sb_publishable_zlp4_HGpTeAQKW55c_pZQA_2HEXRpaC';
+    const TABLE_NAME = 'usuarios';
 
-    let SUPABASE_URL = '';
-    let SUPABASE_ANON_KEY = '';
+    /*
+      NOTA DE SEGURIDAD:
+      Esta pantalla consulta la tabla `usuarios` con la clave anónima (anon key)
+      y compara la contraseña en el propio navegador. Esto solo es aceptable en un
+      entorno de práctica/demo. Para producción se recomienda:
+        1) Activar Row Level Security (RLS) en la tabla `usuarios`.
+        2) Mover la validación a una función RPC de Postgres (o Edge Function) que
+           reciba email/password y devuelva únicamente el perfil, sin exponer la
+           columna password al cliente.
+        3) Migrar la autenticación a Supabase Auth (supabase.auth.signInWithPassword)
+           y guardar el perfil en una tabla `profiles` enlazada por auth.uid().
+    */
 
     async function initLogin() {
       const userRoleSelect = document.getElementById('userRole');
       const credentialsFields = document.getElementById('credentialsFields');
       const loginForm = document.getElementById('loginForm');
+      const accessBtn = document.getElementById('accessBtn');
 
-      // Intentamos cargar un archivo local opcional `supabase-config.js`
+      // Intentamos cargar la configuración local opcional `supabase-config.js`
       try {
         const cfg = await import('./supabase-config.js');
         if (cfg?.SUPABASE_URL) SUPABASE_URL = cfg.SUPABASE_URL;
         if (cfg?.SUPABASE_ANON_KEY) SUPABASE_ANON_KEY = cfg.SUPABASE_ANON_KEY;
       } catch (err) {
-        // No hay archivo de configuración, continuamos con fallback
+        // No hay archivo de configuración local; se usa el respaldo definido arriba.
       }
 
       let supabase = null;
-      if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-        try {
-          supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        } catch (err) {
-          console.error('Error initializing Supabase client', err);
-        }
+      try {
+        supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      } catch (err) {
+        console.error('Error al inicializar Supabase:', err);
       }
 
-      // Controlar la visualización de correo y contraseña según el rol
+      // Mostrar/ocultar correo y contraseña según el perfil elegido
       userRoleSelect.addEventListener('change', (e) => {
         const selectedRole = e.target.value;
-        if (selectedRole === 'Visitante') {
-          credentialsFields.style.display = 'none';
-        } else if (selectedRole) {
-          credentialsFields.style.display = 'block';
-        } else {
-          credentialsFields.style.display = 'none';
-        }
+        credentialsFields.style.display = selectedRole === 'Usuario' ? 'block' : 'none';
       });
 
-      // Manejar la acción del botón de ingreso
       loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const selectedRole = userRoleSelect.value;
@@ -130,49 +138,66 @@
           return;
         }
 
-        // Lógica de redirección para Visitante
+        // Visitante: acceso directo al cotizador, sin credenciales
         if (selectedRole === 'Visitante') {
+          localStorage.removeItem('userId');
+          localStorage.removeItem('userFullName');
+          localStorage.setItem('userRole', 'Visitante');
+          localStorage.setItem('userEmail', '');
           window.location.href = 'cotizador.html';
           return;
         }
 
-        const userEmail = document.getElementById('userEmail').value.trim();
-        const userPassword = document.getElementById('userPassword').value.trim();
+        const userEmail = document.getElementById('userEmail').value.trim().toLowerCase();
+        const userPassword = document.getElementById('userPassword').value;
 
         if (!userEmail || !userPassword) {
           alert('Por favor completa el correo electrónico y la contraseña.');
           return;
         }
 
-        // Si hay configuración de Supabase, intentamos autenticar contra Supabase
-        if (supabase) {
-          try {
-            const result = await supabase.auth.signInWithPassword({ email: userEmail, password: userPassword });
-            if (result.error || !result.data || !result.data.user) {
-              alert('Credenciales inválidas o usuario no encontrado en Supabase.');
-              return;
-            }
-
-            // Autenticación exitosa
-            localStorage.setItem('userRole', selectedRole);
-            localStorage.setItem('userEmail', userEmail);
-            alert(`Bienvenido (${selectedRole}). Accediendo al panel...`);
-            // Redirección para Usuario autenticado
-            window.location.href = 'dashboard.html';
-            return;
-          } catch (err) {
-            console.error('Supabase error', err);
-            alert('Error al comunicarse con Supabase. Revisa la configuración.');
-            return;
-          }
+        if (!supabase) {
+          alert('No se pudo conectar con Supabase. Revisa la configuración.');
+          return;
         }
 
-        // Fallback: si no se configuró Supabase, mantenemos el comportamiento previo
-        localStorage.setItem('userRole', selectedRole);
-        localStorage.setItem('userEmail', userEmail);
-        alert(`Bienvenido (${selectedRole}). Accediendo al panel...`);
-        // Redirección para Usuario autenticado
-        window.location.href = 'dashboard.html';
+        accessBtn.disabled = true;
+        accessBtn.textContent = 'Verificando...';
+
+        try {
+          // Buscamos al usuario por correo en la tabla `usuarios`
+          const { data, error } = await supabase
+            .from(TABLE_NAME)
+            .select('id, full_name, email, perfil, password')
+            .eq('email', userEmail)
+            .maybeSingle();
+
+          if (error) {
+            console.error('Error consultando usuarios:', error);
+            alert('No se pudo validar tus credenciales. Intenta de nuevo.');
+            return;
+          }
+
+          // Validamos que exista y que la contraseña coincida
+          if (!data || data.password !== userPassword) {
+            alert('Correo o contraseña incorrectos, o el usuario no está registrado.');
+            return;
+          }
+
+          // Identificamos el perfil real del usuario (Asesor / Colaborador / Administrador)
+          localStorage.setItem('userId', data.id);
+          localStorage.setItem('userFullName', data.full_name);
+          localStorage.setItem('userEmail', data.email);
+          localStorage.setItem('userRole', data.perfil);
+
+          window.location.href = 'dashboard.html';
+        } catch (err) {
+          console.error('Excepción validando usuario:', err);
+          alert('No se pudo conectar con Supabase. Intenta de nuevo.');
+        } finally {
+          accessBtn.disabled = false;
+          accessBtn.textContent = 'Ingresar al Sistema';
+        }
       });
     }
 

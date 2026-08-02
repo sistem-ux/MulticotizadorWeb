@@ -37,14 +37,24 @@ async function initSupabase() {
     id uuid primary key default gen_random_uuid(),
     full_name text not null,
     email text not null unique,
+    perfil text not null check (perfil in ('Asesor', 'Colaborador', 'Administrador')),
     password text not null,
     created_at timestamp with time zone default now()
   );
 
+  La columna `perfil` es la que usa principal.html para identificar el rol del
+  usuario al iniciar sesión, y auth-guard.js para decidir qué páginas puede ver
+  (PAGE_PERMISSIONS).
+
   NOTA DE SEGURIDAD:
-  Guardar contraseñas en texto plano no es una práctica segura para producción.
-  Lo ideal es usar Supabase Auth o aplicar un hash (ej. bcrypt) antes de insertar.
-  Este ejemplo las guarda directamente para mantener el alcance del requerimiento.
+  Guardar contraseñas en texto plano y consultarlas desde el cliente (anon key)
+  no es una práctica segura para producción. Lo ideal es:
+    1) Activar Row Level Security (RLS) en esta tabla.
+    2) Mover la validación de login a una función RPC de Postgres que reciba
+       email/password y devuelva solo el perfil, sin exponer la contraseña.
+    3) O migrar por completo a Supabase Auth + una tabla `profiles` con el perfil.
+  Este ejemplo las guarda y consulta directamente para mantener el alcance
+  original del requerimiento.
 */
 
 document.addEventListener('DOMContentLoaded', async () => {

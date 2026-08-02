@@ -346,6 +346,12 @@
 </head>
 <body>
 
+  <!-- Verificación temprana de sesión y perfil: si el usuario no tiene permiso
+       para esta página, se redirige antes de que se cargue cualquier dato.
+       (El Visitante también está autorizado aquí, ver PAGE_PERMISSIONS en auth-guard.js) -->
+  <script src="auth-guard.js"></script>
+  <script>requireAccess('cotizador.html');</script>
+
   <!-- BARRA LATERAL DINÁMICA (Cargada universalmente desde sidebar.html) -->
   <aside id="sidebar" class="sidebar"></aside>
 
@@ -491,94 +497,11 @@
   <script src="script.js"></script>
 
   <script>
-    document.addEventListener('DOMContentLoaded', async () => {
-      // 1. Cargar el componente universal de la barra lateral
-      const sidebarElement = document.getElementById('sidebar');
-      if (sidebarElement) {
-        try {
-          const response = await fetch('sidebar.html');
-          if (response.ok) {
-            sidebarElement.innerHTML = await response.text();
-            initSidebarLogic();
-          } else {
-            console.error('No se pudo cargar el archivo sidebar.html');
-          }
-        } catch (error) {
-          console.error('Error de red al intentar cargar la barra lateral:', error);
-        }
-      }
-
-      // 2. Lógica para mostrar/ocultar completamente el menú lateral (hamburguesa)
-      const sidebar = document.getElementById('sidebar');
-      const mainContent = document.getElementById('mainContent');
-      const sidebarToggle = document.getElementById('sidebarToggle');
-
-      if (sidebarToggle) {
-        sidebarToggle.addEventListener('click', () => {
-          if (window.innerWidth <= 768) {
-            sidebar.classList.toggle('is-mobile-visible');
-          } else {
-            sidebar.classList.toggle('is-hidden');
-            mainContent.classList.toggle('is-expanded');
-          }
-        });
-      }
-
-      // 3. Lógica para mostrar el usuario logueado en la parte superior
-      const loggedUserDisplay = document.getElementById('loggedUserDisplay');
-      const savedEmail = localStorage.getItem('userEmail');
-      const savedRole = localStorage.getItem('userRole');
-
-      if (loggedUserDisplay) {
-        if (savedRole === 'Visitante') {
-          loggedUserDisplay.textContent = 'Visitante';
-        } else if (savedEmail) {
-          loggedUserDisplay.textContent = savedEmail;
-        } else {
-          loggedUserDisplay.textContent = 'Usuario no identificado';
-        }
-      }
+    document.addEventListener('DOMContentLoaded', () => {
+      // 'cotizador.html' está permitido para todos los perfiles, incluido Visitante
+      // (ver PAGE_PERMISSIONS en auth-guard.js, ya cargado al inicio del body).
+      initAppShell({ pageName: 'cotizador.html' });
     });
-
-    // Función auxiliar para inicializar la interactividad de la barra lateral inyectada
-    function initSidebarLogic() {
-      const sidebarElement = document.getElementById('sidebar');
-      if (!sidebarElement) return;
-
-      const currentPath = window.location.pathname.split('/').pop();
-      const menuLinks = sidebarElement.querySelectorAll('.menu-link');
-
-      menuLinks.forEach(link => {
-        const href = link.getAttribute('href');
-        if (href === currentPath) {
-          link.style.background = 'rgba(255, 255, 255, 0.12)';
-          link.style.color = '#FFFFFF';
-          
-          const parentList = link.closest('.menu-list');
-          if (parentList) {
-            parentList.classList.remove('is-hidden');
-          }
-        }
-      });
-
-      const menuTitles = sidebarElement.querySelectorAll('.menu-group__title');
-      const menuLists = sidebarElement.querySelectorAll('.menu-list');
-
-      menuTitles.forEach(title => {
-        title.addEventListener('click', () => {
-          const currentList = title.nextElementSibling;
-          if (!currentList || !currentList.classList.contains('menu-list')) return;
-          
-          const isCurrentlyHidden = currentList.classList.contains('is-hidden');
-
-          menuLists.forEach(list => list.classList.add('is-hidden'));
-
-          if (isCurrentlyHidden) {
-            currentList.classList.remove('is-hidden');
-          }
-        });
-      });
-    }
   </script>
 </body>
 </html>

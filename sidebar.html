@@ -3,7 +3,14 @@
   <span class="sidebar__title">MulticotizadorWeb</span>
 </div>
 <nav class="sidebar__nav">
-  
+
+  <!-- Acceso directo: Dashboard (visible para Administrador, Colaborador y Asesor) -->
+  <div class="menu-single">
+    <a href="dashboard.html" class="menu-link menu-link--top" data-roles="Administrador,Colaborador,Asesor">
+      <span>Dashboard</span>
+    </a>
+  </div>
+
   <!-- Opción 1: Administración -->
   <div class="menu-group" id="group-admin">
     <div class="menu-group__title" onclick="const g = this.parentElement; const isOpen = g.classList.contains('is-open'); document.querySelectorAll('.menu-group').forEach(e => e.classList.remove('is-open')); if(!isOpen) g.classList.add('is-open');">
@@ -12,7 +19,13 @@
     </div>
     <ul class="menu-list">
       <li>
-        <a href="usuarios.html" class="menu-link">Usuarios</a>
+        <a href="aseguradoras.html" class="menu-link" data-roles="Administrador">Aseguradoras</a>
+      </li>
+      <li>
+        <a href="perfiles.html" class="menu-link" data-roles="Administrador">Perfiles</a>
+      </li>
+      <li>
+        <a href="usuarios.html" class="menu-link" data-roles="Administrador">Usuarios</a>
       </li>
     </ul>
   </div>
@@ -25,7 +38,7 @@
     </div>
     <ul class="menu-list">
       <li>
-        <a href="cotizador.html" class="menu-link">Cotizador</a>
+        <a href="cotizador.html" class="menu-link" data-roles="Administrador,Colaborador,Asesor,Visitante">Cotizador</a>
       </li>
     </ul>
   </div>
@@ -49,6 +62,19 @@
 <style>
   .menu-group {
     margin-bottom: 0.5rem;
+  }
+
+  .menu-single {
+    margin-bottom: 0.75rem;
+  }
+
+  .menu-link--top {
+    font-weight: 600;
+    border-radius: 6px;
+  }
+
+  .menu-link.menu-link--top {
+    padding: 0.65rem 0.75rem;
   }
 
   .menu-group__title {
