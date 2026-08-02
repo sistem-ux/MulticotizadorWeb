@@ -95,10 +95,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   const fieldPerfil = document.getElementById('fieldPerfil');
   const fieldPassword = document.getElementById('fieldPassword');
 
+  const sortableHeaders = document.querySelectorAll('#usersTable th.is-sortable');
+
   let allUsers = [];       // caché local para el filtro en tiempo real
   let isEditMode = false;
   let confirmResolve = null;
   let notificationTimer = null;
+
+  // Orden por defecto: alfabético por Nombres y Apellidos, ascendente
+  let currentSort = { key: 'full_name', direction: 'asc' };
 
   function showPageNotification(message, type = 'success', duration = 3500) {
     if (!pageNotification) return;
@@ -421,22 +426,61 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
   /* =========================================================
-     BUSCADOR EN TIEMPO REAL (filtra el listado ya cargado)
+     ORDENAMIENTO DE LA TABLA (por columna, clic en cabecera)
+     ========================================================= */
+  function sortUsers(users, key, direction) {
+    const factor = direction === 'desc' ? -1 : 1;
+    return [...users].sort((a, b) => {
+      const valueA = (a[key] || '').toString().toLowerCase();
+      const valueB = (b[key] || '').toString().toLowerCase();
+      return valueA.localeCompare(valueB, 'es', { sensitivity: 'base' }) * factor;
+    });
+  }
+
+  function updateSortIndicators() {
+    sortableHeaders.forEach((th) => {
+      const indicator = th.querySelector('.sort-indicator');
+      const isActive = th.dataset.sortKey === currentSort.key;
+      th.classList.toggle('is-sorted', isActive);
+      if (indicator) {
+        indicator.textContent = isActive ? (currentSort.direction === 'asc' ? '▲' : '▼') : '';
+      }
+    });
+  }
+
+  sortableHeaders.forEach((th) => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.sortKey;
+      if (currentSort.key === key) {
+        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        currentSort = { key, direction: 'asc' };
+      }
+      updateSortIndicators();
+      applyFilter();
+    });
+  });
+
+  /* =========================================================
+     BUSCADOR EN TIEMPO REAL (filtra por nombre, correo o perfil,
+     y respeta el ordenamiento de columna activo)
      ========================================================= */
   function applyFilter() {
     const term = searchInput.value.trim().toLowerCase();
     clearSearchBtn.classList.toggle('is-visible', term.length > 0);
 
-    if (!term) {
-      renderUsers(allUsers);
-      return;
+    let result = allUsers;
+
+    if (term) {
+      result = result.filter((user) =>
+        user.full_name.toLowerCase().includes(term) ||
+        user.email.toLowerCase().includes(term) ||
+        (user.perfil || '').toLowerCase().includes(term)
+      );
     }
 
-    const filtered = allUsers.filter((user) =>
-      user.full_name.toLowerCase().includes(term) ||
-      user.email.toLowerCase().includes(term)
-    );
-    renderUsers(filtered);
+    result = sortUsers(result, currentSort.key, currentSort.direction);
+    renderUsers(result);
   }
 
   searchInput.addEventListener('input', applyFilter);
@@ -599,6 +643,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   /* =========================================================
      INICIO
      ========================================================= */
+  updateSortIndicators();
   await initSupabase();
   await loadUsers();
 });
