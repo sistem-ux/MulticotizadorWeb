@@ -186,6 +186,23 @@
       box-sizing: border-box;
     }
 
+    /* Estilos para los botones de acción tipo icono */
+    .icon-btn {
+      background: transparent;
+      border: none;
+      font-size: 1.25rem;
+      cursor: pointer;
+      margin: 0 0.35rem;
+      padding: 0;
+      display: inline-block;
+      transition: transform 0.2s ease, filter 0.2s ease;
+    }
+    
+    .icon-btn:hover {
+      transform: scale(1.15);
+      filter: brightness(1.2);
+    }
+
     @media (max-width: 768px) {
       .sidebar {
         transform: translateX(-100%);
@@ -272,7 +289,7 @@
   </div>
 
   <!-- =========================================================
-       MODAL: REGISTRAR / EDITAR USUARIO
+       MODAL: REGISTRAR / VER USUARIO
        ========================================================= -->
   <div class="modal-overlay" id="userModalOverlay">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
@@ -344,9 +361,8 @@
         <div class="form-feedback" id="formFeedback"></div>
 
         <div class="modal__footer">
-          <button type="button" class="btn btn--cancel" id="cancelModalBtn">Cancelar</button>
-          <button type="button" class="btn btn--secondary" id="editModalBtn" style="display:none;">Editar</button>
-          <button type="button" class="btn btn--danger" id="deleteModalBtn" style="display:none;">Eliminar</button>
+          <!-- Botón unificado para cerrar la modal -->
+          <button type="button" class="btn btn--cancel" id="cancelModalBtn">Cerrar</button>
           <button type="submit" class="btn btn--primary" id="submitBtn">Registrar</button>
         </div>
       </form>
@@ -403,6 +419,81 @@
         } else {
           loggedUserDisplay.textContent = 'Usuario no identificado';
         }
+      }
+
+      // 4. Lógica para ordenar los usuarios e inyectar dinámicamente los iconos de acción
+      const tbody = document.getElementById('usersTableBody');
+      if (tbody) {
+        let isSorting = false;
+        
+        const observer = new MutationObserver(() => {
+          if (isSorting) return;
+          isSorting = true;
+          
+          const rows = Array.from(tbody.querySelectorAll('tr'));
+          if (rows.length > 1 || rows.length === 1) { // Procesa incluso si hay 1 fila para inyectar iconos
+            
+            // Ordenar alfabéticamente
+            rows.sort((a, b) => {
+              const nameA = a.cells[0]?.textContent.trim().toLowerCase() || '';
+              const nameB = b.cells[0]?.textContent.trim().toLowerCase() || '';
+              return nameA.localeCompare(nameB);
+            });
+            
+            // Re-anexar y formatear botones
+            rows.forEach(row => {
+              tbody.appendChild(row);
+
+              // Acceder a la columna de Acciones (la última)
+              const actionCell = row.cells[row.cells.length - 1];
+              if (actionCell && !actionCell.classList.contains('icons-applied')) {
+                actionCell.classList.add('icons-applied');
+                actionCell.style.textAlign = 'center';
+                actionCell.style.whiteSpace = 'nowrap';
+                
+                // Conservar las funciones originales cambiando su apariencia a iconos
+                const btns = actionCell.querySelectorAll('button');
+                btns.forEach(btn => {
+                  const text = btn.textContent.toLowerCase();
+                  btn.classList.add('icon-btn');
+                  
+                  if (text.includes('edit') || text.includes('ver')) {
+                    btn.innerHTML = '✏️';
+                    btn.title = 'Editar usuario';
+                  } else if (text.includes('elim') || text.includes('borrar')) {
+                    btn.innerHTML = '🗑️';
+                    btn.title = 'Eliminar usuario';
+                  }
+                });
+
+                // Crear y agregar el botón de correo
+                const userEmail = row.cells[1]?.textContent.trim() || '';
+                const mailBtn = document.createElement('button');
+                mailBtn.className = 'icon-btn';
+                mailBtn.innerHTML = '✉️';
+                mailBtn.title = 'Enviar credenciales por correo';
+                mailBtn.onclick = (e) => {
+                  e.preventDefault();
+                  alert(`Enviando credenciales a: ${userEmail}`);
+                  // Aquí puedes colocar la lógica real para enviar el correo si es necesario
+                };
+
+                // Insertarlo antes del botón de eliminar (si existe) para un orden natural
+                const deleteBtn = Array.from(btns).find(b => b.innerHTML === '🗑️');
+                if (deleteBtn) {
+                  actionCell.insertBefore(mailBtn, deleteBtn);
+                } else {
+                  actionCell.appendChild(mailBtn);
+                }
+              }
+            });
+          }
+          
+          // Liberar la bandera de procesamiento
+          setTimeout(() => { isSorting = false; }, 10);
+        });
+        
+        observer.observe(tbody, { childList: true });
       }
     });
 
