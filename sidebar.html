@@ -8,7 +8,7 @@
   <div class="menu-group" id="group-admin">
     <div class="menu-group__title" onclick="toggleMenu('group-admin')">
       <span>Administración</span>
-      <span class="menu-arrow">▼</span>
+      <span class="menu-arrow">›</span>
     </div>
     <ul class="menu-list">
       <li>
@@ -21,7 +21,7 @@
   <div class="menu-group" id="group-operations">
     <div class="menu-group__title" onclick="toggleMenu('group-operations')">
       <span>Operaciones</span>
-      <span class="menu-arrow">▼</span>
+      <span class="menu-arrow">›</span>
     </div>
     <ul class="menu-list">
       <li>
@@ -58,13 +58,18 @@
     color: #FFFFFF;
   }
 
+  /* Indicador actual estilo Chevron minimalista */
   .menu-arrow {
-    font-size: 0.7rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    line-height: 1;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    color: #A6A9B0;
   }
 
   .menu-group.is-open .menu-arrow {
-    transform: rotate(180deg);
+    transform: rotate(90deg);
+    color: #FFFFFF;
   }
 
   .menu-list {
@@ -104,24 +109,26 @@
 </style>
 
 <script>
-  function toggleMenu(groupId) {
-    const group = document.getElementById(groupId);
-    if (!group) return;
-    
-    const isOpen = group.classList.contains('is-open');
-    
-    // Cierra todos los grupos antes de abrir el seleccionado (efecto acordeón)
-    document.querySelectorAll('.menu-group').forEach(el => {
-      el.classList.remove('is-open');
-    });
+  if (typeof toggleMenu !== 'function') {
+    function toggleMenu(groupId) {
+      const group = document.getElementById(groupId);
+      if (!group) return;
+      
+      const isOpen = group.classList.contains('is-open');
+      
+      // Cierra todos los grupos (efecto acordeón)
+      document.querySelectorAll('.menu-group').forEach(el => {
+        el.classList.remove('is-open');
+      });
 
-    if (!isOpen) {
-      group.classList.add('is-open');
+      if (!isOpen) {
+        group.classList.add('is-open');
+      }
     }
   }
 
-  // Auto-abrir y resaltar la página actual al cargar
-  document.addEventListener('DOMContentLoaded', () => {
+  // Ejecución inmediata para asegurar que detecte la página activa al cargar el componente
+  (function initSidebarActiveState() {
     const currentPath = window.location.pathname.split('/').pop();
     const menuLinks = document.querySelectorAll('.menu-link');
 
@@ -137,5 +144,6 @@
         }
       }
     });
-  });
+  })();
 </script>
+```[cite: 9]
