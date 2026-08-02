@@ -128,12 +128,12 @@
       font-size: 0.85rem;
       font-weight: 700;
       letter-spacing: 0.05em;
-      text-transform: none; /* Asegura el formato tipo oración */
+      text-transform: none;
       color: var(--color-gray);
       margin-bottom: 0.5rem;
       padding-left: 0.75rem;
-      cursor: pointer; /* Cursor clickeable para el acordeón */
-      user-select: none; /* Evita que el texto se seleccione al hacer múltiples clics */
+      cursor: pointer;
+      user-select: none;
       transition: color var(--transition);
     }
 
@@ -150,7 +150,6 @@
       gap: 0.35rem;
     }
 
-    /* Clase para ocultar el menú de forma controlada */
     .menu-list.is-hidden {
       display: none;
     }
@@ -215,7 +214,7 @@
       padding: 0.5rem 0.9rem;
       border-radius: var(--radius-sm);
       font-weight: 600;
-      font-size: 1.1rem; /* Un poco más grande para que el icono se vea bien */
+      font-size: 1.1rem;
       transition: background var(--transition);
       display: flex;
       align-items: center;
@@ -323,37 +322,8 @@
 </head>
 <body>
 
-  <!-- BARRA LATERAL -->
-  <aside id="sidebar" class="sidebar">
-    <div class="sidebar__header">
-      <div class="sidebar__logo">MW</div>
-      <span class="sidebar__title">MulticotizadorWeb</span>
-    </div>
-    <nav class="sidebar__nav">
-      
-      <!-- Opción 1: Administración -->
-      <div class="menu-group">
-        <div class="menu-group__title">Administración</div>
-        <ul class="menu-list">
-          <li>
-            <a href="usuarios.html" class="menu-link">Usuarios</a>
-          </li>
-        </ul>
-      </div>
-
-      <!-- Opción 2: Operaciones -->
-      <div class="menu-group">
-        <div class="menu-group__title">Operaciones</div>
-        <!-- Inicia oculto de forma predeterminada para el efecto acordeón (opcional, puedes quitar el is-hidden si prefieres que inicie abierto) -->
-        <ul class="menu-list is-hidden">
-          <li>
-            <a href="cotizador.html" class="menu-link">Cotizador</a>
-          </li>
-        </ul>
-      </div>
-
-    </nav>
-  </aside>
+  <!-- BARRA LATERAL DINÁMICA (Se carga automáticamente desde sidebar.html) -->
+  <aside id="sidebar" class="sidebar"></aside>
 
   <!-- CONTENIDO PRINCIPAL -->
   <div id="mainContent" class="main-content">
@@ -404,57 +374,98 @@
   </div>
 
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
+      // 0. Cargar el componente universal de la barra lateral
+      const sidebarElement = document.getElementById('sidebar');
+      if (sidebarElement) {
+        try {
+          const response = await fetch('sidebar.html');
+          if (response.ok) {
+            sidebarElement.innerHTML = await response.text();
+            
+            // Una vez cargado el HTML del menú, inicializamos sus eventos internos:
+            initSidebarLogic();
+          } else {
+            console.error('No se pudo cargar el archivo sidebar.html');
+          }
+        } catch (error) {
+          console.error('Error de red al intentar cargar la barra lateral:', error);
+        }
+      }
+
       // 1. Lógica para mostrar/ocultar completamente el menú lateral (hamburguesa)
       const sidebar = document.getElementById('sidebar');
       const mainContent = document.getElementById('mainContent');
       const sidebarToggle = document.getElementById('sidebarToggle');
 
-      sidebarToggle.addEventListener('click', () => {
-        if (window.innerWidth <= 768) {
-          sidebar.classList.toggle('is-mobile-visible');
+      if (sidebarToggle) {
+        sidebarToggle.addEventListener('click', () => {
+          if (window.innerWidth <= 768) {
+            sidebar.classList.toggle('is-mobile-visible');
+          } else {
+            sidebar.classList.toggle('is-hidden');
+            mainContent.classList.toggle('is-expanded');
+          }
+        });
+      }
+
+      // 3. Lógica para mostrar el usuario logueado en la parte superior
+      const loggedUserDisplay = document.getElementById('loggedUserDisplay');
+      const savedEmail = localStorage.getItem('userEmail');
+      const savedRole = localStorage.getItem('userRole');
+
+      if (loggedUserDisplay) {
+        if (savedRole === 'Visitante') {
+          loggedUserDisplay.textContent = 'Visitante';
+        } else if (savedEmail) {
+          loggedUserDisplay.textContent = savedEmail;
         } else {
-          sidebar.classList.toggle('is-hidden');
-          mainContent.classList.toggle('is-expanded');
+          loggedUserDisplay.textContent = 'Usuario no identificado';
+        }
+      }
+    });
+
+    // Función auxiliar para inicializar la interactividad de la barra lateral inyectada
+    function initSidebarLogic() {
+      const sidebarElement = document.getElementById('sidebar');
+      if (!sidebarElement) return;
+
+      // Detectar la pantalla actual para desplegar/marcar el menú activo automáticamente
+      const currentPath = window.location.pathname.split('/').pop();
+      const menuLinks = sidebarElement.querySelectorAll('.menu-link');
+
+      menuLinks.forEach(link => {
+        const href = link.getAttribute('href');
+        if (href === currentPath) {
+          link.style.background = 'rgba(255, 255, 255, 0.12)';
+          link.style.color = '#FFFFFF';
+          
+          const parentList = link.closest('.menu-list');
+          if (parentList) {
+            parentList.classList.remove('is-hidden');
+          }
         }
       });
 
-      // 2. Lógica para el menú lateral tipo acordeón (Administración, Operaciones)
-      const menuTitles = document.querySelectorAll('.menu-group__title');
-      const menuLists = document.querySelectorAll('.menu-list');
+      // Lógica de acordeón para los títulos del menú
+      const menuTitles = sidebarElement.querySelectorAll('.menu-group__title');
+      const menuLists = sidebarElement.querySelectorAll('.menu-list');
 
       menuTitles.forEach(title => {
         title.addEventListener('click', () => {
-          // Buscamos el submenú correspondiente (el ul que está justo debajo del título clickeado)
           const currentList = title.nextElementSibling;
+          if (!currentList || !currentList.classList.contains('menu-list')) return;
+          
           const isCurrentlyHidden = currentList.classList.contains('is-hidden');
 
-          // Ocultamos todos los submenús primero
           menuLists.forEach(list => list.classList.add('is-hidden'));
 
-          // Si el que clickeamos estaba oculto, lo mostramos; si estaba abierto, ya se ocultó en el paso anterior.
           if (isCurrentlyHidden) {
             currentList.classList.remove('is-hidden');
           }
         });
       });
-
-      // 3. Lógica para mostrar el usuario logueado en la parte superior
-      const loggedUserDisplay = document.getElementById('loggedUserDisplay');
-      
-      // Recuperar los datos guardados en principal.html
-      const savedEmail = localStorage.getItem('userEmail');
-      const savedRole = localStorage.getItem('userRole');
-
-      if (savedRole === 'Visitante') {
-        loggedUserDisplay.textContent = 'Visitante';
-      } else if (savedEmail) {
-        // Muestra el correo.
-        loggedUserDisplay.textContent = savedEmail;
-      } else {
-        loggedUserDisplay.textContent = 'Usuario no identificado';
-      }
-    });
+    }
   </script>
 </body>
 </html>
