@@ -47,7 +47,7 @@ async function initSupabase() {
   Este ejemplo las guarda directamente para mantener el alcance del requerimiento.
 */
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
 
   /* =========================================================
      REFERENCIAS DEL DOM
@@ -67,13 +67,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const userIdInput = document.getElementById('userId');
   const fullNameInput = document.getElementById('fullName');
   const emailInput = document.getElementById('email');
+  const perfilInput = document.getElementById('perfil');
   const passwordInput = document.getElementById('password');
   const togglePasswordBtn = document.getElementById('togglePasswordBtn');
   const submitBtn = document.getElementById('submitBtn');
+  const editModalBtn = document.getElementById('editModalBtn');
+  const deleteModalBtn = document.getElementById('deleteModalBtn');
   const formFeedback = document.getElementById('formFeedback');
 
   const fieldFullName = document.getElementById('fieldFullName');
   const fieldEmail = document.getElementById('fieldEmail');
+  const fieldPerfil = document.getElementById('fieldPerfil');
   const fieldPassword = document.getElementById('fieldPassword');
 
   let allUsers = [];       // caché local para el filtro en tiempo real
@@ -115,6 +119,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  perfilInput.addEventListener('change', () => {
+    if (perfilInput.value) {
+      fieldPerfil.classList.remove('has-error');
+    }
+  });
+
   /* =========================================================
      CONTRASEÑA: alfanumérica + caracteres especiales
      (mostrar / ocultar)
@@ -150,6 +160,10 @@ document.addEventListener('DOMContentLoaded', () => {
     setFieldError(fieldEmail, !emailOk);
     if (!emailOk) valid = false;
 
+    const perfilOk = perfilInput.value.trim().length > 0;
+    setFieldError(fieldPerfil, !perfilOk);
+    if (!perfilOk) valid = false;
+
     const passwordOk = PASSWORD_REGEX.test(passwordInput.value);
     setFieldError(fieldPassword, !passwordOk);
     if (!passwordOk) valid = false;
@@ -170,32 +184,62 @@ document.addEventListener('DOMContentLoaded', () => {
   function getErrorMessage(error) {
     if (!error) return 'Error desconocido.';
     if (typeof error === 'string') return error;
-    if (error.message) return error.message;
-    if (error.details) return error.details;
-    if (error.hint) return error.hint;
-    return JSON.stringify(error);
+
+    const parts = [];
+    if (error.message) parts.push(error.message);
+    if (error.status) parts.push(`status ${error.status}`);
+    if (error.statusText) parts.push(error.statusText);
+    if (error.code) parts.push(`code ${error.code}`);
+    if (error.details) parts.push(error.details);
+    if (error.hint) parts.push(error.hint);
+
+    const text = parts.filter(Boolean).join(' | ');
+    return text || JSON.stringify(error);
   }
 
   /* =========================================================
      MODAL: abrir / cerrar
      ========================================================= */
-  function openModal({ edit = false, user = null } = {}) {
+  function openModal({ edit = false, user = null, viewOnly = false } = {}) {
     isEditMode = edit;
     userForm.reset();
     clearFeedback();
-    [fieldFullName, fieldEmail, fieldPassword].forEach((f) => setFieldError(f, false));
+    [fieldFullName, fieldEmail, fieldFieldPerfil, fieldPassword].forEach((f) => setFieldError(f, false));
 
-    if (edit && user) {
-      modalTitle.textContent = 'Editar Usuario';
+    if (user) {
+      modalTitle.textContent = viewOnly ? 'Ver Usuario' : 'Editar Usuario';
       submitBtn.textContent = 'Guardar Cambios';
       userIdInput.value = user.id;
       fullNameInput.value = user.full_name;
       emailInput.value = user.email;
+      perfilInput.value = user.perfil || '';
       passwordInput.value = user.password;
     } else {
       modalTitle.textContent = 'Registrar Usuario';
       submitBtn.textContent = 'Registrar';
       userIdInput.value = '';
+      perfilInput.value = '';
+    }
+
+    const isViewMode = viewOnly && !!user;
+    const fields = [fullNameInput, emailInput, perfilInput, passwordInput];
+    fields.forEach((field) => {
+      field.disabled = isViewMode;
+    });
+
+    if (isViewMode) {
+      submitBtn.style.display = 'none';
+      editModalBtn.style.display = 'inline-flex';
+      deleteModalBtn.style.display = 'inline-flex';
+      editModalBtn.textContent = 'Editar';
+    } else {
+      submitBtn.style.display = 'inline-flex';
+      editModalBtn.style.display = 'none';
+      deleteModalBtn.style.display = user ? 'inline-flex' : 'none';
+    }
+
+    if (!user) {
+      deleteModalBtn.style.display = 'none';
     }
 
     modalOverlay.classList.add('is-open');
@@ -208,6 +252,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   openModalBtn.addEventListener('click', () => openModal({ edit: false }));
+  editModalBtn.addEventListener('click', enableModalEditMode);
+  deleteModalBtn.addEventListener('click', () => {
+    const id = userIdInput.value;
+    handleDelete(id);
+  });
   modalCloseBtn.addEventListener('click', closeModal);
   cancelModalBtn.addEventListener('click', closeModal);
   modalOverlay.addEventListener('click', (e) => {
@@ -234,24 +283,28 @@ document.addEventListener('DOMContentLoaded', () => {
       tr.innerHTML = `
         <td data-label="Nombres y Apellidos">${escapeHtml(user.full_name)}</td>
         <td data-label="Correo">${escapeHtml(user.email)}</td>
+        <td data-label="Perfil">${escapeHtml(user.perfil || '')}</td>
         <td data-label="Contraseña"><span class="password-mask">••••••••</span></td>
         <td data-label="Acciones" class="col-actions">
-          <button type="button" class="action-btn action-btn--edit" data-id="${user.id}" aria-label="Editar usuario">✏️</button>
-          <button type="button" class="action-btn action-btn--delete" data-id="${user.id}" aria-label="Eliminar usuario">🗑️</button>
+          <button type="button" class="action-btn action-btn--view" data-id="${user.id}" aria-label="Ver usuario">👁</button>
+          <button type="button" class="action-btn action-btn--email" data-id="${user.id}" aria-label="Enviar login por correo">✉️</button>
         </td>
       `;
       usersTableBody.appendChild(tr);
     });
 
-    usersTableBody.querySelectorAll('.action-btn--edit').forEach((btn) => {
+    usersTableBody.querySelectorAll('.action-btn--view').forEach((btn) => {
       btn.addEventListener('click', () => {
         const user = allUsers.find((u) => u.id === btn.dataset.id);
-        if (user) openModal({ edit: true, user });
+        if (user) openModal({ edit: false, user, viewOnly: true });
       });
     });
 
-    usersTableBody.querySelectorAll('.action-btn--delete').forEach((btn) => {
-      btn.addEventListener('click', () => handleDelete(btn.dataset.id));
+    usersTableBody.querySelectorAll('.action-btn--email').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const user = allUsers.find((u) => u.id === btn.dataset.id);
+        if (user) handleSendLogin(user);
+      });
     });
   }
 
@@ -259,6 +312,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const div = document.createElement('div');
     div.textContent = str ?? '';
     return div.innerHTML;
+  }
+
+  function enableModalEditMode() {
+    isEditMode = true;
+    [fullNameInput, emailInput, perfilInput, passwordInput].forEach((field) => {
+      field.disabled = false;
+    });
+    submitBtn.style.display = 'inline-flex';
+    editModalBtn.style.display = 'none';
+    submitBtn.textContent = 'Guardar Cambios';
+  }
+
+  function handleSendLogin(user) {
+    const subject = encodeURIComponent('Datos de acceso');
+    const body = encodeURIComponent(
+      `Hola ${user.full_name},\n\n` +
+      `Tu acceso al sistema es:\n` +
+      `Correo: ${user.email}\n` +
+      `Perfil: ${user.perfil || 'N/A'}\n` +
+      `Contraseña: ${user.password}\n\n` +
+      `Por favor, cambia tu contraseña al iniciar sesión.`
+    );
+    window.location.href = `mailto:${user.email}?subject=${subject}&body=${body}`;
   }
 
   /* =========================================================
@@ -351,6 +427,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const payload = {
       full_name: fullNameInput.value.trim(),
       email: emailInput.value.trim(),
+      perfil: perfilInput.value,
       password: passwordInput.value,
     };
 
@@ -374,7 +451,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (error) {
         console.error('Error al guardar usuario:', error);
-        showFeedback(`No se pudo guardar el usuario: ${getErrorMessage(error)}`, 'error');
+        const message = getErrorMessage(error);
+        const prefix = error.status === 401 || error.statusCode === 401
+          ? 'Acceso denegado a Supabase. Verifica la ANON KEY y los permisos de la tabla.'
+          : 'No se pudo guardar el usuario.';
+        showFeedback(`${prefix} ${message}`, 'error');
         return;
       }
 

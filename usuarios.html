@@ -47,6 +47,7 @@
             <tr>
               <th scope="col">Nombres y Apellidos</th>
               <th scope="col">Correo</th>
+              <th scope="col">Perfil</th>
               <th scope="col">Contraseña</th>
               <th scope="col" class="col-actions">Acciones</th>
             </tr>
@@ -103,6 +104,18 @@
           <span class="field-error">Solo minúsculas, números y caracteres especiales (@ . _ -, etc.).</span>
         </div>
 
+        <!-- Perfil -->
+        <div class="modal__field" id="fieldPerfil">
+          <label for="perfil" class="form-label">Perfil</label>
+          <select id="perfil" class="text-input" required>
+            <option value="">Selecciona un perfil</option>
+            <option value="Asesor">Asesor</option>
+            <option value="Colaborador">Colaborador</option>
+            <option value="Administrador">Administrador</option>
+          </select>
+          <span class="field-error">Selecciona un perfil válido.</span>
+        </div>
+
         <!-- Contraseña -->
         <div class="modal__field" id="fieldPassword">
           <label for="password" class="form-label">Contraseña</label>
@@ -124,6 +137,8 @@
 
         <div class="modal__footer">
           <button type="button" class="btn btn--cancel" id="cancelModalBtn">Cancelar</button>
+          <button type="button" class="btn btn--secondary" id="editModalBtn" style="display:none;">Editar</button>
+          <button type="button" class="btn btn--danger" id="deleteModalBtn" style="display:none;">Eliminar</button>
           <button type="submit" class="btn btn--primary" id="submitBtn">Registrar</button>
         </div>
       </form>
