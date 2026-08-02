@@ -6,7 +6,7 @@
   
   <!-- Opción 1: Administración -->
   <div class="menu-group" id="group-admin">
-    <div class="menu-group__title" onclick="toggleMenu('group-admin')">
+    <div class="menu-group__title" onclick="const g = this.parentElement; const isOpen = g.classList.contains('is-open'); document.querySelectorAll('.menu-group').forEach(e => e.classList.remove('is-open')); if(!isOpen) g.classList.add('is-open');">
       <span>Administración</span>
       <span class="menu-arrow">›</span>
     </div>
@@ -19,7 +19,7 @@
 
   <!-- Opción 2: Operaciones -->
   <div class="menu-group" id="group-operations">
-    <div class="menu-group__title" onclick="toggleMenu('group-operations')">
+    <div class="menu-group__title" onclick="const g = this.parentElement; const isOpen = g.classList.contains('is-open'); document.querySelectorAll('.menu-group').forEach(e => e.classList.remove('is-open')); if(!isOpen) g.classList.add('is-open');">
       <span>Operaciones</span>
       <span class="menu-arrow">›</span>
     </div>
@@ -31,6 +31,20 @@
   </div>
 
 </nav>
+
+<!-- Hack para inicializar el estado activo (Evita el bloqueo de scripts inyectados por innerHTML) -->
+<img src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" onload="
+  const currentPath = window.location.pathname.split('/').pop();
+  document.querySelectorAll('.menu-link').forEach(link => {
+    if(link.getAttribute('href') === currentPath) {
+      link.style.background = 'rgba(255, 255, 255, 0.12)';
+      link.style.color = '#FFFFFF';
+      const parentGroup = link.closest('.menu-group');
+      if(parentGroup) parentGroup.classList.add('is-open');
+    }
+  });
+  this.remove();
+" style="display:none;" alt="" />
 
 <style>
   .menu-group {
@@ -107,43 +121,3 @@
     color: #FFFFFF;
   }
 </style>
-
-<script>
-  if (typeof toggleMenu !== 'function') {
-    function toggleMenu(groupId) {
-      const group = document.getElementById(groupId);
-      if (!group) return;
-      
-      const isOpen = group.classList.contains('is-open');
-      
-      // Cierra todos los grupos (efecto acordeón)
-      document.querySelectorAll('.menu-group').forEach(el => {
-        el.classList.remove('is-open');
-      });
-
-      if (!isOpen) {
-        group.classList.add('is-open');
-      }
-    }
-  }
-
-  // Ejecución inmediata para asegurar que detecte la página activa al cargar el componente
-  (function initSidebarActiveState() {
-    const currentPath = window.location.pathname.split('/').pop();
-    const menuLinks = document.querySelectorAll('.menu-link');
-
-    menuLinks.forEach(link => {
-      const href = link.getAttribute('href');
-      if (href === currentPath) {
-        link.style.background = 'rgba(255, 255, 255, 0.12)';
-        link.style.color = '#FFFFFF';
-        
-        const parentGroup = link.closest('.menu-group');
-        if (parentGroup) {
-          parentGroup.classList.add('is-open');
-        }
-      }
-    });
-  })();
-</script>
-```[cite: 9]
