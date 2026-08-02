@@ -9,6 +9,173 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <style>
+    /* Estilos estructurales para el diseño con barra lateral y superior */
+    :root {
+      --color-navy: #001F5B;
+      --color-gray-light: #F2F3F5;
+      --color-gray-border: #D8DAE0;
+      --transition: 0.25s ease;
+    }
+
+    body {
+      display: flex;
+      overflow-x: hidden;
+      margin: 0;
+      background: linear-gradient(180deg, #EEF1F6 0%, #E4E8F0 100%);
+      min-height: 100vh;
+      font-family: 'Inter', sans-serif;
+    }
+
+    /* Estilos del Sidebar inyectado */
+    .sidebar {
+      width: 260px;
+      background: var(--color-navy);
+      color: #FFFFFF;
+      display: flex;
+      flex-direction: column;
+      transition: transform var(--transition), width var(--transition);
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 100;
+      box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
+    }
+
+    .sidebar.is-hidden {
+      transform: translateX(-100%);
+    }
+
+    .sidebar__header {
+      padding: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .sidebar__logo {
+      width: 40px;
+      height: 40px;
+      background-color: #FFFFFF;
+      color: var(--color-navy);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Poppins', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .sidebar__title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .sidebar__nav {
+      padding: 1.5rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .menu-group__title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: #A6A9B0;
+      margin-bottom: 0.5rem;
+      padding-left: 0.75rem;
+      cursor: pointer;
+      user-select: none;
+      transition: color var(--transition);
+    }
+
+    .menu-group__title:hover {
+      color: #FFFFFF;
+    }
+
+    .menu-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .menu-list.is-hidden {
+      display: none;
+    }
+
+    .menu-link {
+      display: flex;
+      align-items: center;
+      padding: 0.75rem 0.85rem;
+      color: #D8DAE0;
+      text-decoration: none;
+      font-size: 0.92rem;
+      font-weight: 500;
+      border-radius: 6px;
+      transition: background var(--transition), color var(--transition);
+    }
+
+    .menu-link:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #FFFFFF;
+    }
+
+    /* Área de contenido principal ajustada */
+    .main-wrapper {
+      flex: 1;
+      margin-left: 260px;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      transition: margin-left var(--transition);
+    }
+
+    .main-wrapper.is-expanded {
+      margin-left: 0;
+    }
+
+    /* Barra Superior */
+    .topbar {
+      height: 70px;
+      background: #FFFFFF;
+      border-bottom: 1px solid var(--color-gray-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1.5rem;
+      position: sticky;
+      top: 0;
+      z-index: 90;
+    }
+
+    .btn-toggle {
+      background: var(--color-gray-light);
+      border: 1px solid var(--color-gray-border);
+      color: var(--color-navy);
+      padding: 0.5rem 0.9rem;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 1.1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background var(--transition);
+    }
+
+    .btn-toggle:hover {
+      background: var(--color-gray-border);
+    }
+
     /* Estilos limpios para la lista de planes y la ventana emergente (modal) */
     .plans-list {
       display: flex;
@@ -160,84 +327,115 @@
       justify-content: center;
       padding: 0 16px;
       box-sizing: border-box;
-      margin-top: 0; /* override page-wide .btn--secondary margin */
+      margin-top: 0;
       align-self: center;
+    }
+
+    @media (max-width: 768px) {
+      .sidebar {
+        transform: translateX(-100%);
+      }
+      .sidebar.is-mobile-visible {
+        transform: translateX(0);
+      }
+      .main-wrapper {
+        margin-left: 0 !important;
+      }
     }
   </style>
 </head>
 <body>
 
-  <main class="page">
-    <div class="card">
+  <!-- BARRA LATERAL DINÁMICA (Cargada universalmente desde sidebar.html) -->
+  <aside id="sidebar" class="sidebar"></aside>
 
-      <!-- Encabezado principal -->
-      <header class="page-header">
-        <span class="page-header__eyebrow">Solicitud de Cotización</span>
-        <h1 class="page-header__title">👨‍👩‍👧‍👦 Datos del grupo familiar</h1>
-        <p class="page-header__subtitle">Completa la información del solicitante y de cada integrante que deseas incluir.</p>
-      </header>
+  <!-- CONTENEDOR GENERAL DE LA DERECHA -->
+  <div id="mainContent" class="main-wrapper">
+    
+    <!-- BARRA SUPERIOR -->
+    <header class="topbar">
+      <div class="topbar__actions">
+        <button id="sidebarToggle" class="btn-toggle" title="Ocultar / Mostrar Menú">☰</button>
+      </div>
+      <div id="loggedUserDisplay" style="font-weight: 600; font-size: 0.9rem; color: var(--color-navy);">
+        Cargando...
+      </div>
+    </header>
 
-      <form id="familyForm" novalidate>
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="page">
+      <div class="card">
 
-        <!-- Nombre del solicitante -->
-        <section class="form-section">
-          <label for="applicantName" class="form-label">Nombre del solicitante</label>
-          <input
-            type="text"
-            id="applicantName"
-            name="applicantName"
-            class="text-input"
-            placeholder="Ej: Juan Pérez Gómez"
-            autocomplete="off"
-          >
-          <span class="form-hint"></span>
-        </section>
+        <!-- Encabezado principal -->
+        <header class="page-header">
+          <span class="page-header__eyebrow">Solicitud de Cotización</span>
+          <h1 class="page-header__title">👨‍👩‍👧‍👦 Datos del grupo familiar</h1>
+          <p class="page-header__subtitle">Completa la información del solicitante y de cada integrante que deseas incluir.</p>
+        </header>
 
-        <!-- Tabla / tarjetas del grupo familiar -->
-        <section class="form-section">
-          <h2 class="section-title">Integrantes del grupo familiar</h2>
+        <form id="familyForm" novalidate>
 
-          <div class="table-wrapper">
-            <table class="family-table" id="familyTable">
-              <thead>
-                <tr>
-                  <th scope="col" class="col-check">Incluir</th>
-                  <th scope="col" class="col-relation">Parentesco</th>
-                  <th scope="col" class="col-gender">Género</th>
-                  <th scope="col" class="col-date">Fecha de nacimiento</th>
-                  <th scope="col" class="col-age">Edad</th>
-                </tr>
-              </thead>
-              <tbody id="familyTableBody">
-                <!-- Las filas se generan también vía JS -->
-              </tbody>
-            </table>
-          </div>
+          <!-- Nombre del solicitante -->
+          <section class="form-section">
+            <label for="applicantName" class="form-label">Nombre del solicitante</label>
+            <input
+              type="text"
+              id="applicantName"
+              name="applicantName"
+              class="text-input"
+              placeholder="Ej: Juan Pérez Gómez"
+              autocomplete="off"
+            >
+            <span class="form-hint"></span>
+          </section>
 
-          <button type="button" id="addChildBtn" class="btn btn--secondary">
-            <span aria-hidden="true">＋</span> Agregar hijo
-          </button>
-        </section>
+          <!-- Tabla / tarjetas del grupo familiar -->
+          <section class="form-section">
+            <h2 class="section-title">Integrantes del grupo familiar</h2>
 
-        <!-- Acción principal -->
-        <section class="form-section form-section--actions">
-          <div class="actions-row">
-            <button type="button" id="showPlansBtn" class="btn btn--primary">
-              Mostrar planes
+            <div class="table-wrapper">
+              <table class="family-table" id="familyTable">
+                <thead>
+                  <tr>
+                    <th scope="col" class="col-check">Incluir</th>
+                    <th scope="col" class="col-relation">Parentesco</th>
+                    <th scope="col" class="col-gender">Género</th>
+                    <th scope="col" class="col-date">Fecha de nacimiento</th>
+                    <th scope="col" class="col-age">Edad</th>
+                  </tr>
+                </thead>
+                <tbody id="familyTableBody">
+                  <!-- Las filas se generan también vía JS -->
+                </tbody>
+              </table>
+            </div>
+
+            <button type="button" id="addChildBtn" class="btn btn--secondary">
+              <span aria-hidden="true">＋</span> Agregar hijo
             </button>
-            <button type="button" id="modifyDataBtn" class="btn btn--secondary" disabled>
-              Modificar datos
-            </button>
-          </div>
-        </section>
+          </section>
 
-      </form>
+          <!-- Acción principal -->
+          <section class="form-section form-section--actions">
+            <div class="actions-row">
+              <button type="button" id="showPlansBtn" class="btn btn--primary">
+                Mostrar planes
+              </button>
+              <button type="button" id="modifyDataBtn" class="btn btn--secondary" disabled>
+                Modificar datos
+              </button>
+            </div>
+          </section>
 
-      <!-- CONTENEDOR DE PLANES (En forma de lista) -->
-      <div id="plansContainer" class="plans-container"></div>
+        </form>
 
-    </div>
-  </main>
+        <!-- CONTENEDOR DE PLANES (En forma de lista) -->
+        <div id="plansContainer" class="plans-container"></div>
+
+      </div>
+    </main>
+
+  </div>
 
   <!-- VENTANA EMERGENTE (MODAL) PARA SELECCIONAR ADICIONALES -->
   <div id="coveragesModal" class="modal-overlay">
@@ -291,5 +489,96 @@
   </template>
 
   <script src="script.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      // 1. Cargar el componente universal de la barra lateral
+      const sidebarElement = document.getElementById('sidebar');
+      if (sidebarElement) {
+        try {
+          const response = await fetch('sidebar.html');
+          if (response.ok) {
+            sidebarElement.innerHTML = await response.text();
+            initSidebarLogic();
+          } else {
+            console.error('No se pudo cargar el archivo sidebar.html');
+          }
+        } catch (error) {
+          console.error('Error de red al intentar cargar la barra lateral:', error);
+        }
+      }
+
+      // 2. Lógica para mostrar/ocultar completamente el menú lateral (hamburguesa)
+      const sidebar = document.getElementById('sidebar');
+      const mainContent = document.getElementById('mainContent');
+      const sidebarToggle = document.getElementById('sidebarToggle');
+
+      if (sidebarToggle) {
+        sidebarToggle.addEventListener('click', () => {
+          if (window.innerWidth <= 768) {
+            sidebar.classList.toggle('is-mobile-visible');
+          } else {
+            sidebar.classList.toggle('is-hidden');
+            mainContent.classList.toggle('is-expanded');
+          }
+        });
+      }
+
+      // 3. Lógica para mostrar el usuario logueado en la parte superior
+      const loggedUserDisplay = document.getElementById('loggedUserDisplay');
+      const savedEmail = localStorage.getItem('userEmail');
+      const savedRole = localStorage.getItem('userRole');
+
+      if (loggedUserDisplay) {
+        if (savedRole === 'Visitante') {
+          loggedUserDisplay.textContent = 'Visitante';
+        } else if (savedEmail) {
+          loggedUserDisplay.textContent = savedEmail;
+        } else {
+          loggedUserDisplay.textContent = 'Usuario no identificado';
+        }
+      }
+    });
+
+    // Función auxiliar para inicializar la interactividad de la barra lateral inyectada
+    function initSidebarLogic() {
+      const sidebarElement = document.getElementById('sidebar');
+      if (!sidebarElement) return;
+
+      const currentPath = window.location.pathname.split('/').pop();
+      const menuLinks = sidebarElement.querySelectorAll('.menu-link');
+
+      menuLinks.forEach(link => {
+        const href = link.getAttribute('href');
+        if (href === currentPath) {
+          link.style.background = 'rgba(255, 255, 255, 0.12)';
+          link.style.color = '#FFFFFF';
+          
+          const parentList = link.closest('.menu-list');
+          if (parentList) {
+            parentList.classList.remove('is-hidden');
+          }
+        }
+      });
+
+      const menuTitles = sidebarElement.querySelectorAll('.menu-group__title');
+      const menuLists = sidebarElement.querySelectorAll('.menu-list');
+
+      menuTitles.forEach(title => {
+        title.addEventListener('click', () => {
+          const currentList = title.nextElementSibling;
+          if (!currentList || !currentList.classList.contains('menu-list')) return;
+          
+          const isCurrentlyHidden = currentList.classList.contains('is-hidden');
+
+          menuLists.forEach(list => list.classList.add('is-hidden'));
+
+          if (isCurrentlyHidden) {
+            currentList.classList.remove('is-hidden');
+          }
+        });
+      });
+    }
+  </script>
 </body>
 </html>
