@@ -204,7 +204,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     isEditMode = edit;
     userForm.reset();
     clearFeedback();
-    [fieldFullName, fieldEmail, fieldFieldPerfil, fieldPassword].forEach((f) => setFieldError(f, false));
+    [fieldFullName, fieldEmail, fieldPerfil, fieldPassword].forEach((f) => setFieldError(f, false));
 
     if (user) {
       modalTitle.textContent = viewOnly ? 'Ver Usuario' : 'Editar Usuario';
@@ -249,21 +249,39 @@ document.addEventListener('DOMContentLoaded', async () => {
   function closeModal() {
     modalOverlay.classList.remove('is-open');
     userForm.reset();
+    [fullNameInput, emailInput, perfilInput, passwordInput].forEach((field) => {
+      field.disabled = false;
+    });
+    submitBtn.style.display = 'inline-flex';
+    editModalBtn.style.display = 'none';
+    deleteModalBtn.style.display = 'none';
   }
 
-  openModalBtn.addEventListener('click', () => openModal({ edit: false }));
-  editModalBtn.addEventListener('click', enableModalEditMode);
-  deleteModalBtn.addEventListener('click', () => {
-    const id = userIdInput.value;
-    handleDelete(id);
-  });
-  modalCloseBtn.addEventListener('click', closeModal);
-  cancelModalBtn.addEventListener('click', closeModal);
-  modalOverlay.addEventListener('click', (e) => {
-    if (e.target === modalOverlay) closeModal();
-  });
+  if (openModalBtn) {
+    openModalBtn.addEventListener('click', () => openModal({ edit: false }));
+  }
+  if (editModalBtn) {
+    editModalBtn.addEventListener('click', enableModalEditMode);
+  }
+  if (deleteModalBtn) {
+    deleteModalBtn.addEventListener('click', () => {
+      const id = userIdInput.value;
+      handleDelete(id);
+    });
+  }
+  if (modalCloseBtn) {
+    modalCloseBtn.addEventListener('click', closeModal);
+  }
+  if (cancelModalBtn) {
+    cancelModalBtn.addEventListener('click', closeModal);
+  }
+  if (modalOverlay) {
+    modalOverlay.addEventListener('click', (e) => {
+      if (e.target === modalOverlay) closeModal();
+    });
+  }
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && modalOverlay.classList.contains('is-open')) closeModal();
+    if (e.key === 'Escape' && modalOverlay?.classList.contains('is-open')) closeModal();
   });
 
   /* =========================================================
@@ -287,7 +305,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td data-label="Contraseña"><span class="password-mask">••••••••</span></td>
         <td data-label="Acciones" class="col-actions">
           <button type="button" class="action-btn action-btn--view" data-id="${user.id}" aria-label="Ver usuario">👁</button>
-          <button type="button" class="action-btn action-btn--email" data-id="${user.id}" aria-label="Enviar login por correo">✉️</button>
         </td>
       `;
       usersTableBody.appendChild(tr);
@@ -300,12 +317,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
     });
 
-    usersTableBody.querySelectorAll('.action-btn--email').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const user = allUsers.find((u) => u.id === btn.dataset.id);
-        if (user) handleSendLogin(user);
-      });
-    });
   }
 
   function escapeHtml(str) {
@@ -324,18 +335,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     submitBtn.textContent = 'Guardar Cambios';
   }
 
-  function handleSendLogin(user) {
-    const subject = encodeURIComponent('Datos de acceso');
-    const body = encodeURIComponent(
-      `Hola ${user.full_name},\n\n` +
-      `Tu acceso al sistema es:\n` +
-      `Correo: ${user.email}\n` +
-      `Perfil: ${user.perfil || 'N/A'}\n` +
-      `Contraseña: ${user.password}\n\n` +
-      `Por favor, cambia tu contraseña al iniciar sesión.`
-    );
-    window.location.href = `mailto:${user.email}?subject=${subject}&body=${body}`;
-  }
 
   /* =========================================================
      BUSCADOR EN TIEMPO REAL (filtra el listado ya cargado)
