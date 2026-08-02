@@ -132,6 +132,13 @@
       color: var(--color-gray);
       margin-bottom: 0.5rem;
       padding-left: 0.75rem;
+      cursor: pointer; /* Cursor clickeable para el acordeón */
+      user-select: none; /* Evita que el texto se seleccione al hacer múltiples clics */
+      transition: color var(--transition);
+    }
+
+    .menu-group__title:hover {
+      color: var(--color-white);
     }
 
     .menu-list {
@@ -141,6 +148,11 @@
       display: flex;
       flex-direction: column;
       gap: 0.35rem;
+    }
+
+    /* Clase para ocultar el menú de forma controlada */
+    .menu-list.is-hidden {
+      display: none;
     }
 
     .menu-link {
@@ -332,7 +344,8 @@
       <!-- Opción 2: Operaciones -->
       <div class="menu-group">
         <div class="menu-group__title">Operaciones</div>
-        <ul class="menu-list">
+        <!-- Inicia oculto de forma predeterminada para el efecto acordeón (opcional, puedes quitar el is-hidden si prefieres que inicie abierto) -->
+        <ul class="menu-list is-hidden">
           <li>
             <a href="cotizador.html" class="menu-link">Cotizador</a>
           </li>
@@ -392,7 +405,7 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      // 1. Lógica para el menú lateral
+      // 1. Lógica para mostrar/ocultar completamente el menú lateral (hamburguesa)
       const sidebar = document.getElementById('sidebar');
       const mainContent = document.getElementById('mainContent');
       const sidebarToggle = document.getElementById('sidebarToggle');
@@ -406,7 +419,27 @@
         }
       });
 
-      // 2. Lógica para mostrar el usuario logueado en la parte superior
+      // 2. Lógica para el menú lateral tipo acordeón (Administración, Operaciones)
+      const menuTitles = document.querySelectorAll('.menu-group__title');
+      const menuLists = document.querySelectorAll('.menu-list');
+
+      menuTitles.forEach(title => {
+        title.addEventListener('click', () => {
+          // Buscamos el submenú correspondiente (el ul que está justo debajo del título clickeado)
+          const currentList = title.nextElementSibling;
+          const isCurrentlyHidden = currentList.classList.contains('is-hidden');
+
+          // Ocultamos todos los submenús primero
+          menuLists.forEach(list => list.classList.add('is-hidden'));
+
+          // Si el que clickeamos estaba oculto, lo mostramos; si estaba abierto, ya se ocultó en el paso anterior.
+          if (isCurrentlyHidden) {
+            currentList.classList.remove('is-hidden');
+          }
+        });
+      });
+
+      // 3. Lógica para mostrar el usuario logueado en la parte superior
       const loggedUserDisplay = document.getElementById('loggedUserDisplay');
       
       // Recuperar los datos guardados en principal.html
@@ -416,7 +449,7 @@
       if (savedRole === 'Visitante') {
         loggedUserDisplay.textContent = 'Visitante';
       } else if (savedEmail) {
-        // Muestra el correo. Si prefieres mostrar solo lo que está antes del @, usa: savedEmail.split('@')[0]
+        // Muestra el correo.
         loggedUserDisplay.textContent = savedEmail;
       } else {
         loggedUserDisplay.textContent = 'Usuario no identificado';
