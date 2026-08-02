@@ -186,15 +186,17 @@
       box-sizing: border-box;
     }
 
-    /* Estilos para los botones de acción tipo icono */
+    /* Estilos para los botones de acción tipo icono en la tabla */
     .icon-btn {
       background: transparent;
       border: none;
-      font-size: 1.25rem;
+      font-size: 1.2rem;
       cursor: pointer;
-      margin: 0 0.35rem;
-      padding: 0;
-      display: inline-block;
+      margin: 0 0.25rem;
+      padding: 0.2rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       transition: transform 0.2s ease, filter 0.2s ease;
     }
     
@@ -264,6 +266,8 @@
           </button>
         </div>
 
+        <div id="pageNotification" class="page-notification" aria-live="polite" style="display:none;"></div>
+
         <!-- Listado de usuarios -->
         <div class="users-table-wrapper">
           <table class="users-table" id="usersTable">
@@ -289,7 +293,7 @@
   </div>
 
   <!-- =========================================================
-       MODAL: REGISTRAR / VER USUARIO
+       MODAL: REGISTRAR / EDITAR / VER USUARIO
        ========================================================= -->
   <div class="modal-overlay" id="userModalOverlay">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
@@ -361,8 +365,13 @@
         <div class="form-feedback" id="formFeedback"></div>
 
         <div class="modal__footer">
-          <!-- Botón unificado para cerrar la modal -->
+          <!-- Botón Cerrar solicitado (oculta/cierra la pantalla modal) -->
           <button type="button" class="btn btn--cancel" id="cancelModalBtn">Cerrar</button>
+          
+          <!-- Botones originales conservados y ocultos/manejados por usuarios.js -->
+          <button type="button" class="btn btn--secondary" id="editModalBtn" style="display:none;">Editar</button>
+          
+          <!-- Botón de registro -->
           <button type="submit" class="btn btn--primary" id="submitBtn">Registrar</button>
         </div>
       </form>
@@ -372,9 +381,19 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="usuarios.js"></script>
 
+  <div id="confirmOverlay" class="confirm-overlay" style="display:none;">
+    <div class="confirm-modal">
+      <h3 id="confirmTitle">Confirmación</h3>
+      <p id="confirmMessage">¿Deseas continuar?</p>
+      <div class="confirm-actions">
+        <button type="button" id="confirmCancelBtn" class="btn btn--cancel">Cancelar</button>
+        <button type="button" id="confirmAcceptBtn" class="btn btn--danger">Eliminar</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     document.addEventListener('DOMContentLoaded', async () => {
-      // 1. Cargar el componente universal de la barra lateral
       const sidebarElement = document.getElementById('sidebar');
       if (sidebarElement) {
         try {
@@ -390,7 +409,6 @@
         }
       }
 
-      // 2. Lógica para mostrar/ocultar completamente el menú lateral (hamburguesa)
       const sidebar = document.getElementById('sidebar');
       const mainContent = document.getElementById('mainContent');
       const sidebarToggle = document.getElementById('sidebarToggle');
@@ -406,7 +424,6 @@
         });
       }
 
-      // 3. Lógica para mostrar el usuario logueado en la parte superior
       const loggedUserDisplay = document.getElementById('loggedUserDisplay');
       const savedEmail = localStorage.getItem('userEmail');
       const savedRole = localStorage.getItem('userRole');
@@ -420,84 +437,8 @@
           loggedUserDisplay.textContent = 'Usuario no identificado';
         }
       }
-
-      // 4. Lógica para ordenar los usuarios e inyectar dinámicamente los iconos de acción
-      const tbody = document.getElementById('usersTableBody');
-      if (tbody) {
-        let isSorting = false;
-        
-        const observer = new MutationObserver(() => {
-          if (isSorting) return;
-          isSorting = true;
-          
-          const rows = Array.from(tbody.querySelectorAll('tr'));
-          if (rows.length > 1 || rows.length === 1) { // Procesa incluso si hay 1 fila para inyectar iconos
-            
-            // Ordenar alfabéticamente
-            rows.sort((a, b) => {
-              const nameA = a.cells[0]?.textContent.trim().toLowerCase() || '';
-              const nameB = b.cells[0]?.textContent.trim().toLowerCase() || '';
-              return nameA.localeCompare(nameB);
-            });
-            
-            // Re-anexar y formatear botones
-            rows.forEach(row => {
-              tbody.appendChild(row);
-
-              // Acceder a la columna de Acciones (la última)
-              const actionCell = row.cells[row.cells.length - 1];
-              if (actionCell && !actionCell.classList.contains('icons-applied')) {
-                actionCell.classList.add('icons-applied');
-                actionCell.style.textAlign = 'center';
-                actionCell.style.whiteSpace = 'nowrap';
-                
-                // Conservar las funciones originales cambiando su apariencia a iconos
-                const btns = actionCell.querySelectorAll('button');
-                btns.forEach(btn => {
-                  const text = btn.textContent.toLowerCase();
-                  btn.classList.add('icon-btn');
-                  
-                  if (text.includes('edit') || text.includes('ver')) {
-                    btn.innerHTML = '✏️';
-                    btn.title = 'Editar usuario';
-                  } else if (text.includes('elim') || text.includes('borrar')) {
-                    btn.innerHTML = '🗑️';
-                    btn.title = 'Eliminar usuario';
-                  }
-                });
-
-                // Crear y agregar el botón de correo
-                const userEmail = row.cells[1]?.textContent.trim() || '';
-                const mailBtn = document.createElement('button');
-                mailBtn.className = 'icon-btn';
-                mailBtn.innerHTML = '✉️';
-                mailBtn.title = 'Enviar credenciales por correo';
-                mailBtn.onclick = (e) => {
-                  e.preventDefault();
-                  alert(`Enviando credenciales a: ${userEmail}`);
-                  // Aquí puedes colocar la lógica real para enviar el correo si es necesario
-                };
-
-                // Insertarlo antes del botón de eliminar (si existe) para un orden natural
-                const deleteBtn = Array.from(btns).find(b => b.innerHTML === '🗑️');
-                if (deleteBtn) {
-                  actionCell.insertBefore(mailBtn, deleteBtn);
-                } else {
-                  actionCell.appendChild(mailBtn);
-                }
-              }
-            });
-          }
-          
-          // Liberar la bandera de procesamiento
-          setTimeout(() => { isSorting = false; }, 10);
-        });
-        
-        observer.observe(tbody, { childList: true });
-      }
     });
 
-    // Función auxiliar para inicializar la interactividad de la barra lateral inyectada
     function initSidebarLogic() {
       const sidebarElement = document.getElementById('sidebar');
       if (!sidebarElement) return;
@@ -510,7 +451,7 @@
         if (href === currentPath) {
           link.style.background = 'rgba(255, 255, 255, 0.12)';
           link.style.color = '#FFFFFF';
-          
+
           const parentList = link.closest('.menu-list');
           if (parentList) {
             parentList.classList.remove('is-hidden');
@@ -525,11 +466,9 @@
         title.addEventListener('click', () => {
           const currentList = title.nextElementSibling;
           if (!currentList || !currentList.classList.contains('menu-list')) return;
-          
+
           const isCurrentlyHidden = currentList.classList.contains('is-hidden');
-
           menuLists.forEach(list => list.classList.add('is-hidden'));
-
           if (isCurrentlyHidden) {
             currentList.classList.remove('is-hidden');
           }

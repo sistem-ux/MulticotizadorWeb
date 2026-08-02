@@ -72,8 +72,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const togglePasswordBtn = document.getElementById('togglePasswordBtn');
   const submitBtn = document.getElementById('submitBtn');
   const editModalBtn = document.getElementById('editModalBtn');
-  const deleteModalBtn = document.getElementById('deleteModalBtn');
   const formFeedback = document.getElementById('formFeedback');
+  const pageNotification = document.getElementById('pageNotification');
+  const confirmOverlay = document.getElementById('confirmOverlay');
+  const confirmTitle = document.getElementById('confirmTitle');
+  const confirmMessage = document.getElementById('confirmMessage');
+  const confirmCancelBtn = document.getElementById('confirmCancelBtn');
+  const confirmAcceptBtn = document.getElementById('confirmAcceptBtn');
 
   const fieldFullName = document.getElementById('fieldFullName');
   const fieldEmail = document.getElementById('fieldEmail');
@@ -82,6 +87,50 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let allUsers = [];       // caché local para el filtro en tiempo real
   let isEditMode = false;
+  let confirmResolve = null;
+  let notificationTimer = null;
+
+  function showPageNotification(message, type = 'success', duration = 3500) {
+    if (!pageNotification) return;
+    pageNotification.textContent = message;
+    pageNotification.className = `page-notification page-notification--${type} is-visible`;
+    pageNotification.style.display = 'block';
+
+    if (notificationTimer) {
+      clearTimeout(notificationTimer);
+    }
+
+    notificationTimer = setTimeout(() => {
+      pageNotification.className = 'page-notification';
+      pageNotification.style.display = 'none';
+      notificationTimer = null;
+    }, duration);
+  }
+
+  function openConfirmDialog({ title, message, acceptLabel = 'Eliminar' }) {
+    if (!confirmOverlay || !confirmTitle || !confirmMessage || !confirmAcceptBtn || !confirmCancelBtn) {
+      return Promise.resolve(false);
+    }
+
+    confirmTitle.textContent = title;
+    confirmMessage.textContent = message;
+    confirmAcceptBtn.textContent = acceptLabel;
+    confirmOverlay.style.display = 'flex';
+    confirmAcceptBtn.focus();
+
+    return new Promise((resolve) => {
+      confirmResolve = resolve;
+    });
+  }
+
+  function closeConfirmDialog() {
+    if (!confirmOverlay) return;
+    confirmOverlay.style.display = 'none';
+    if (confirmResolve) {
+      confirmResolve(false);
+      confirmResolve = null;
+    }
+  }
 
   /* =========================================================
      FORMATEO "TIPO ORACIÓN" DEL NOMBRE (igual que en el registro
@@ -230,16 +279,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (isViewMode) {
       submitBtn.style.display = 'none';
       editModalBtn.style.display = 'inline-flex';
-      deleteModalBtn.style.display = 'inline-flex';
       editModalBtn.textContent = 'Editar';
     } else {
       submitBtn.style.display = 'inline-flex';
       editModalBtn.style.display = 'none';
-      deleteModalBtn.style.display = user ? 'inline-flex' : 'none';
-    }
-
-    if (!user) {
-      deleteModalBtn.style.display = 'none';
     }
 
     modalOverlay.classList.add('is-open');
@@ -254,7 +297,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     submitBtn.style.display = 'inline-flex';
     editModalBtn.style.display = 'none';
-    deleteModalBtn.style.display = 'none';
   }
 
   if (openModalBtn) {
@@ -262,12 +304,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   if (editModalBtn) {
     editModalBtn.addEventListener('click', enableModalEditMode);
-  }
-  if (deleteModalBtn) {
-    deleteModalBtn.addEventListener('click', () => {
-      const id = userIdInput.value;
-      handleDelete(id);
-    });
   }
   if (modalCloseBtn) {
     modalCloseBtn.addEventListener('click', closeModal);
@@ -280,8 +316,37 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (e.target === modalOverlay) closeModal();
     });
   }
+  if (confirmCancelBtn) {
+    confirmCancelBtn.addEventListener('click', () => {
+      closeConfirmDialog();
+    });
+  }
+
+  if (confirmAcceptBtn) {
+    confirmAcceptBtn.addEventListener('click', () => {
+      if (confirmResolve) {
+        confirmResolve(true);
+        confirmResolve = null;
+      }
+      closeConfirmDialog();
+    });
+  }
+
+  if (confirmOverlay) {
+    confirmOverlay.addEventListener('click', (e) => {
+      if (e.target === confirmOverlay) {
+        closeConfirmDialog();
+      }
+    });
+  }
+
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && modalOverlay?.classList.contains('is-open')) closeModal();
+    if (e.key !== 'Escape') return;
+    if (confirmOverlay?.style.display === 'flex') {
+      closeConfirmDialog();
+      return;
+    }
+    if (modalOverlay?.classList.contains('is-open')) closeModal();
   });
 
   /* =========================================================
@@ -305,16 +370,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td data-label="Contraseña"><span class="password-mask">••••••••</span></td>
         <td data-label="Acciones" class="col-actions">
           <button type="button" class="action-btn action-btn--view" data-id="${user.id}" aria-label="Ver usuario">👁</button>
+          <button type="button" class="action-btn action-btn--delete" data-id="${user.id}" aria-label="Eliminar usuario">🗑️</button>
         </td>
       `;
       usersTableBody.appendChild(tr);
-    });
 
-    usersTableBody.querySelectorAll('.action-btn--view').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const user = allUsers.find((u) => u.id === btn.dataset.id);
-        if (user) openModal({ edit: false, user, viewOnly: true });
-      });
+      const viewButton = tr.querySelector('.action-btn--view');
+      const deleteButton = tr.querySelector('.action-btn--delete');
+
+      if (viewButton) {
+        viewButton.addEventListener('click', () => {
+          openModal({ edit: false, user, viewOnly: true });
+        });
+      }
+
+      if (deleteButton) {
+        deleteButton.addEventListener('click', async () => {
+          await handleDelete(user.id);
+        });
+      }
     });
 
   }
@@ -474,21 +548,42 @@ document.addEventListener('DOMContentLoaded', async () => {
      ========================================================= */
   async function handleDelete(id) {
     const user = allUsers.find((u) => u.id === id);
-    const confirmed = confirm(`¿Eliminar al usuario "${user ? user.full_name : ''}"? Esta acción no se puede deshacer.`);
-    if (!confirmed) return;
-
-    const { error } = await supabaseClient
-      .from(TABLE_NAME)
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      console.error('Error al eliminar usuario:', error);
-      alert('No se pudo eliminar el usuario. Intenta de nuevo.');
+    if (!user) {
+      showPageNotification('Usuario no encontrado.', 'error');
       return;
     }
 
-    await loadUsers();
+    const confirmed = await openConfirmDialog({
+      title: 'Eliminar usuario',
+      message: `¿Eliminar al usuario "${user.full_name}"? Esta acción no se puede deshacer.`,
+      acceptLabel: 'Eliminar'
+    });
+
+    if (!confirmed) return;
+
+    if (!supabaseClient) {
+      showPageNotification('Supabase no está inicializado.', 'error');
+      return;
+    }
+
+    try {
+      const { error } = await supabaseClient
+        .from(TABLE_NAME)
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error al eliminar usuario:', error);
+        showPageNotification(`No se pudo eliminar el usuario: ${getErrorMessage(error)}`, 'error');
+        return;
+      }
+
+      await loadUsers();
+      showPageNotification('Usuario eliminado correctamente.', 'success');
+    } catch (err) {
+      console.error('Excepción al eliminar usuario:', err);
+      showPageNotification(`No se pudo eliminar el usuario: ${getErrorMessage(err)}`, 'error');
+    }
   }
 
   /* =========================================================

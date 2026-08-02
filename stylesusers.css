@@ -854,10 +854,69 @@ select {
 .btn--danger:hover {
   background: #992d24;
 }
-  padding: 0.7rem 0.9rem;
+
+.page-notification {
+  position: relative;
+  margin: 0 0 1rem;
+  padding: 0.9rem 1rem;
   border-radius: var(--radius-sm);
-  font-size: 0.85rem;
-  display: none;
+  border: 1px solid transparent;
+  font-size: 0.95rem;
+  color: var(--color-navy);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: var(--shadow-soft);
+}
+
+.page-notification--success {
+  border-color: rgba(44, 125, 60, 0.18);
+  background: rgba(44, 125, 60, 0.08);
+  color: var(--color-green-dark);
+}
+
+.page-notification--error {
+  border-color: rgba(192, 57, 43, 0.18);
+  background: rgba(192, 57, 43, 0.08);
+  color: var(--color-danger);
+}
+
+.page-notification.is-visible {
+  display: block;
+}
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 1rem;
+}
+
+.confirm-modal {
+  width: min(440px, 100%);
+  background: var(--color-white);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: 1.5rem 1.35rem;
+}
+
+.confirm-modal h3 {
+  margin: 0 0 0.65rem;
+  font-size: 1.1rem;
+}
+
+.confirm-modal p {
+  margin: 0 0 1.25rem;
+  color: #5B6472;
+  line-height: 1.6;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
 }
 
 .form-feedback.is-visible {
