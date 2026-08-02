@@ -5,8 +5,8 @@
 <nav class="sidebar__nav">
   
   <!-- Opción 1: Administración -->
-  <div class="menu-group">
-    <div class="menu-group__title">
+  <div class="menu-group" id="group-admin">
+    <div class="menu-group__title" onclick="toggleMenu('group-admin')">
       <span>Administración</span>
       <span class="menu-arrow">▼</span>
     </div>
@@ -18,8 +18,8 @@
   </div>
 
   <!-- Opción 2: Operaciones -->
-  <div class="menu-group">
-    <div class="menu-group__title">
+  <div class="menu-group" id="group-operations">
+    <div class="menu-group__title" onclick="toggleMenu('group-operations')">
       <span>Operaciones</span>
       <span class="menu-arrow">▼</span>
     </div>
@@ -33,7 +33,6 @@
 </nav>
 
 <style>
-  /* Estilos específicos para mejorar la jerarquía de los menús y submenús */
   .menu-group {
     margin-bottom: 0.5rem;
   }
@@ -59,7 +58,6 @@
     color: #FFFFFF;
   }
 
-  /* Estilo y animación de la flecha */
   .menu-arrow {
     font-size: 0.7rem;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -69,7 +67,6 @@
     transform: rotate(180deg);
   }
 
-  /* Animación de desplazamiento suave para los submenús */
   .menu-list {
     list-style: none;
     padding: 0;
@@ -84,17 +81,17 @@
   }
 
   .menu-group.is-open .menu-list {
-    max-height: 200px; /* Altura suficiente para contener los submenús */
+    max-height: 200px;
     opacity: 1;
   }
 
   .menu-link {
     display: flex;
     align-items: center;
-    padding: 0.6rem 0.75rem 0.6rem 1.75rem; /* Mayor sangría a la izquierda */
+    padding: 0.6rem 0.75rem 0.6rem 1.75rem;
     color: #C5C8CE;
     text-decoration: none;
-    font-size: 0.85rem; /* Letra ligeramente más pequeña que el menú principal */
+    font-size: 0.85rem;
     font-weight: 400;
     border-radius: 6px;
     transition: background 0.2s ease, color 0.2s ease;
@@ -107,13 +104,26 @@
 </style>
 
 <script>
-  // Actualización de la lógica para manejar las clases de apertura y cierre con la animación
-  document.addEventListener('DOMContentLoaded', () => {
-    const sidebarElement = document.getElementById('sidebar') || document;
+  function toggleMenu(groupId) {
+    const group = document.getElementById(groupId);
+    if (!group) return;
     
-    // Auto-abrir el grupo si contiene la página activa
+    const isOpen = group.classList.contains('is-open');
+    
+    // Cierra todos los grupos antes de abrir el seleccionado (efecto acordeón)
+    document.querySelectorAll('.menu-group').forEach(el => {
+      el.classList.remove('is-open');
+    });
+
+    if (!isOpen) {
+      group.classList.add('is-open');
+    }
+  }
+
+  // Auto-abrir y resaltar la página actual al cargar
+  document.addEventListener('DOMContentLoaded', () => {
     const currentPath = window.location.pathname.split('/').pop();
-    const menuLinks = sidebarElement.querySelectorAll('.menu-link');
+    const menuLinks = document.querySelectorAll('.menu-link');
 
     menuLinks.forEach(link => {
       const href = link.getAttribute('href');
@@ -126,27 +136,6 @@
           parentGroup.classList.add('is-open');
         }
       }
-    });
-
-    // Control de acordeón con animación
-    const menuTitles = sidebarElement.querySelectorAll('.menu-group__title');
-    menuTitles.forEach(title => {
-      // Evitar duplicar eventos si se recarga dinámicamente
-      title.onclick = () => {
-        const parentGroup = title.closest('.menu-group');
-        if (!parentGroup) return;
-
-        const isOpen = parentGroup.classList.contains('is-open');
-        
-        // Opcional: cerrar los demás grupos para un comportamiento de acordeón estricto
-        document.querySelectorAll('.menu-group').forEach(group => {
-          group.classList.remove('is-open');
-        });
-
-        if (!isOpen) {
-          parentGroup.classList.add('is-open');
-        }
-      };
     });
   });
 </script>
