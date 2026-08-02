@@ -25,3 +25,58 @@
   </div>
 
 </nav>
+
+<style>
+  /* Estilos específicos para mejorar la jerarquía de los menús y submenús */
+  .menu-group {
+    margin-bottom: 0.5rem;
+  }
+
+  .menu-group__title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #FFFFFF;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+
+  .menu-group__title:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #FFFFFF;
+  }
+
+  .menu-list {
+    list-style: none;
+    padding: 0;
+    margin: 0.35rem 0 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .menu-list.is-hidden {
+    display: none;
+  }
+
+  .menu-link {
+    display: flex;
+    align-items: center;
+    padding: 0.6rem 0.75rem 0.6rem 1.75rem; /* Mayor sangría a la izquierda para notar el submenú */
+    color: #C5C8CE;
+    text-decoration: none;
+    font-size: 0.85rem; /* Letra ligeramente más pequeña que el menú principal */
+    font-weight: 400;
+    border-radius: 6px;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+
+  .menu-link:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #FFFFFF;
+  }
+</style>
