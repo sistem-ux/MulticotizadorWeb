@@ -33,9 +33,7 @@
           <select id="userRole" class="text-input" style="cursor: pointer;">
             <option value="">Selecciona un perfil...</option>
             <option value="Visitante">Visitante</option>
-            <option value="Asesor">Asesor</option>
-            <option value="Colaborador">Colaborador</option>
-            <option value="Administrador">Administrador</option>
+            <option value="Usuario">Usuario</option>
           </select>
         </section>
 
@@ -132,6 +130,7 @@
           return;
         }
 
+        // Lógica de redirección para Visitante
         if (selectedRole === 'Visitante') {
           window.location.href = 'cotizador.html';
           return;
@@ -157,8 +156,9 @@
             // Autenticación exitosa
             localStorage.setItem('userRole', selectedRole);
             localStorage.setItem('userEmail', userEmail);
-            alert(`Bienvenido (${selectedRole}). Accediendo al cotizador...`);
-            window.location.href = 'cotizador.html';
+            alert(`Bienvenido (${selectedRole}). Accediendo al panel...`);
+            // Redirección para Usuario autenticado
+            window.location.href = 'dashboard.html';
             return;
           } catch (err) {
             console.error('Supabase error', err);
@@ -170,8 +170,9 @@
         // Fallback: si no se configuró Supabase, mantenemos el comportamiento previo
         localStorage.setItem('userRole', selectedRole);
         localStorage.setItem('userEmail', userEmail);
-        alert(`Bienvenido (${selectedRole}). Accediendo al cotizador...`);
-        window.location.href = 'cotizador.html';
+        alert(`Bienvenido (${selectedRole}). Accediendo al panel...`);
+        // Redirección para Usuario autenticado
+        window.location.href = 'dashboard.html';
       });
     }
 
