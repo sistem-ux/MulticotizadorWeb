@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aseguradoras y Productos | Panel de Administración</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="stylesusers.css">
+  <style>
+    /* Estilos estructurales para el diseño con barra lateral y superior
+       (idénticos a los usados en usuarios.html / dashboard.html / cotizador.html,
+       para que esta pantalla se vea exactamente igual al resto del sistema). */
+    :root {
+      --color-navy: #001F5B;
+      --color-gray-light: #F2F3F5;
+      --color-gray-border: #D8DAE0;
+      --transition: 0.25s ease;
+    }
+
+    body {
+      display: flex;
+      overflow-x: hidden;
+      margin: 0;
+      background: linear-gradient(180deg, #EEF1F6 0%, #E4E8F0 100%);
+      min-height: 100vh;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .sidebar {
+      width: 260px;
+      background: var(--color-navy);
+      color: #FFFFFF;
+      display: flex;
+      flex-direction: column;
+      transition: transform var(--transition), width var(--transition);
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 100;
+      box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
+    }
+
+    .sidebar.is-hidden { transform: translateX(-100%); }
+
+    .sidebar__header {
+      padding: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .sidebar__logo {
+      width: 40px;
+      height: 40px;
+      background-color: #FFFFFF;
+      color: var(--color-navy);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Poppins', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .sidebar__title { font-size: 1.1rem; font-weight: 700; letter-spacing: 0.02em; }
+
+    .sidebar__nav {
+      padding: 1.5rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .menu-group__title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: #A6A9B0;
+      margin-bottom: 0.5rem;
+      padding-left: 0.75rem;
+      cursor: pointer;
+      user-select: none;
+      transition: color var(--transition);
+    }
+
+    .menu-group__title:hover { color: #FFFFFF; }
+
+    .menu-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .menu-list.is-hidden { display: none; }
+
+    .menu-link {
+      display: flex;
+      align-items: center;
+      padding: 0.75rem 0.85rem;
+      color: #D8DAE0;
+      text-decoration: none;
+      font-size: 0.92rem;
+      font-weight: 500;
+      border-radius: 6px;
+      transition: background var(--transition), color var(--transition);
+    }
+
+    .menu-link:hover { background: rgba(255, 255, 255, 0.08); color: #FFFFFF; }
+
+    .main-wrapper {
+      flex: 1;
+      margin-left: 260px;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      transition: margin-left var(--transition);
+    }
+
+    .main-wrapper.is-expanded { margin-left: 0; }
+
+    .topbar {
+      height: 70px;
+      background: #FFFFFF;
+      border-bottom: 1px solid var(--color-gray-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1.5rem;
+      position: sticky;
+      top: 0;
+      z-index: 90;
+    }
+
+    .btn-toggle {
+      background: var(--color-gray-light);
+      border: 1px solid var(--color-gray-border);
+      color: var(--color-navy);
+      padding: 0.5rem 0.9rem;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 1.1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background var(--transition);
+    }
+
+    .btn-toggle:hover { background: var(--color-gray-border); }
+
+    .page--users {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      padding: 1.5rem;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .icon-btn {
+      background: transparent;
+      border: none;
+      font-size: 1.2rem;
+      cursor: pointer;
+      margin: 0 0.25rem;
+      padding: 0.2rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s ease, filter 0.2s ease;
+    }
+
+    .icon-btn:hover { transform: scale(1.15); filter: brightness(1.2); }
+
+    /* ---------------------------------------------------------------
+       Pestañas Aseguradoras / Productos (exclusivo de esta pantalla,
+       construido con los mismos tokens de color y tipografía del resto
+       del sistema para no introducir un estilo distinto).
+       --------------------------------------------------------------- */
+    .tabs-nav {
+      display: flex;
+      gap: 0.5rem;
+      border-bottom: 1px solid var(--color-gray-border);
+      margin-bottom: 1.5rem;
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      border-bottom: 3px solid transparent;
+      padding: 0.75rem 0.25rem;
+      margin-right: 1.5rem;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #5B6472;
+      cursor: pointer;
+      transition: color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .tab-btn:hover { color: var(--color-navy); }
+
+    .tab-btn.is-active {
+      color: var(--color-navy);
+      border-bottom-color: #2C7D3C;
+    }
+
+    .tab-panel { display: none; }
+    .tab-panel.is-active { display: block; }
+
+    .status-pill {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+    .status-pill--activo { background: #dff6e8; color: #235F2F; }
+    .status-pill--inactivo { background: #f5e2e2; color: #C0392B; }
+
+    .logo-thumb {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1px solid var(--color-gray-border);
+      background: var(--color-gray-light);
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    .field-row {
+      display: flex;
+      gap: 0.75rem;
+    }
+    .field-row > .modal__field { flex: 1; }
+
+    .checkbox-inline {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+      color: var(--color-navy);
+      font-weight: 600;
+      margin-top: 0.4rem;
+    }
+
+    @media (max-width: 768px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.is-mobile-visible { transform: translateX(0); }
+      .main-wrapper { margin-left: 0 !important; }
+      .field-row { flex-direction: column; gap: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Verificación temprana de sesión y perfil: solo Administrador puede ver esta página -->
+  <script src="auth-guard.js"></script>
+  <script>requireAccess('aseguradoras.html');</script>
+
+  <!-- BARRA LATERAL DINÁMICA -->
+  <aside id="sidebar" class="sidebar"></aside>
+
+  <!-- CONTENEDOR GENERAL DE LA DERECHA -->
+  <div id="mainContent" class="main-wrapper">
+
+    <!-- BARRA SUPERIOR -->
+    <header class="topbar">
+      <div class="topbar__actions">
+        <button id="sidebarToggle" class="btn-toggle" title="Ocultar / Mostrar Menú">☰</button>
+      </div>
+      <div id="loggedUserDisplay" style="font-weight: 600; font-size: 0.9rem; color: var(--color-navy);">
+        Cargando...
+      </div>
+    </header>
+
+    <!-- CONTENIDO DE LA PÁGINA -->
+    <main class="page page--users">
+      <div class="card">
+
+        <header class="page-header">
+          <span class="page-header__eyebrow">Administración</span>
+          <h1 class="page-header__title">🏢 Aseguradoras y Productos</h1>
+          <p class="page-header__subtitle">Configura las compañías aseguradoras y los productos que ofrece cada una. Los planes se configuran desde el menú "Planes".</p>
+        </header>
+
+        <!-- PESTAÑAS -->
+        <nav class="tabs-nav">
+          <button type="button" class="tab-btn is-active" data-tab="aseguradoras">Aseguradoras</button>
+          <button type="button" class="tab-btn" data-tab="productos">Productos</button>
+        </nav>
+
+        <!-- ============================================================
+             PESTAÑA: ASEGURADORAS
+             ============================================================ -->
+        <section id="panelAseguradoras" class="tab-panel is-active">
+
+          <div class="users-toolbar">
+            <div class="search-bar">
+              <span class="search-bar__icon" aria-hidden="true">🔎</span>
+              <input type="text" id="searchAseguradoras" class="search-bar__input" placeholder="Buscar por nombre o código..." autocomplete="off">
+              <button type="button" id="clearSearchAseguradoras" class="search-bar__clear" aria-label="Limpiar búsqueda">✕</button>
+            </div>
+            <button type="button" id="openAseguradoraModalBtn" class="btn btn--register">
+              <span aria-hidden="true">＋</span> Registrar Aseguradora
+            </button>
+          </div>
+
+          <div id="aseguradorasNotification" class="page-notification" aria-live="polite" style="display:none;"></div>
+
+          <div class="users-table-wrapper">
+            <table class="users-table" id="aseguradorasTable">
+              <thead>
+                <tr>
+                  <th scope="col" class="is-sortable" data-sort-key="nombre">Compañía <span class="sort-indicator"></span></th>
+                  <th scope="col" class="is-sortable" data-sort-key="codigo">Código <span class="sort-indicator"></span></th>
+                  <th scope="col">Edad Mín/Máx</th>
+                  <th scope="col">Financiamiento</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col" class="col-actions">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="aseguradorasTableBody"></tbody>
+            </table>
+            <div id="aseguradorasLoading" class="users-loading">Cargando aseguradoras...</div>
+            <div id="aseguradorasEmpty" class="users-empty" style="display:none;">No se encontraron aseguradoras.</div>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             PESTAÑA: PRODUCTOS
+             ============================================================ -->
+        <section id="panelProductos" class="tab-panel">
+
+          <div class="users-toolbar">
+            <div class="search-bar">
+              <span class="search-bar__icon" aria-hidden="true">🔎</span>
+              <input type="text" id="searchProductos" class="search-bar__input" placeholder="Buscar por nombre de producto..." autocomplete="off">
+              <button type="button" id="clearSearchProductos" class="search-bar__clear" aria-label="Limpiar búsqueda">✕</button>
+            </div>
+            <button type="button" id="openProductoModalBtn" class="btn btn--register">
+              <span aria-hidden="true">＋</span> Registrar Producto
+            </button>
+          </div>
+
+          <div id="productosNotification" class="page-notification" aria-live="polite" style="display:none;"></div>
+
+          <div class="users-table-wrapper">
+            <table class="users-table" id="productosTable">
+              <thead>
+                <tr>
+                  <th scope="col" class="is-sortable" data-sort-key="nombre">Producto <span class="sort-indicator"></span></th>
+                  <th scope="col">Aseguradora</th>
+                  <th scope="col">Edad Mín/Máx</th>
+                  <th scope="col">Mostrar en Inicio</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col" class="col-actions">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="productosTableBody"></tbody>
+            </table>
+            <div id="productosLoading" class="users-loading">Cargando productos...</div>
+            <div id="productosEmpty" class="users-empty" style="display:none;">No se encontraron productos.</div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- =========================================================
+       MODAL: REGISTRAR / EDITAR / VER ASEGURADORA
+       ========================================================= -->
+  <div class="modal-overlay" id="aseguradoraModalOverlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="aseguradoraModalTitle">
+      <div class="modal__header">
+        <h2 class="modal__title" id="aseguradoraModalTitle">Registrar Aseguradora</h2>
+        <button type="button" class="modal__close" id="aseguradoraModalCloseBtn" aria-label="Cerrar">✕</button>
+      </div>
+
+      <form id="aseguradoraForm" novalidate>
+        <input type="hidden" id="aseguradoraId" value="">
+
+        <div class="modal__field" id="fieldAseguradoraNombre">
+          <label for="aseguradoraNombre" class="form-label">Nombre de la Compañía</label>
+          <input type="text" id="aseguradoraNombre" class="text-input" placeholder="Ej: SEGUROS CARACAS" autocomplete="off" required>
+          <span class="field-error">Ingresa el nombre de la aseguradora.</span>
+        </div>
+
+        <div class="modal__field" id="fieldAseguradoraCodigo">
+          <label for="aseguradoraCodigo" class="form-label">Código</label>
+          <input type="text" id="aseguradoraCodigo" class="text-input" placeholder="Ej: COMP001" autocomplete="off" required>
+          <span class="field-error">Ingresa un código único (letras/números, sin espacios).</span>
+        </div>
+
+        <div class="field-row">
+          <div class="modal__field" id="fieldAseguradoraEdadMin">
+            <label for="aseguradoraEdadMin" class="form-label">Edad Mínima</label>
+            <input type="number" id="aseguradoraEdadMin" class="text-input" min="0" max="99" placeholder="0">
+            <span class="field-error">Edad inválida.</span>
+          </div>
+          <div class="modal__field" id="fieldAseguradoraEdadMax">
+            <label for="aseguradoraEdadMax" class="form-label">Edad Máxima</label>
+            <input type="number" id="aseguradoraEdadMax" class="text-input" min="0" max="99" placeholder="99">
+            <span class="field-error">Debe ser mayor o igual a la edad mínima.</span>
+          </div>
+        </div>
+
+        <div class="modal__field" id="fieldAseguradoraStatus">
+          <label for="aseguradoraStatus" class="form-label">Estado</label>
+          <select id="aseguradoraStatus" class="text-input" required>
+            <option value="ACTIVO">ACTIVO</option>
+            <option value="INACTIVO">INACTIVO</option>
+          </select>
+        </div>
+
+        <div class="modal__field" id="fieldAseguradoraStatusTarifa">
+          <label for="aseguradoraStatusTarifa" class="form-label">Status de Tarifa</label>
+          <select id="aseguradoraStatusTarifa" class="text-input">
+            <option value="ACTUALIZADA">ACTUALIZADA</option>
+            <option value="NO APLICA">NO APLICA</option>
+          </select>
+        </div>
+
+        <div class="modal__field" id="fieldAseguradoraRefInicio">
+          <label for="aseguradoraRefInicio" class="form-label">Referencia de Inicio</label>
+          <input type="text" id="aseguradoraRefInicio" class="text-input" placeholder="Ej: INICIO-01" autocomplete="off">
+        </div>
+
+        <div class="checkbox-inline">
+          <input type="checkbox" id="aseguradoraIgtf">
+          <label for="aseguradoraIgtf" style="font-weight:600; cursor:pointer;">Aplica IGTF</label>
+        </div>
+        <div class="checkbox-inline">
+          <input type="checkbox" id="aseguradoraFinUsd">
+          <label for="aseguradoraFinUsd" style="font-weight:600; cursor:pointer;">Permite financiamiento en USD</label>
+        </div>
+        <div class="checkbox-inline" style="margin-bottom: 1.25rem;">
+          <input type="checkbox" id="aseguradoraFinBs">
+          <label for="aseguradoraFinBs" style="font-weight:600; cursor:pointer;">Permite financiamiento en Bs</label>
+        </div>
+
+        <div class="modal__field" id="fieldAseguradoraLogo">
+          <label for="aseguradoraLogo" class="form-label">URL del Logo</label>
+          <input type="text" id="aseguradoraLogo" class="text-input" placeholder="https://... o ruta del archivo" autocomplete="off">
+          <span class="form-hint">Por ahora se referencia por URL o ruta; la carga directa de archivos se agregará más adelante.</span>
+        </div>
+
+        <div class="form-feedback" id="aseguradoraFormFeedback"></div>
+
+        <div class="modal__footer">
+          <button type="button" class="btn btn--cancel" id="cancelAseguradoraModalBtn">Cerrar</button>
+          <button type="button" class="btn btn--secondary" id="editAseguradoraModalBtn" style="display:none;">Editar</button>
+          <button type="submit" class="btn btn--primary" id="submitAseguradoraBtn">Registrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL: REGISTRAR / EDITAR / VER PRODUCTO
+       ========================================================= -->
+  <div class="modal-overlay" id="productoModalOverlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="productoModalTitle">
+      <div class="modal__header">
+        <h2 class="modal__title" id="productoModalTitle">Registrar Producto</h2>
+        <button type="button" class="modal__close" id="productoModalCloseBtn" aria-label="Cerrar">✕</button>
+      </div>
+
+      <form id="productoForm" novalidate>
+        <input type="hidden" id="productoId" value="">
+
+        <div class="modal__field" id="fieldProductoAseguradora">
+          <label for="productoAseguradora" class="form-label">Aseguradora</label>
+          <select id="productoAseguradora" class="text-input" required>
+            <option value="">Selecciona una aseguradora</option>
+          </select>
+          <span class="field-error">Selecciona la aseguradora dueña de este producto.</span>
+        </div>
+
+        <div class="modal__field" id="fieldProductoNombre">
+          <label for="productoNombre" class="form-label">Nombre del Producto</label>
+          <input type="text" id="productoNombre" class="text-input" placeholder="Ej: SALUD EXTERIOR" autocomplete="off" required>
+          <span class="field-error">Ingresa el nombre del producto.</span>
+        </div>
+
+        <div class="field-row">
+          <div class="modal__field" id="fieldProductoEdadMin">
+            <label for="productoEdadMin" class="form-label">Edad Mínima</label>
+            <input type="number" id="productoEdadMin" class="text-input" min="0" max="99" placeholder="0">
+          </div>
+          <div class="modal__field" id="fieldProductoEdadMax">
+            <label for="productoEdadMax" class="form-label">Edad Máxima</label>
+            <input type="number" id="productoEdadMax" class="text-input" min="0" max="99" placeholder="99">
+            <span class="field-error">Debe ser mayor o igual a la edad mínima.</span>
+          </div>
+        </div>
+
+        <div class="modal__field" id="fieldProductoStatus">
+          <label for="productoStatus" class="form-label">Estado</label>
+          <select id="productoStatus" class="text-input">
+            <option value="ACTIVO">ACTIVO</option>
+            <option value="INACTIVO">INACTIVO</option>
+          </select>
+        </div>
+
+        <div class="modal__field" id="fieldProductoStatusTarifa">
+          <label for="productoStatusTarifa" class="form-label">Status de Tarifa</label>
+          <select id="productoStatusTarifa" class="text-input">
+            <option value="ACTUALIZADA">ACTUALIZADA</option>
+            <option value="NO APLICA">NO APLICA</option>
+          </select>
+        </div>
+
+        <div class="checkbox-inline" style="margin-bottom: 1.25rem;">
+          <input type="checkbox" id="productoMostrarInicio" checked>
+          <label for="productoMostrarInicio" style="font-weight:600; cursor:pointer;">Mostrar en el cotizador de inicio</label>
+        </div>
+
+        <div class="form-feedback" id="productoFormFeedback"></div>
+
+        <div class="modal__footer">
+          <button type="button" class="btn btn--cancel" id="cancelProductoModalBtn">Cerrar</button>
+          <button type="button" class="btn btn--secondary" id="editProductoModalBtn" style="display:none;">Editar</button>
+          <button type="submit" class="btn btn--primary" id="submitProductoBtn">Registrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- CONFIRMACIÓN COMPARTIDA (eliminar aseguradora / producto) -->
+  <div id="confirmOverlay" class="confirm-overlay" style="display:none;">
+    <div class="confirm-modal">
+      <h3 id="confirmTitle">Confirmación</h3>
+      <p id="confirmMessage">¿Deseas continuar?</p>
+      <div class="confirm-actions">
+        <button type="button" id="confirmCancelBtn" class="btn btn--cancel">Cancelar</button>
+        <button type="button" id="confirmAcceptBtn" class="btn btn--danger">Eliminar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="aseguradoras.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Solo el perfil "Administrador" tiene acceso (ver PAGE_PERMISSIONS en auth-guard.js).
+      initAppShell({ pageName: 'aseguradoras.html' });
+    });
+  </script>
+</body>
+</html>
