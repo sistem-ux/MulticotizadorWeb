@@ -172,7 +172,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const aseguradoraForm = document.getElementById('aseguradoraForm');
   const aseguradoraIdInput = document.getElementById('aseguradoraId');
   const aseguradoraNombreInput = document.getElementById('aseguradoraNombre');
-  const aseguradoraCodigoInput = document.getElementById('aseguradoraCodigo');
   const aseguradoraEdadMinInput = document.getElementById('aseguradoraEdadMin');
   const aseguradoraEdadMaxInput = document.getElementById('aseguradoraEdadMax');
   const aseguradoraStatusInput = document.getElementById('aseguradoraStatus');
@@ -194,7 +193,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const sortableHeadersAseguradoras = document.querySelectorAll('#aseguradorasTable th.is-sortable');
 
   function aseguradoraFields() {
-    return [aseguradoraNombreInput, aseguradoraCodigoInput, aseguradoraEdadMinInput, aseguradoraEdadMaxInput,
+    return [aseguradoraNombreInput, aseguradoraEdadMinInput, aseguradoraEdadMaxInput,
       aseguradoraStatusInput, aseguradoraStatusTarifaInput, aseguradoraRefInicioInput,
       aseguradoraIgtfInput, aseguradoraFinUsdInput, aseguradoraFinBsInput, aseguradoraLogoInput];
   }
@@ -211,7 +210,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       submitAseguradoraBtn.textContent = 'Guardar Cambios';
       aseguradoraIdInput.value = item.id;
       aseguradoraNombreInput.value = item.nombre || '';
-      aseguradoraCodigoInput.value = item.codigo || '';
       aseguradoraEdadMinInput.value = item.edad_minima ?? '';
       aseguradoraEdadMaxInput.value = item.edad_maxima ?? '';
       aseguradoraStatusInput.value = item.status || 'ACTIVO';
@@ -273,9 +271,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     setFieldError(fieldAseguradoraNombre, !nombreOk);
     if (!nombreOk) valid = false;
 
-    const codigoOk = /^[A-Za-z0-9\-]{3,}$/.test(aseguradoraCodigoInput.value.trim());
-    setFieldError(fieldAseguradoraCodigo, !codigoOk);
-    if (!codigoOk) valid = false;
 
     const min = aseguradoraEdadMinInput.value === '' ? null : Number(aseguradoraEdadMinInput.value);
     const max = aseguradoraEdadMaxInput.value === '' ? null : Number(aseguradoraEdadMaxInput.value);
@@ -433,7 +428,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const payload = {
       nombre: aseguradoraNombreInput.value.trim().toUpperCase(),
-      codigo: aseguradoraCodigoInput.value.trim().toUpperCase(),
       edad_minima: aseguradoraEdadMinInput.value === '' ? null : Number(aseguradoraEdadMinInput.value),
       edad_maxima: aseguradoraEdadMaxInput.value === '' ? null : Number(aseguradoraEdadMaxInput.value),
       status: aseguradoraStatusInput.value,
@@ -455,12 +449,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       submitAseguradoraBtn.disabled = false;
       submitAseguradoraBtn.textContent = isEditModeAseguradora ? 'Guardar Cambios' : 'Registrar';
-
-      if (error) {
-        const prefix = error.code === '23505' ? 'Ya existe una aseguradora con ese código.' : 'No se pudo guardar la aseguradora.';
-        showFeedback('aseguradoraFormFeedback', `${prefix} ${getErrorMessage(error)}`, 'error');
-        return;
-      }
 
       showFeedback('aseguradoraFormFeedback', isEditModeAseguradora ? 'Aseguradora actualizada correctamente.' : 'Aseguradora registrada correctamente.', 'success');
       await loadAseguradoras();
