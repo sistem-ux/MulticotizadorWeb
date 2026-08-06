@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Planes | Panel de Administración</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="stylesusers.css">
+  <style>
+    /* Estilos estructurales idénticos al resto del panel de administración
+       (usuarios.html / aseguradoras.html), para mantener el mismo look. */
+    :root {
+      --color-navy: #001F5B;
+      --color-gray-light: #F2F3F5;
+      --color-gray-border: #D8DAE0;
+      --transition: 0.25s ease;
+    }
+
+    body {
+      display: flex;
+      overflow-x: hidden;
+      margin: 0;
+      background: linear-gradient(180deg, #EEF1F6 0%, #E4E8F0 100%);
+      min-height: 100vh;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .sidebar {
+      width: 260px;
+      background: var(--color-navy);
+      color: #FFFFFF;
+      display: flex;
+      flex-direction: column;
+      transition: transform var(--transition), width var(--transition);
+      position: fixed;
+      top: 0; bottom: 0; left: 0;
+      z-index: 100;
+      box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
+    }
+    .sidebar.is-hidden { transform: translateX(-100%); }
+    .sidebar__header {
+      padding: 1.5rem; display: flex; align-items: center; gap: 0.75rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .sidebar__logo {
+      width: 40px; height: 40px; background-color: #FFFFFF; color: var(--color-navy);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-family: 'Poppins', sans-serif; font-size: 1.1rem; font-weight: 700;
+    }
+    .sidebar__title { font-size: 1.1rem; font-weight: 700; letter-spacing: 0.02em; }
+    .sidebar__nav { padding: 1.5rem 1rem; display: flex; flex-direction: column; gap: 1.25rem; overflow-y: auto; flex: 1; }
+    .menu-group__title {
+      font-size: 0.85rem; font-weight: 700; letter-spacing: 0.05em; color: #A6A9B0;
+      margin-bottom: 0.5rem; padding-left: 0.75rem; cursor: pointer; user-select: none;
+      transition: color var(--transition);
+    }
+    .menu-group__title:hover { color: #FFFFFF; }
+    .menu-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+    .menu-list.is-hidden { display: none; }
+    .menu-link {
+      display: flex; align-items: center; padding: 0.75rem 0.85rem; color: #D8DAE0;
+      text-decoration: none; font-size: 0.92rem; font-weight: 500; border-radius: 6px;
+      transition: background var(--transition), color var(--transition);
+    }
+    .menu-link:hover { background: rgba(255, 255, 255, 0.08); color: #FFFFFF; }
+
+    .main-wrapper {
+      flex: 1; margin-left: 260px; display: flex; flex-direction: column;
+      min-height: 100vh; transition: margin-left var(--transition);
+    }
+    .main-wrapper.is-expanded { margin-left: 0; }
+
+    .topbar {
+      height: 70px; background: #FFFFFF; border-bottom: 1px solid var(--color-gray-border);
+      display: flex; align-items: center; justify-content: space-between; padding: 0 1.5rem;
+      position: sticky; top: 0; z-index: 90;
+    }
+    .btn-toggle {
+      background: var(--color-gray-light); border: 1px solid var(--color-gray-border);
+      color: var(--color-navy); padding: 0.5rem 0.9rem; border-radius: 6px; font-weight: 600;
+      font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: background var(--transition);
+    }
+    .btn-toggle:hover { background: var(--color-gray-border); }
+
+    .page--users { flex: 1; display: flex; justify-content: center; padding: 1.5rem; width: 100%; box-sizing: border-box; }
+
+    /* ---------------------------------------------------------------
+       Pestañas Planes / Opcionales
+       --------------------------------------------------------------- */
+    .tabs-nav { display: flex; gap: 0.5rem; border-bottom: 1px solid var(--color-gray-border); margin-bottom: 1.5rem; }
+    .tab-btn {
+      background: none; border: none; border-bottom: 3px solid transparent; padding: 0.75rem 0.25rem;
+      margin-right: 1.5rem; font-family: 'Inter', sans-serif; font-size: 0.95rem; font-weight: 600;
+      color: #5B6472; cursor: pointer; transition: color 0.2s ease, border-color 0.2s ease;
+    }
+    .tab-btn:hover { color: var(--color-navy); }
+    .tab-btn.is-active { color: var(--color-navy); border-bottom-color: #2C7D3C; }
+    .tab-panel { display: none; }
+    .tab-panel.is-active { display: block; }
+
+    .status-pill { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.78rem; font-weight: 600; }
+    .status-pill--activo { background: #dff6e8; color: #235F2F; }
+    .status-pill--inactivo { background: #f5e2e2; color: #C0392B; }
+
+    /* Modal ancho para Planes/Opcionales (el modal base de stylesusers.css
+       tiene max-width 460px, aquí lo ampliamos solo para este formulario) */
+    .modal--wide { max-width: 760px; }
+
+    .form-subsection {
+      margin: 1.5rem 0 1rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--color-gray-border);
+    }
+    .form-subsection__title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--color-navy);
+      margin-bottom: 0.9rem;
+    }
+    .form-subsection__hint {
+      font-size: 0.8rem;
+      color: var(--color-gray);
+      margin: -0.5rem 0 0.9rem;
+    }
+
+    .field-row { display: flex; gap: 0.75rem; }
+    .field-row > .modal__field { flex: 1; }
+    .field-row--3 > .modal__field { flex: 1 1 0; }
+
+    .checkbox-inline {
+      display: flex; align-items: center; gap: 0.5rem; font-size: 0.88rem;
+      color: var(--color-navy); font-weight: 600; margin-bottom: 0.6rem;
+    }
+    .checkbox-inline input { width: 16px; height: 16px; cursor: pointer; }
+    .checkbox-inline label { cursor: pointer; }
+
+    .cobertura-row {
+      display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.6rem;
+    }
+    .cobertura-row .cobertura-label {
+      flex: 0 0 170px; font-size: 0.88rem; font-weight: 600; color: var(--color-navy);
+    }
+    .cobertura-row select { flex: 1; }
+    .cobertura-row .cobertura-extra { flex: 0 0 110px; }
+
+    .fraccionamiento-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 0.5rem 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .tarifas-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 0.6rem;
+      max-height: 320px;
+      overflow-y: auto;
+      padding: 0.75rem;
+      background: var(--color-gray-light);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-gray-border);
+    }
+    .tarifa-cell label {
+      display: block; font-size: 0.7rem; font-weight: 700; color: #5B6472;
+      margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.03em;
+    }
+    .tarifa-cell input {
+      width: 100%; padding: 0.4rem 0.5rem; border: 1.5px solid var(--color-gray-border);
+      border-radius: 6px; font-size: 0.85rem;
+    }
+
+    .hijos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.6rem; margin-top: 0.75rem; }
+
+    .opcionales-checklist {
+      max-height: 220px; overflow-y: auto; padding: 0.75rem;
+      background: var(--color-gray-light); border-radius: var(--radius-md);
+      border: 1px solid var(--color-gray-border);
+    }
+    .opcionales-checklist label {
+      display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;
+      color: var(--color-navy); padding: 0.3rem 0; cursor: pointer;
+    }
+
+    .icon-btn {
+      background: transparent; border: none; font-size: 1.2rem; cursor: pointer;
+      margin: 0 0.25rem; padding: 0.2rem; display: inline-flex; align-items: center;
+      justify-content: center; transition: transform 0.2s ease, filter 0.2s ease;
+    }
+    .icon-btn:hover { transform: scale(1.15); filter: brightness(1.2); }
+
+    @media (max-width: 768px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.is-mobile-visible { transform: translateX(0); }
+      .main-wrapper { margin-left: 0 !important; }
+      .field-row, .field-row--3 { flex-direction: column; gap: 0; }
+      .cobertura-row { flex-wrap: wrap; }
+      .cobertura-row .cobertura-label { flex: 1 0 100%; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Verificación temprana de sesión y perfil: solo Administrador puede ver esta página -->
+  <script src="auth-guard.js"></script>
+  <script>requireAccess('planes.html');</script>
+
+  <!-- BARRA LATERAL DINÁMICA -->
+  <aside id="sidebar" class="sidebar"></aside>
+
+  <!-- CONTENEDOR GENERAL DE LA DERECHA -->
+  <div id="mainContent" class="main-wrapper">
+
+    <header class="topbar">
+      <div class="topbar__actions">
+        <button id="sidebarToggle" class="btn-toggle" title="Ocultar / Mostrar Menú">☰</button>
+      </div>
+      <div id="loggedUserDisplay" style="font-weight: 600; font-size: 0.9rem; color: var(--color-navy);">
+        Cargando...
+      </div>
+    </header>
+
+    <main class="page page--users">
+      <div class="card">
+
+        <header class="page-header">
+          <span class="page-header__eyebrow">Administración</span>
+          <h1 class="page-header__title">📋 Planes</h1>
+          <p class="page-header__subtitle">Configura los planes de cada producto: sumas, deducibles, coberturas, tarifas por edad y coberturas adicionales.</p>
+        </header>
+
+        <nav class="tabs-nav">
+          <button type="button" class="tab-btn is-active" data-tab="planes">Planes</button>
+          <button type="button" class="tab-btn" data-tab="opcionales">Coberturas Adicionales</button>
+        </nav>
+
+        <!-- ============================================================
+             PESTAÑA: PLANES
+             ============================================================ -->
+        <section id="panelPlanes" class="tab-panel is-active">
+
+          <div class="users-toolbar">
+            <div class="search-bar">
+              <span class="search-bar__icon" aria-hidden="true">🔎</span>
+              <input type="text" id="searchPlanes" class="search-bar__input" placeholder="Buscar por código, aseguradora o producto..." autocomplete="off">
+              <button type="button" id="clearSearchPlanes" class="search-bar__clear" aria-label="Limpiar búsqueda">✕</button>
+            </div>
+            <button type="button" id="openPlanModalBtn" class="btn btn--register">
+              <span aria-hidden="true">＋</span> Registrar Plan
+            </button>
+          </div>
+
+          <div id="planesNotification" class="page-notification" aria-live="polite" style="display:none;"></div>
+
+          <div class="users-table-wrapper">
+            <table class="users-table" id="planesTable">
+              <thead>
+                <tr>
+                  <th scope="col" class="is-sortable" data-sort-key="codigo">Código <span class="sort-indicator"></span></th>
+                  <th scope="col">Aseguradora</th>
+                  <th scope="col">Producto</th>
+                  <th scope="col">Suma Asegurada</th>
+                  <th scope="col">Deducible</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col" class="col-actions">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="planesTableBody"></tbody>
+            </table>
+            <div id="planesLoading" class="users-loading">Cargando planes...</div>
+            <div id="planesEmpty" class="users-empty" style="display:none;">No se encontraron planes.</div>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             PESTAÑA: OPCIONALES (Coberturas Adicionales)
+             ============================================================ -->
+        <section id="panelOpcionales" class="tab-panel">
+
+          <div class="users-toolbar">
+            <div class="search-bar">
+              <span class="search-bar__icon" aria-hidden="true">🔎</span>
+              <input type="text" id="searchOpcionales" class="search-bar__input" placeholder="Buscar por código o cobertura..." autocomplete="off">
+              <button type="button" id="clearSearchOpcionales" class="search-bar__clear" aria-label="Limpiar búsqueda">✕</button>
+            </div>
+            <button type="button" id="openOpcionalModalBtn" class="btn btn--register">
+              <span aria-hidden="true">＋</span> Registrar Cobertura
+            </button>
+          </div>
+
+          <div id="opcionalesNotification" class="page-notification" aria-live="polite" style="display:none;"></div>
+
+          <div class="users-table-wrapper">
+            <table class="users-table" id="opcionalesTable">
+              <thead>
+                <tr>
+                  <th scope="col" class="is-sortable" data-sort-key="cobertura">Cobertura <span class="sort-indicator"></span></th>
+                  <th scope="col">Aseguradora / Producto</th>
+                  <th scope="col">Suma Asegurada</th>
+                  <th scope="col">Prima</th>
+                  <th scope="col">Planes Asociados</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col" class="col-actions">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="opcionalesTableBody"></tbody>
+            </table>
+            <div id="opcionalesLoading" class="users-loading">Cargando coberturas adicionales...</div>
+            <div id="opcionalesEmpty" class="users-empty" style="display:none;">No se encontraron coberturas.</div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- =========================================================
+       MODAL: REGISTRAR / EDITAR / VER PLAN
+       ========================================================= -->
+  <div class="modal-overlay" id="planModalOverlay">
+    <div class="modal modal--wide" role="dialog" aria-modal="true" aria-labelledby="planModalTitle">
+      <div class="modal__header">
+        <h2 class="modal__title" id="planModalTitle">Registrar Plan</h2>
+        <button type="button" class="modal__close" id="planModalCloseBtn" aria-label="Cerrar">✕</button>
+      </div>
+
+      <form id="planForm" novalidate>
+        <input type="hidden" id="planId" value="">
+
+        <!-- Datos generales -->
+        <div class="field-row">
+          <div class="modal__field" id="fieldPlanAseguradora">
+            <label for="planAseguradora" class="form-label">Aseguradora</label>
+            <select id="planAseguradora" class="text-input" required>
+              <option value="">Selecciona una aseguradora</option>
+            </select>
+            <span class="field-error">Selecciona la aseguradora.</span>
+          </div>
+          <div class="modal__field" id="fieldPlanProducto">
+            <label for="planProducto" class="form-label">Producto</label>
+            <select id="planProducto" class="text-input" required disabled>
+              <option value="">Selecciona primero una aseguradora</option>
+            </select>
+            <span class="field-error">Selecciona el producto.</span>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="modal__field" id="fieldPlanCodigo">
+            <label for="planCodigo" class="form-label">Código del Plan</label>
+            <input type="text" id="planCodigo" class="text-input" placeholder="Ej: PLAN-0001" autocomplete="off" required>
+            <span class="field-error">Ingresa un código único.</span>
+          </div>
+          <div class="modal__field">
+            <label for="planTipoTarifa" class="form-label">Tipo de Tarifa</label>
+            <input type="text" id="planTipoTarifa" class="text-input" placeholder="Ej: EMISIÓN" value="EMISIÓN">
+          </div>
+        </div>
+
+        <div class="field-row field-row--3">
+          <div class="modal__field">
+            <label for="planSumaAsegurada" class="form-label">Suma Asegurada</label>
+            <input type="number" id="planSumaAsegurada" class="text-input" min="0" step="1" required>
+          </div>
+          <div class="modal__field">
+            <label for="planDeducible" class="form-label">Deducible</label>
+            <input type="number" id="planDeducible" class="text-input" min="0" step="1" value="0">
+          </div>
+          <div class="modal__field">
+            <label for="planDeducibleExterior" class="form-label">Deducible en el Exterior</label>
+            <input type="number" id="planDeducibleExterior" class="text-input" min="0" step="1" value="0">
+          </div>
+        </div>
+
+        <div class="field-row field-row--3">
+          <div class="modal__field">
+            <label for="planEdadMinTarifa" class="form-label">Edad Mínima Tarifa</label>
+            <input type="number" id="planEdadMinTarifa" class="text-input" min="0" max="99" value="0">
+          </div>
+          <div class="modal__field">
+            <label for="planStatus" class="form-label">Estado del Plan</label>
+            <select id="planStatus" class="text-input">
+              <option value="ACTIVO">ACTIVO</option>
+              <option value="INACTIVO">INACTIVO</option>
+            </select>
+          </div>
+          <div class="modal__field">
+            <label for="planStatusProducto" class="form-label">Status Producto</label>
+            <select id="planStatusProducto" class="text-input">
+              <option value="ACTIVO">ACTIVO</option>
+              <option value="INACTIVO">INACTIVO</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="checkbox-inline">
+          <input type="checkbox" id="planFinanciable">
+          <label for="planFinanciable">Plan financiable</label>
+        </div>
+
+        <!-- Rango de edades permitidas -->
+        <div class="form-subsection">
+          <h3 class="form-subsection__title">Edades Permitidas</h3>
+          <div class="field-row field-row--3">
+            <div class="modal__field">
+              <label for="planEdadMinTitular" class="form-label">Edad Mín. Titular</label>
+              <input type="number" id="planEdadMinTitular" class="text-input" min="0" max="99" value="0">
+            </div>
+            <div class="modal__field">
+              <label for="planEdadMaxTitular" class="form-label">Edad Máx. Titular</label>
+              <input type="number" id="planEdadMaxTitular" class="text-input" min="0" max="99" value="99">
+            </div>
+          </div>
+          <div class="field-row field-row--3">
+            <div class="modal__field">
+              <label for="planEdadMinFamiliares" class="form-label">Edad Mín. Familiares</label>
+              <input type="number" id="planEdadMinFamiliares" class="text-input" min="0" max="99" value="0">
+            </div>
+            <div class="modal__field">
+              <label for="planEdadMaxFamiliares" class="form-label">Edad Máx. Familiares</label>
+              <input type="number" id="planEdadMaxFamiliares" class="text-input" min="0" max="99" value="99">
+            </div>
+          </div>
+        </div>
+
+        <!-- Coberturas incluidas en el plan -->
+        <div class="form-subsection">
+          <h3 class="form-subsection__title">Coberturas del Plan</h3>
+          <p class="form-subsection__hint">Para cada cobertura indica si está incluida, es opcional (con costo adicional en "Coberturas Adicionales") o no aplica.</p>
+          <div id="coberturasContainer"></div>
+          <div class="modal__field" style="margin-top: 0.75rem;">
+            <label for="planServAdicionalesPlanes" class="form-label">Sub-planes de "Servicios Adicionales" (separados por coma)</label>
+            <input type="text" id="planServAdicionalesPlanes" class="text-input" placeholder="Ej: PLAN DE 5, PLAN DE 6">
+          </div>
+        </div>
+
+        <!-- Descuentos -->
+        <div class="form-subsection">
+          <h3 class="form-subsection__title">Descuentos por Forma de Pago</h3>
+          <div class="field-row">
+            <div class="checkbox-inline" style="flex: 0 0 auto;">
+              <input type="checkbox" id="planDescPagoContadoAplica">
+              <label for="planDescPagoContadoAplica">Aplica descuento pago de contado</label>
+            </div>
+            <div class="modal__field" style="max-width: 140px;">
+              <input type="number" id="planDescPagoContadoPct" class="text-input" min="0" max="100" placeholder="% desc." value="0">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="checkbox-inline" style="flex: 0 0 auto;">
+              <input type="checkbox" id="planDescPagoDivisasAplica">
+              <label for="planDescPagoDivisasAplica">Aplica descuento pago en divisas</label>
+            </div>
+            <div class="modal__field" style="max-width: 140px;">
+              <input type="number" id="planDescPagoDivisasPct" class="text-input" min="0" max="100" placeholder="% desc." value="0">
+            </div>
+          </div>
+        </div>
+
+        <!-- Fraccionamiento -->
+        <div class="form-subsection">
+          <h3 class="form-subsection__title">Fraccionamiento de Pago Disponible</h3>
+          <div class="fraccionamiento-grid" id="fraccionamientoContainer"></div>
+          <div class="modal__field" style="max-width: 220px;">
+            <label for="planGastoAdminFraccionamiento" class="form-label">Gasto Admin. por Fraccionamiento</label>
+            <input type="number" id="planGastoAdminFraccionamiento" class="text-input" min="0" step="0.01" value="0">
+          </div>
+        </div>
+
+        <!-- Modo tarifa hijos -->
+        <div class="form-subsection">
+          <h3 class="form-subsection__title">Tarifa de Hijos</h3>
+          <div class="modal__field" style="max-width: 320px;">
+            <label for="planModoTarifaHijos" class="form-label">Modo de Tarifa</label>
+            <select id="planModoTarifaHijos" class="text-input">
+              <option value="POR HIJO">Por hijo (usa la tarifa normal por edad)</option>
+              <option value="POR CANTIDAD DE HIJOS">Por cantidad de hijos (tarifa fija según cuántos hijos)</option>
+            </select>
+          </div>
+          <div id="hijosGridWrapper" style="display:none;">
+            <div class="hijos-grid" id="hijosGridContainer"></div>
+          </div>
+        </div>
+
+        <!-- Tarifas por edad -->
+        <div class="form-subsection">
+          <h3 class="form-subsection__title">Tarifas por Rango de Edad</h3>
+          <p class="form-subsection__hint">Deja en blanco los rangos que no apliquen para este plan.</p>
+          <div class="tarifas-grid" id="tarifasGridContainer"></div>
+        </div>
+
+        <div class="form-feedback" id="planFormFeedback"></div>
+
+        <div class="modal__footer">
+          <button type="button" class="btn btn--cancel" id="cancelPlanModalBtn">Cerrar</button>
+          <button type="button" class="btn btn--secondary" id="editPlanModalBtn" style="display:none;">Editar</button>
+          <button type="submit" class="btn btn--primary" id="submitPlanBtn">Registrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL: REGISTRAR / EDITAR / VER OPCIONAL (Cobertura Adicional)
+       ========================================================= -->
+  <div class="modal-overlay" id="opcionalModalOverlay">
+    <div class="modal modal--wide" role="dialog" aria-modal="true" aria-labelledby="opcionalModalTitle">
+      <div class="modal__header">
+        <h2 class="modal__title" id="opcionalModalTitle">Registrar Cobertura Adicional</h2>
+        <button type="button" class="modal__close" id="opcionalModalCloseBtn" aria-label="Cerrar">✕</button>
+      </div>
+
+      <form id="opcionalForm" novalidate>
+        <input type="hidden" id="opcionalId" value="">
+
+        <div class="field-row">
+          <div class="modal__field" id="fieldOpcionalAseguradora">
+            <label for="opcionalAseguradora" class="form-label">Aseguradora</label>
+            <select id="opcionalAseguradora" class="text-input" required>
+              <option value="">Selecciona una aseguradora</option>
+            </select>
+            <span class="field-error">Selecciona la aseguradora.</span>
+          </div>
+          <div class="modal__field" id="fieldOpcionalProducto">
+            <label for="opcionalProducto" class="form-label">Producto</label>
+            <select id="opcionalProducto" class="text-input" required disabled>
+              <option value="">Selecciona primero una aseguradora</option>
+            </select>
+            <span class="field-error">Selecciona el producto.</span>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="modal__field" id="fieldOpcionalCodigo">
+            <label for="opcionalCodigo" class="form-label">Código</label>
+            <input type="text" id="opcionalCodigo" class="text-input" placeholder="Ej: COB-0001" required>
+            <span class="field-error">Ingresa un código único.</span>
+          </div>
+          <div class="modal__field">
+            <label for="opcionalTipoCobertura" class="form-label">Tipo de Cobertura</label>
+            <select id="opcionalTipoCobertura" class="text-input">
+              <option value="INDIVIDUAL">INDIVIDUAL</option>
+              <option value="PAQUETE">PAQUETE</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="modal__field" id="fieldOpcionalCobertura">
+            <label for="opcionalCobertura" class="form-label">Cobertura</label>
+            <select id="opcionalCobertura" class="text-input" required>
+              <option value="FUNERARIOS">FUNERARIOS</option>
+              <option value="ASISTENCIA EN VIAJES">ASISTENCIA EN VIAJES</option>
+              <option value="MATERNIDAD">MATERNIDAD</option>
+              <option value="INVALIDEZ PERMANENTE">INVALIDEZ PERMANENTE</option>
+              <option value="MUERTE ACCIDENTAL">MUERTE ACCIDENTAL</option>
+              <option value="ODONTOLOGÍA">ODONTOLOGÍA</option>
+              <option value="OFTALMOLOGÍA">OFTALMOLOGÍA</option>
+              <option value="DERMATOLOGÍA">DERMATOLOGÍA</option>
+              <option value="PSICOLOGÍA">PSICOLOGÍA</option>
+              <option value="COMBO DE SERVICIOS">COMBO DE SERVICIOS</option>
+            </select>
+          </div>
+          <div class="modal__field">
+            <label for="opcionalNombreServicio" class="form-label">Nombre del Servicio (opcional)</label>
+            <input type="text" id="opcionalNombreServicio" class="text-input" placeholder="Ej: Plan de 5 Servicios">
+          </div>
+        </div>
+
+        <div class="field-row field-row--3">
+          <div class="modal__field">
+            <label for="opcionalSuma" class="form-label">Suma Asegurada</label>
+            <input type="number" id="opcionalSuma" class="text-input" min="0" step="1">
+          </div>
+          <div class="modal__field">
+            <label for="opcionalPrima" class="form-label">Prima</label>
+            <input type="number" id="opcionalPrima" class="text-input" min="0" step="0.01" required>
+            <span class="field-error">Ingresa la prima de esta cobertura.</span>
+          </div>
+          <div class="modal__field">
+            <label for="opcionalStatus" class="form-label">Estado</label>
+            <select id="opcionalStatus" class="text-input">
+              <option value="ACTIVO">ACTIVO</option>
+              <option value="INACTIVO">INACTIVO</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="modal__field">
+            <label for="opcionalPrima2" class="form-label">Prima 2 (opcional)</label>
+            <input type="number" id="opcionalPrima2" class="text-input" min="0" step="0.01">
+          </div>
+          <div class="modal__field">
+            <label for="opcionalPrima3" class="form-label">Prima 3 (opcional)</label>
+            <input type="number" id="opcionalPrima3" class="text-input" min="0" step="0.01">
+          </div>
+        </div>
+
+        <div class="form-subsection">
+          <h3 class="form-subsection__title">Planes Asociados</h3>
+          <p class="form-subsection__hint">Solo se listan los planes del producto seleccionado arriba.</p>
+          <div class="opcionales-checklist" id="opcionalPlanesChecklist">
+            <p style="color: var(--color-gray); font-size: 0.85rem;">Selecciona primero un producto.</p>
+          </div>
+        </div>
+
+        <div class="form-feedback" id="opcionalFormFeedback"></div>
+
+        <div class="modal__footer">
+          <button type="button" class="btn btn--cancel" id="cancelOpcionalModalBtn">Cerrar</button>
+          <button type="button" class="btn btn--secondary" id="editOpcionalModalBtn" style="display:none;">Editar</button>
+          <button type="submit" class="btn btn--primary" id="submitOpcionalBtn">Registrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- CONFIRMACIÓN COMPARTIDA -->
+  <div id="confirmOverlay" class="confirm-overlay" style="display:none;">
+    <div class="confirm-modal">
+      <h3 id="confirmTitle">Confirmación</h3>
+      <p id="confirmMessage">¿Deseas continuar?</p>
+      <div class="confirm-actions">
+        <button type="button" id="confirmCancelBtn" class="btn btn--cancel">Cancelar</button>
+        <button type="button" id="confirmAcceptBtn" class="btn btn--danger">Eliminar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="planes.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      initAppShell({ pageName: 'planes.html' });
+    });
+  </script>
+</body>
+</html>
