@@ -238,15 +238,22 @@
     /* Los botones de Acciones (editar / activar-inactivar / eliminar) siempre
        en línea, uno al lado del otro, sin importar cómo stylesusers.css
        maneje la celda por defecto (incluida la vista de tarjeta en móvil). */
+    .users-table th.col-actions,
+    .users-table td.col-actions {
+      width: 1%;
+      white-space: nowrap;
+      padding-right: 1.25rem;
+    }
     .users-table td.col-actions {
       display: flex;
       flex-wrap: nowrap;
       align-items: center;
-      gap: 0.4rem;
-      white-space: nowrap;
+      justify-content: flex-start;
+      gap: 0.5rem;
     }
     .users-table td.col-actions .action-btn {
       flex-shrink: 0;
+      margin: 0;
     }
 
     .logo-thumb {
