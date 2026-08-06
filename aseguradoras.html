@@ -218,48 +218,80 @@
     .tab-panel { display: none; }
     .tab-panel.is-active { display: block; }
 
-    .status-pill {
-      display: inline-block;
-      padding: 0.2rem 0.6rem;
-      border-radius: 999px;
-      font-size: 0.78rem;
-      font-weight: 600;
-    }
-    .status-pill--activo { background: #dff6e8; color: #235F2F; }
-    .status-pill--inactivo { background: #f5e2e2; color: #C0392B; }
-
     .logo-thumb {
-      width: 32px;
-      height: 32px;
+      width: 34px;
+      height: 34px;
       border-radius: 50%;
       object-fit: cover;
       border: 1px solid var(--color-gray-border);
       background: var(--color-gray-light);
       display: inline-block;
       vertical-align: middle;
+      margin-right: 0.6rem;
     }
 
-    .field-row {
-      display: flex;
-      gap: 0.75rem;
+    .logo-placeholder-cell {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: var(--color-gray-light);
+      border: 1px dashed var(--color-gray-border);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      color: #9BA0AB;
+      vertical-align: middle;
+      margin-right: 0.6rem;
     }
-    .field-row > .modal__field { flex: 1; }
 
-    .checkbox-inline {
+    /* Bloque de carga de logo dentro del modal */
+    .logo-upload {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      font-size: 0.9rem;
-      color: var(--color-navy);
-      font-weight: 600;
-      margin-top: 0.4rem;
+      gap: 1rem;
     }
+
+    .logo-upload__preview {
+      width: 72px;
+      height: 72px;
+      border-radius: 12px;
+      border: 1px dashed var(--color-gray-border);
+      background: var(--color-gray-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .logo-upload__img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: none;
+    }
+
+    .logo-upload__placeholder {
+      font-size: 0.7rem;
+      color: #9BA0AB;
+      text-align: center;
+      padding: 0 0.4rem;
+    }
+
+    .logo-upload__actions {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      align-items: flex-start;
+    }
+
+    .logo-upload__actions .btn { padding: 0.5rem 0.9rem; font-size: 0.85rem; }
 
     @media (max-width: 768px) {
       .sidebar { transform: translateX(-100%); }
       .sidebar.is-mobile-visible { transform: translateX(0); }
       .main-wrapper { margin-left: 0 !important; }
-      .field-row { flex-direction: column; gap: 0; }
     }
   </style>
 </head>
@@ -292,7 +324,7 @@
         <header class="page-header">
           <span class="page-header__eyebrow">Administración</span>
           <h1 class="page-header__title">🏢 Aseguradoras y Productos</h1>
-          <p class="page-header__subtitle">Configura las compañías aseguradoras y los productos que ofrece cada una. Los planes se configuran desde el menú "Planes".</p>
+          <p class="page-header__subtitle">Registra las compañías aseguradoras y los productos que ofrece cada una. Los planes se configuran desde el menú "Planes".</p>
         </header>
 
         <!-- PESTAÑAS -->
@@ -309,7 +341,7 @@
           <div class="users-toolbar">
             <div class="search-bar">
               <span class="search-bar__icon" aria-hidden="true">🔎</span>
-              <input type="text" id="searchAseguradoras" class="search-bar__input" placeholder="Buscar por nombre o código..." autocomplete="off">
+              <input type="text" id="searchAseguradoras" class="search-bar__input" placeholder="Buscar por nombre..." autocomplete="off">
               <button type="button" id="clearSearchAseguradoras" class="search-bar__clear" aria-label="Limpiar búsqueda">✕</button>
             </div>
             <button type="button" id="openAseguradoraModalBtn" class="btn btn--register">
@@ -323,11 +355,7 @@
             <table class="users-table" id="aseguradorasTable">
               <thead>
                 <tr>
-                  <th scope="col" class="is-sortable" data-sort-key="nombre">Compañía <span class="sort-indicator"></span></th>
-                  <th scope="col" class="is-sortable" data-sort-key="codigo">Código <span class="sort-indicator"></span></th>
-                  <th scope="col">Edad Mín/Máx</th>
-                  <th scope="col">Financiamiento</th>
-                  <th scope="col">Estado</th>
+                  <th scope="col" class="is-sortable" data-sort-key="nombre">Aseguradora <span class="sort-indicator"></span></th>
                   <th scope="col" class="col-actions">Acciones</th>
                 </tr>
               </thead>
@@ -362,9 +390,6 @@
                 <tr>
                   <th scope="col" class="is-sortable" data-sort-key="nombre">Producto <span class="sort-indicator"></span></th>
                   <th scope="col">Aseguradora</th>
-                  <th scope="col">Edad Mín/Máx</th>
-                  <th scope="col">Mostrar en Inicio</th>
-                  <th scope="col">Estado</th>
                   <th scope="col" class="col-actions">Acciones</th>
                 </tr>
               </thead>
@@ -380,7 +405,7 @@
   </div>
 
   <!-- =========================================================
-       MODAL: REGISTRAR / EDITAR / VER ASEGURADORA
+       MODAL: REGISTRAR / EDITAR ASEGURADORA
        ========================================================= -->
   <div class="modal-overlay" id="aseguradoraModalOverlay">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="aseguradoraModalTitle">
@@ -391,72 +416,35 @@
 
       <form id="aseguradoraForm" novalidate>
         <input type="hidden" id="aseguradoraId" value="">
+        <input type="hidden" id="aseguradoraLogoUrlActual" value="">
 
         <div class="modal__field" id="fieldAseguradoraNombre">
-          <label for="aseguradoraNombre" class="form-label">Nombre de la Compañía</label>
+          <label for="aseguradoraNombre" class="form-label">Nombre de la Aseguradora</label>
           <input type="text" id="aseguradoraNombre" class="text-input" placeholder="Ej: Seguros Caracas" autocomplete="off" required>
           <span class="field-error">Ingresa el nombre de la aseguradora.</span>
         </div>
 
-
-        <div class="field-row">
-          <div class="modal__field" id="fieldAseguradoraEdadMin">
-            <label for="aseguradoraEdadMin" class="form-label">Edad Mínima</label>
-            <input type="number" id="aseguradoraEdadMin" class="text-input" min="0" max="99" placeholder="0">
-            <span class="field-error">Edad inválida.</span>
-          </div>
-          <div class="modal__field" id="fieldAseguradoraEdadMax">
-            <label for="aseguradoraEdadMax" class="form-label">Edad Máxima</label>
-            <input type="number" id="aseguradoraEdadMax" class="text-input" min="0" max="99" placeholder="99">
-            <span class="field-error">Debe ser mayor o igual a la edad mínima.</span>
-          </div>
-        </div>
-
-        <div class="modal__field" id="fieldAseguradoraStatus">
-          <label for="aseguradoraStatus" class="form-label">Estado</label>
-          <select id="aseguradoraStatus" class="text-input" required>
-            <option value="ACTIVO">ACTIVO</option>
-            <option value="INACTIVO">INACTIVO</option>
-          </select>
-        </div>
-
-        <div class="modal__field" id="fieldAseguradoraStatusTarifa">
-          <label for="aseguradoraStatusTarifa" class="form-label">Status de Tarifa</label>
-          <select id="aseguradoraStatusTarifa" class="text-input">
-            <option value="ACTUALIZADA">ACTUALIZADA</option>
-            <option value="NO APLICA">NO APLICA</option>
-          </select>
-        </div>
-
-        <div class="modal__field" id="fieldAseguradoraRefInicio">
-          <label for="aseguradoraRefInicio" class="form-label">Referencia de Inicio</label>
-          <input type="text" id="aseguradoraRefInicio" class="text-input" placeholder="Ej: INICIO-01" autocomplete="off">
-        </div>
-
-        <div class="checkbox-inline">
-          <input type="checkbox" id="aseguradoraIgtf">
-          <label for="aseguradoraIgtf" style="font-weight:600; cursor:pointer;">Aplica IGTF</label>
-        </div>
-        <div class="checkbox-inline">
-          <input type="checkbox" id="aseguradoraFinUsd">
-          <label for="aseguradoraFinUsd" style="font-weight:600; cursor:pointer;">Permite financiamiento en USD</label>
-        </div>
-        <div class="checkbox-inline" style="margin-bottom: 1.25rem;">
-          <input type="checkbox" id="aseguradoraFinBs">
-          <label for="aseguradoraFinBs" style="font-weight:600; cursor:pointer;">Permite financiamiento en Bs</label>
-        </div>
-
         <div class="modal__field" id="fieldAseguradoraLogo">
-          <label for="aseguradoraLogo" class="form-label">URL del Logo</label>
-          <input type="text" id="aseguradoraLogo" class="text-input" placeholder="https://... o ruta del archivo" autocomplete="off">
-          <span class="form-hint">Por ahora se referencia por URL o ruta; la carga directa de archivos se agregará más adelante.</span>
+          <label class="form-label">Logo</label>
+          <div class="logo-upload">
+            <div class="logo-upload__preview">
+              <img id="aseguradoraLogoPreview" class="logo-upload__img" alt="">
+              <span id="aseguradoraLogoPlaceholder" class="logo-upload__placeholder">Sin logo</span>
+            </div>
+            <div class="logo-upload__actions">
+              <input type="file" id="aseguradoraLogoFile" accept="image/png" style="display:none;">
+              <button type="button" class="btn btn--secondary" id="aseguradoraLogoSelectBtn">Seleccionar PNG</button>
+              <button type="button" class="btn btn--cancel" id="aseguradoraLogoRemoveBtn" style="display:none;">Quitar logo</button>
+            </div>
+          </div>
+          <span class="form-hint">Solo archivos PNG, máximo 2&nbsp;MB.</span>
+          <span class="field-error" id="aseguradoraLogoError">Selecciona un archivo PNG válido (máx. 2 MB).</span>
         </div>
 
         <div class="form-feedback" id="aseguradoraFormFeedback"></div>
 
         <div class="modal__footer">
           <button type="button" class="btn btn--cancel" id="cancelAseguradoraModalBtn">Cerrar</button>
-          <button type="button" class="btn btn--secondary" id="editAseguradoraModalBtn" style="display:none;">Editar</button>
           <button type="submit" class="btn btn--primary" id="submitAseguradoraBtn">Registrar</button>
         </div>
       </form>
@@ -464,7 +452,7 @@
   </div>
 
   <!-- =========================================================
-       MODAL: REGISTRAR / EDITAR / VER PRODUCTO
+       MODAL: REGISTRAR / EDITAR PRODUCTO
        ========================================================= -->
   <div class="modal-overlay" id="productoModalOverlay">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="productoModalTitle">
@@ -486,48 +474,14 @@
 
         <div class="modal__field" id="fieldProductoNombre">
           <label for="productoNombre" class="form-label">Nombre del Producto</label>
-          <input type="text" id="productoNombre" class="text-input" placeholder="Ej: SALUD EXTERIOR" autocomplete="off" required>
+          <input type="text" id="productoNombre" class="text-input" placeholder="Ej: Salud Exterior" autocomplete="off" required>
           <span class="field-error">Ingresa el nombre del producto.</span>
-        </div>
-
-        <div class="field-row">
-          <div class="modal__field" id="fieldProductoEdadMin">
-            <label for="productoEdadMin" class="form-label">Edad Mínima</label>
-            <input type="number" id="productoEdadMin" class="text-input" min="0" max="99" placeholder="0">
-          </div>
-          <div class="modal__field" id="fieldProductoEdadMax">
-            <label for="productoEdadMax" class="form-label">Edad Máxima</label>
-            <input type="number" id="productoEdadMax" class="text-input" min="0" max="99" placeholder="99">
-            <span class="field-error">Debe ser mayor o igual a la edad mínima.</span>
-          </div>
-        </div>
-
-        <div class="modal__field" id="fieldProductoStatus">
-          <label for="productoStatus" class="form-label">Estado</label>
-          <select id="productoStatus" class="text-input">
-            <option value="ACTIVO">ACTIVO</option>
-            <option value="INACTIVO">INACTIVO</option>
-          </select>
-        </div>
-
-        <div class="modal__field" id="fieldProductoStatusTarifa">
-          <label for="productoStatusTarifa" class="form-label">Status de Tarifa</label>
-          <select id="productoStatusTarifa" class="text-input">
-            <option value="ACTUALIZADA">ACTUALIZADA</option>
-            <option value="NO APLICA">NO APLICA</option>
-          </select>
-        </div>
-
-        <div class="checkbox-inline" style="margin-bottom: 1.25rem;">
-          <input type="checkbox" id="productoMostrarInicio" checked>
-          <label for="productoMostrarInicio" style="font-weight:600; cursor:pointer;">Mostrar en el cotizador de inicio</label>
         </div>
 
         <div class="form-feedback" id="productoFormFeedback"></div>
 
         <div class="modal__footer">
           <button type="button" class="btn btn--cancel" id="cancelProductoModalBtn">Cerrar</button>
-          <button type="button" class="btn btn--secondary" id="editProductoModalBtn" style="display:none;">Editar</button>
           <button type="submit" class="btn btn--primary" id="submitProductoBtn">Registrar</button>
         </div>
       </form>

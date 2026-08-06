@@ -6,6 +6,8 @@ const SUPABASE_URL = 'https://cibtpkpxdrykozujaqba.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_zlp4_HGpTeAQKW55c_pZQA_2HEXRpaC';
 const TABLE_ASEGURADORAS = 'aseguradoras';
 const TABLE_PRODUCTOS = 'productos';
+const LOGO_BUCKET = 'logos-aseguradoras';
+const LOGO_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
 
 let supabaseClient = null;
 
@@ -25,15 +27,17 @@ async function initSupabase() {
 }
 
 /*
-  Tablas esperadas en Supabase (ver 01_schema.sql):
-    - aseguradoras (codigo, nombre, status_tarifa, ref_inicio, igtf, edad_minima,
-      edad_maxima, financiamiento_usd, financiamiento_bs, status, logo_url)
-    - productos (aseguradora_id -> aseguradoras.id, nombre, edad_minima, edad_maxima,
-      status, mostrar_en_inicio, status_tarifa)
+  Tablas esperadas en Supabase (ver 01_schema_aseguradoras_productos.sql):
+    - aseguradoras (nombre, logo_url, fecha_creacion, usuario_creacion,
+      fecha_modificacion, usuario_modificacion)
+    - productos (aseguradora_id -> aseguradoras.id, nombre, fecha_creacion,
+      usuario_creacion, fecha_modificacion, usuario_modificacion)
+    - Storage bucket público "logos-aseguradoras" para los logos PNG.
 
-  NOTA DE SEGURIDAD: al igual que en usuarios.js, esta pantalla consulta con la
-  clave anónima. Para producción se recomienda activar RLS y restringir
-  escritura solo a usuarios autenticados con perfil Administrador.
+  NOTA DE SEGURIDAD: al igual que en usuarios.js, esta pantalla consulta con
+  la clave anónima. El control de acceso real lo hace auth-guard.js en el
+  cliente (solo perfil Administrador entra a esta página). Para producción
+  se recomienda migrar a Supabase Auth y restringir RLS por auth.uid().
 */
 
 function getErrorMessage(error) {
@@ -52,6 +56,35 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str ?? '';
   return div.innerHTML;
+}
+
+/* =============================================================
+   FORMATEADOR DE TEXTO EN TIEMPO REAL: "Inicial De Cada Palabra"
+   Mismo patrón usado en el formulario de grupo familiar (Fase 1):
+   soporta entrada en mayúsculas sostenidas y conserva la posición
+   del cursor mientras el usuario escribe.
+   ============================================================= */
+function toTitleCaseLive(value) {
+  return value.replace(/\S+/g, (word) => {
+    const first = word.charAt(0).toLocaleUpperCase('es');
+    const rest = word.slice(1).toLocaleLowerCase('es');
+    return first + rest;
+  });
+}
+
+function attachTitleCaseFormatter(inputEl) {
+  inputEl.addEventListener('input', () => {
+    const start = inputEl.selectionStart;
+    const end = inputEl.selectionEnd;
+    const original = inputEl.value;
+    const formatted = toTitleCaseLive(original);
+    if (formatted !== original) {
+      inputEl.value = formatted;
+      // La longitud no cambia (solo mayúsculas/minúsculas), así que la
+      // posición del cursor sigue siendo válida tal cual.
+      inputEl.setSelectionRange(start, end);
+    }
+  });
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -136,6 +169,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   /* =========================================================
+     USUARIO ACTUAL (auditoría) — viene de auth-guard.js
+     ========================================================= */
+  function getCurrentUserLabel() {
+    if (typeof getSession !== 'function') return null;
+    const session = getSession();
+    return session.fullName || session.email || null;
+  }
+
+  /* =========================================================
      PESTAÑAS
      ========================================================= */
   const tabButtons = document.querySelectorAll('.tab-btn');
@@ -155,6 +197,40 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   /* =========================================================================
+     ============================  LOGO STORAGE  ===============================
+     ========================================================================= */
+
+  function extractLogoPath(url) {
+    if (!url) return null;
+    const marker = `/object/public/${LOGO_BUCKET}/`;
+    const idx = url.indexOf(marker);
+    if (idx === -1) return null;
+    return url.substring(idx + marker.length);
+  }
+
+  async function uploadLogo(file) {
+    const uniqueName = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    const path = `aseguradoras/${uniqueName}.png`;
+    const { error: uploadError } = await supabaseClient
+      .storage
+      .from(LOGO_BUCKET)
+      .upload(path, file, { contentType: 'image/png', upsert: false });
+    if (uploadError) throw uploadError;
+    const { data } = supabaseClient.storage.from(LOGO_BUCKET).getPublicUrl(path);
+    return data.publicUrl;
+  }
+
+  async function deleteLogoIfExists(url) {
+    const path = extractLogoPath(url);
+    if (!path) return;
+    try {
+      await supabaseClient.storage.from(LOGO_BUCKET).remove([path]);
+    } catch (err) {
+      console.warn('No se pudo eliminar el logo anterior del storage:', err);
+    }
+  }
+
+  /* =========================================================================
      ==========================  ASEGURADORAS  ================================
      ========================================================================= */
 
@@ -171,71 +247,101 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cancelAseguradoraModalBtn = document.getElementById('cancelAseguradoraModalBtn');
   const aseguradoraForm = document.getElementById('aseguradoraForm');
   const aseguradoraIdInput = document.getElementById('aseguradoraId');
+  const aseguradoraLogoUrlActualInput = document.getElementById('aseguradoraLogoUrlActual');
   const aseguradoraNombreInput = document.getElementById('aseguradoraNombre');
-  const aseguradoraEdadMinInput = document.getElementById('aseguradoraEdadMin');
-  const aseguradoraEdadMaxInput = document.getElementById('aseguradoraEdadMax');
-  const aseguradoraStatusInput = document.getElementById('aseguradoraStatus');
-  const aseguradoraStatusTarifaInput = document.getElementById('aseguradoraStatusTarifa');
-  const aseguradoraRefInicioInput = document.getElementById('aseguradoraRefInicio');
-  const aseguradoraIgtfInput = document.getElementById('aseguradoraIgtf');
-  const aseguradoraFinUsdInput = document.getElementById('aseguradoraFinUsd');
-  const aseguradoraFinBsInput = document.getElementById('aseguradoraFinBs');
-  const aseguradoraLogoInput = document.getElementById('aseguradoraLogo');
   const submitAseguradoraBtn = document.getElementById('submitAseguradoraBtn');
-  const editAseguradoraModalBtn = document.getElementById('editAseguradoraModalBtn');
 
   const fieldAseguradoraNombre = document.getElementById('fieldAseguradoraNombre');
-  const fieldAseguradoraCodigo = document.getElementById('fieldAseguradoraCodigo');
-  const fieldAseguradoraEdadMin = document.getElementById('fieldAseguradoraEdadMin');
-  const fieldAseguradoraEdadMax = document.getElementById('fieldAseguradoraEdadMax');
+  const fieldAseguradoraLogo = document.getElementById('fieldAseguradoraLogo');
+
+  const aseguradoraLogoFileInput = document.getElementById('aseguradoraLogoFile');
+  const aseguradoraLogoSelectBtn = document.getElementById('aseguradoraLogoSelectBtn');
+  const aseguradoraLogoRemoveBtn = document.getElementById('aseguradoraLogoRemoveBtn');
+  const aseguradoraLogoPreview = document.getElementById('aseguradoraLogoPreview');
+  const aseguradoraLogoPlaceholder = document.getElementById('aseguradoraLogoPlaceholder');
+
+  attachTitleCaseFormatter(aseguradoraNombreInput);
 
   let currentSortAseguradoras = { key: 'nombre', direction: 'asc' };
   const sortableHeadersAseguradoras = document.querySelectorAll('#aseguradorasTable th.is-sortable');
 
-  function aseguradoraFields() {
-    return [aseguradoraNombreInput, aseguradoraEdadMinInput, aseguradoraEdadMaxInput,
-      aseguradoraStatusInput, aseguradoraStatusTarifaInput, aseguradoraRefInicioInput,
-      aseguradoraIgtfInput, aseguradoraFinUsdInput, aseguradoraFinBsInput, aseguradoraLogoInput];
+  // Estado del logo dentro del modal (independiente de lo ya guardado en DB)
+  let aseguradoraSelectedLogoFile = null; // File nuevo seleccionado, o null
+  let aseguradoraLogoWasRemoved = false;  // true si el usuario pidió quitar el logo existente
+
+  function setLogoPreview(url) {
+    if (url) {
+      aseguradoraLogoPreview.src = url;
+      aseguradoraLogoPreview.style.display = 'block';
+      aseguradoraLogoPlaceholder.style.display = 'none';
+      aseguradoraLogoRemoveBtn.style.display = 'inline-flex';
+    } else {
+      aseguradoraLogoPreview.removeAttribute('src');
+      aseguradoraLogoPreview.style.display = 'none';
+      aseguradoraLogoPlaceholder.style.display = 'block';
+      aseguradoraLogoRemoveBtn.style.display = 'none';
+    }
   }
 
-  function openAseguradoraModal({ edit = false, item = null, viewOnly = false } = {}) {
+  function resetLogoUploadState() {
+    aseguradoraSelectedLogoFile = null;
+    aseguradoraLogoWasRemoved = false;
+    aseguradoraLogoFileInput.value = '';
+    setFieldError(fieldAseguradoraLogo, false);
+  }
+
+  aseguradoraLogoSelectBtn.addEventListener('click', () => aseguradoraLogoFileInput.click());
+
+  aseguradoraLogoFileInput.addEventListener('change', () => {
+    const file = aseguradoraLogoFileInput.files[0];
+    if (!file) return;
+
+    const isPng = file.type === 'image/png';
+    const isValidSize = file.size <= LOGO_MAX_BYTES;
+
+    if (!isPng || !isValidSize) {
+      setFieldError(fieldAseguradoraLogo, true);
+      aseguradoraLogoFileInput.value = '';
+      return;
+    }
+
+    setFieldError(fieldAseguradoraLogo, false);
+    aseguradoraSelectedLogoFile = file;
+    aseguradoraLogoWasRemoved = false;
+    setLogoPreview(URL.createObjectURL(file));
+  });
+
+  aseguradoraLogoRemoveBtn.addEventListener('click', () => {
+    aseguradoraSelectedLogoFile = null;
+    aseguradoraLogoWasRemoved = true;
+    aseguradoraLogoFileInput.value = '';
+    setLogoPreview(null);
+  });
+
+  function aseguradoraFields() {
+    return [aseguradoraNombreInput];
+  }
+
+  function openAseguradoraModal({ edit = false, item = null } = {}) {
     isEditModeAseguradora = edit;
     aseguradoraForm.reset();
     clearFeedback('aseguradoraFormFeedback');
-    [fieldAseguradoraNombre, fieldAseguradoraCodigo, fieldAseguradoraEdadMin, fieldAseguradoraEdadMax]
-      .forEach((f) => setFieldError(f, false));
+    setFieldError(fieldAseguradoraNombre, false);
+    resetLogoUploadState();
 
     if (item) {
-      aseguradoraModalTitle.textContent = viewOnly ? 'Ver Aseguradora' : 'Editar Aseguradora';
+      aseguradoraModalTitle.textContent = 'Editar Aseguradora';
       submitAseguradoraBtn.textContent = 'Guardar Cambios';
       aseguradoraIdInput.value = item.id;
+      aseguradoraLogoUrlActualInput.value = item.logo_url || '';
       aseguradoraNombreInput.value = item.nombre || '';
-      aseguradoraEdadMinInput.value = item.edad_minima ?? '';
-      aseguradoraEdadMaxInput.value = item.edad_maxima ?? '';
-      aseguradoraStatusInput.value = item.status || 'ACTIVO';
-      aseguradoraStatusTarifaInput.value = item.status_tarifa || 'NO APLICA';
-      aseguradoraRefInicioInput.value = item.ref_inicio || '';
-      aseguradoraIgtfInput.checked = !!item.igtf;
-      aseguradoraFinUsdInput.checked = !!item.financiamiento_usd;
-      aseguradoraFinBsInput.checked = !!item.financiamiento_bs;
-      aseguradoraLogoInput.value = item.logo_url || '';
+      setLogoPreview(item.logo_url || null);
     } else {
       aseguradoraModalTitle.textContent = 'Registrar Aseguradora';
       submitAseguradoraBtn.textContent = 'Registrar';
       aseguradoraIdInput.value = '';
-      aseguradoraStatusInput.value = 'ACTIVO';
-      aseguradoraStatusTarifaInput.value = 'NO APLICA';
-    }
-
-    const isViewMode = viewOnly && !!item;
-    aseguradoraFields().forEach((f) => { f.disabled = isViewMode; });
-
-    if (isViewMode) {
-      submitAseguradoraBtn.style.display = 'none';
-      editAseguradoraModalBtn.style.display = 'inline-flex';
-    } else {
-      submitAseguradoraBtn.style.display = 'inline-flex';
-      editAseguradoraModalBtn.style.display = 'none';
+      aseguradoraLogoUrlActualInput.value = '';
+      setLogoPreview(null);
     }
 
     aseguradoraModalOverlay.classList.add('is-open');
@@ -245,19 +351,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   function closeAseguradoraModal() {
     aseguradoraModalOverlay.classList.remove('is-open');
     aseguradoraForm.reset();
-    aseguradoraFields().forEach((f) => { f.disabled = false; });
-    submitAseguradoraBtn.style.display = 'inline-flex';
-    editAseguradoraModalBtn.style.display = 'none';
+    resetLogoUploadState();
+    setLogoPreview(null);
   }
 
   openAseguradoraModalBtn.addEventListener('click', () => openAseguradoraModal({ edit: false }));
-  editAseguradoraModalBtn.addEventListener('click', () => {
-    isEditModeAseguradora = true;
-    aseguradoraFields().forEach((f) => { f.disabled = false; });
-    submitAseguradoraBtn.style.display = 'inline-flex';
-    editAseguradoraModalBtn.style.display = 'none';
-    submitAseguradoraBtn.textContent = 'Guardar Cambios';
-  });
   aseguradoraModalCloseBtn.addEventListener('click', closeAseguradoraModal);
   cancelAseguradoraModalBtn.addEventListener('click', closeAseguradoraModal);
   aseguradoraModalOverlay.addEventListener('click', (e) => {
@@ -270,17 +368,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const nombreOk = aseguradoraNombreInput.value.trim().length >= 3;
     setFieldError(fieldAseguradoraNombre, !nombreOk);
     if (!nombreOk) valid = false;
-
-
-    const min = aseguradoraEdadMinInput.value === '' ? null : Number(aseguradoraEdadMinInput.value);
-    const max = aseguradoraEdadMaxInput.value === '' ? null : Number(aseguradoraEdadMaxInput.value);
-    const minOk = min === null || (min >= 0 && min <= 99);
-    setFieldError(fieldAseguradoraEdadMin, !minOk);
-    if (!minOk) valid = false;
-
-    const maxOk = max === null || (max >= 0 && max <= 99 && (min === null || max >= min));
-    setFieldError(fieldAseguradoraEdadMax, !maxOk);
-    if (!maxOk) valid = false;
 
     return valid;
   }
@@ -295,30 +382,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     items.forEach((item) => {
       const tr = document.createElement('tr');
-      const statusClass = item.status === 'ACTIVO' ? 'status-pill--activo' : 'status-pill--inactivo';
-      const finParts = [];
-      if (item.financiamiento_usd) finParts.push('USD');
-      if (item.financiamiento_bs) finParts.push('Bs');
-      const finText = finParts.length ? finParts.join(' / ') : '—';
 
       tr.innerHTML = `
-        <td data-label="Compañía">
-          ${item.logo_url ? `<img src="${escapeHtml(item.logo_url)}" class="logo-thumb" alt="" onerror="this.style.display='none'">` : ''}
+        <td data-label="Aseguradora">
+          ${item.logo_url
+            ? `<img src="${escapeHtml(item.logo_url)}" class="logo-thumb" alt="" onerror="this.style.display='none'">`
+            : `<span class="logo-placeholder-cell" aria-hidden="true">—</span>`}
           ${escapeHtml(item.nombre)}
         </td>
-        <td data-label="Código">${escapeHtml(item.codigo)}</td>
-        <td data-label="Edad Mín/Máx">${item.edad_minima ?? '—'} / ${item.edad_maxima ?? '—'}</td>
-        <td data-label="Financiamiento">${finText}</td>
-        <td data-label="Estado"><span class="status-pill ${statusClass}">${escapeHtml(item.status)}</span></td>
         <td data-label="Acciones" class="col-actions">
-          <button type="button" class="action-btn action-btn--view" data-id="${item.id}" aria-label="Ver aseguradora">👁</button>
+          <button type="button" class="action-btn action-btn--edit" data-id="${item.id}" aria-label="Editar aseguradora">✏️</button>
           <button type="button" class="action-btn action-btn--delete" data-id="${item.id}" aria-label="Eliminar aseguradora">🗑️</button>
         </td>
       `;
       aseguradorasTableBody.appendChild(tr);
 
-      tr.querySelector('.action-btn--view').addEventListener('click', () => {
-        openAseguradoraModal({ edit: false, item, viewOnly: true });
+      tr.querySelector('.action-btn--edit').addEventListener('click', () => {
+        openAseguradoraModal({ edit: true, item });
       });
       tr.querySelector('.action-btn--delete').addEventListener('click', () => handleDeleteAseguradora(item.id));
     });
@@ -360,8 +440,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     clearSearchAseguradoras.classList.toggle('is-visible', term.length > 0);
     let result = allAseguradoras;
     if (term) {
-      result = result.filter((a) =>
-        a.nombre.toLowerCase().includes(term) || a.codigo.toLowerCase().includes(term));
+      result = result.filter((a) => a.nombre.toLowerCase().includes(term));
     }
     result = sortItems(result, currentSortAseguradoras.key, currentSortAseguradoras.direction);
     renderAseguradoras(result);
@@ -426,20 +505,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     submitAseguradoraBtn.disabled = true;
     submitAseguradoraBtn.textContent = isEditModeAseguradora ? 'Guardando...' : 'Registrando...';
 
-    const payload = {
-      nombre: aseguradoraNombreInput.value.trim().toUpperCase(),
-      edad_minima: aseguradoraEdadMinInput.value === '' ? null : Number(aseguradoraEdadMinInput.value),
-      edad_maxima: aseguradoraEdadMaxInput.value === '' ? null : Number(aseguradoraEdadMaxInput.value),
-      status: aseguradoraStatusInput.value,
-      status_tarifa: aseguradoraStatusTarifaInput.value,
-      ref_inicio: aseguradoraRefInicioInput.value.trim() || null,
-      igtf: aseguradoraIgtfInput.checked,
-      financiamiento_usd: aseguradoraFinUsdInput.checked,
-      financiamiento_bs: aseguradoraFinBsInput.checked,
-      logo_url: aseguradoraLogoInput.value.trim() || null,
-    };
+    const previousLogoUrl = aseguradoraLogoUrlActualInput.value || null;
+    const currentUser = getCurrentUserLabel();
 
     try {
+      // 1) Resolver el logo final antes de tocar la tabla
+      let finalLogoUrl = previousLogoUrl;
+      if (aseguradoraSelectedLogoFile) {
+        finalLogoUrl = await uploadLogo(aseguradoraSelectedLogoFile);
+      } else if (aseguradoraLogoWasRemoved) {
+        finalLogoUrl = null;
+      }
+
+      const payload = {
+        nombre: aseguradoraNombreInput.value.trim(),
+        logo_url: finalLogoUrl,
+      };
+
+      if (isEditModeAseguradora) {
+        payload.usuario_modificacion = currentUser;
+      } else {
+        payload.usuario_creacion = currentUser;
+        payload.usuario_modificacion = currentUser;
+      }
+
       let error;
       if (isEditModeAseguradora) {
         ({ error } = await supabaseClient.from(TABLE_ASEGURADORAS).update(payload).eq('id', aseguradoraIdInput.value));
@@ -450,13 +539,24 @@ document.addEventListener('DOMContentLoaded', async () => {
       submitAseguradoraBtn.disabled = false;
       submitAseguradoraBtn.textContent = isEditModeAseguradora ? 'Guardar Cambios' : 'Registrar';
 
+      if (error) {
+        const prefix = error.code === '23505' ? 'Ya existe una aseguradora con ese nombre.' : 'No se pudo guardar la aseguradora.';
+        showFeedback('aseguradoraFormFeedback', `${prefix} ${getErrorMessage(error)}`, 'error');
+        return;
+      }
+
+      // 2) Si el logo cambió o se quitó, borra el archivo anterior del storage (best-effort)
+      if (previousLogoUrl && previousLogoUrl !== finalLogoUrl) {
+        await deleteLogoIfExists(previousLogoUrl);
+      }
+
       showFeedback('aseguradoraFormFeedback', isEditModeAseguradora ? 'Aseguradora actualizada correctamente.' : 'Aseguradora registrada correctamente.', 'success');
       await loadAseguradoras();
       setTimeout(closeAseguradoraModal, 700);
     } catch (err) {
       submitAseguradoraBtn.disabled = false;
       submitAseguradoraBtn.textContent = isEditModeAseguradora ? 'Guardar Cambios' : 'Registrar';
-      showFeedback('aseguradoraFormFeedback', `No se pudo conectar con Supabase: ${getErrorMessage(err)}`, 'error');
+      showFeedback('aseguradoraFormFeedback', `No se pudo guardar: ${getErrorMessage(err)}`, 'error');
     }
   });
 
@@ -477,6 +577,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         showNotification('aseguradorasNotification', `No se pudo eliminar: ${getErrorMessage(error)}`, 'error');
         return;
       }
+      await deleteLogoIfExists(item.logo_url);
       await loadAseguradoras();
       await loadProductos();
       showNotification('aseguradorasNotification', 'Aseguradora eliminada correctamente.', 'success');
@@ -504,17 +605,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const productoIdInput = document.getElementById('productoId');
   const productoAseguradoraSelect = document.getElementById('productoAseguradora');
   const productoNombreInput = document.getElementById('productoNombre');
-  const productoEdadMinInput = document.getElementById('productoEdadMin');
-  const productoEdadMaxInput = document.getElementById('productoEdadMax');
-  const productoStatusInput = document.getElementById('productoStatus');
-  const productoStatusTarifaInput = document.getElementById('productoStatusTarifa');
-  const productoMostrarInicioInput = document.getElementById('productoMostrarInicio');
   const submitProductoBtn = document.getElementById('submitProductoBtn');
-  const editProductoModalBtn = document.getElementById('editProductoModalBtn');
 
   const fieldProductoAseguradora = document.getElementById('fieldProductoAseguradora');
   const fieldProductoNombre = document.getElementById('fieldProductoNombre');
-  const fieldProductoEdadMax = document.getElementById('fieldProductoEdadMax');
+
+  attachTitleCaseFormatter(productoNombreInput);
 
   let currentSortProductos = { key: 'nombre', direction: 'asc' };
   const sortableHeadersProductos = document.querySelectorAll('#productosTable th.is-sortable');
@@ -532,45 +628,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function productoFields() {
-    return [productoAseguradoraSelect, productoNombreInput, productoEdadMinInput, productoEdadMaxInput,
-      productoStatusInput, productoStatusTarifaInput, productoMostrarInicioInput];
+    return [productoAseguradoraSelect, productoNombreInput];
   }
 
-  function openProductoModal({ edit = false, item = null, viewOnly = false } = {}) {
+  function openProductoModal({ edit = false, item = null } = {}) {
     isEditModeProducto = edit;
     productoForm.reset();
     clearFeedback('productoFormFeedback');
-    [fieldProductoAseguradora, fieldProductoNombre, fieldProductoEdadMax].forEach((f) => setFieldError(f, false));
+    [fieldProductoAseguradora, fieldProductoNombre].forEach((f) => setFieldError(f, false));
 
     if (item) {
-      productoModalTitle.textContent = viewOnly ? 'Ver Producto' : 'Editar Producto';
+      productoModalTitle.textContent = 'Editar Producto';
       submitProductoBtn.textContent = 'Guardar Cambios';
       productoIdInput.value = item.id;
       productoAseguradoraSelect.value = item.aseguradora_id;
       productoNombreInput.value = item.nombre || '';
-      productoEdadMinInput.value = item.edad_minima ?? '';
-      productoEdadMaxInput.value = item.edad_maxima ?? '';
-      productoStatusInput.value = item.status || 'ACTIVO';
-      productoStatusTarifaInput.value = item.status_tarifa || 'NO APLICA';
-      productoMostrarInicioInput.checked = !!item.mostrar_en_inicio;
     } else {
       productoModalTitle.textContent = 'Registrar Producto';
       submitProductoBtn.textContent = 'Registrar';
       productoIdInput.value = '';
-      productoStatusInput.value = 'ACTIVO';
-      productoStatusTarifaInput.value = 'NO APLICA';
-      productoMostrarInicioInput.checked = true;
-    }
-
-    const isViewMode = viewOnly && !!item;
-    productoFields().forEach((f) => { f.disabled = isViewMode; });
-
-    if (isViewMode) {
-      submitProductoBtn.style.display = 'none';
-      editProductoModalBtn.style.display = 'inline-flex';
-    } else {
-      submitProductoBtn.style.display = 'inline-flex';
-      editProductoModalBtn.style.display = 'none';
     }
 
     productoModalOverlay.classList.add('is-open');
@@ -580,19 +656,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   function closeProductoModal() {
     productoModalOverlay.classList.remove('is-open');
     productoForm.reset();
-    productoFields().forEach((f) => { f.disabled = false; });
-    submitProductoBtn.style.display = 'inline-flex';
-    editProductoModalBtn.style.display = 'none';
   }
 
   openProductoModalBtn.addEventListener('click', () => openProductoModal({ edit: false }));
-  editProductoModalBtn.addEventListener('click', () => {
-    isEditModeProducto = true;
-    productoFields().forEach((f) => { f.disabled = false; });
-    submitProductoBtn.style.display = 'inline-flex';
-    editProductoModalBtn.style.display = 'none';
-    submitProductoBtn.textContent = 'Guardar Cambios';
-  });
   productoModalCloseBtn.addEventListener('click', closeProductoModal);
   cancelProductoModalBtn.addEventListener('click', closeProductoModal);
   productoModalOverlay.addEventListener('click', (e) => {
@@ -610,12 +676,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     setFieldError(fieldProductoNombre, !nombreOk);
     if (!nombreOk) valid = false;
 
-    const min = productoEdadMinInput.value === '' ? 0 : Number(productoEdadMinInput.value);
-    const max = productoEdadMaxInput.value === '' ? 99 : Number(productoEdadMaxInput.value);
-    const maxOk = max >= min;
-    setFieldError(fieldProductoEdadMax, !maxOk);
-    if (!maxOk) valid = false;
-
     return valid;
   }
 
@@ -629,24 +689,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     items.forEach((item) => {
       const tr = document.createElement('tr');
-      const statusClass = item.status === 'ACTIVO' ? 'status-pill--activo' : 'status-pill--inactivo';
       const aseguradoraNombre = item.aseguradoras?.nombre || allAseguradoras.find((a) => a.id === item.aseguradora_id)?.nombre || '—';
 
       tr.innerHTML = `
         <td data-label="Producto">${escapeHtml(item.nombre)}</td>
         <td data-label="Aseguradora">${escapeHtml(aseguradoraNombre)}</td>
-        <td data-label="Edad Mín/Máx">${item.edad_minima ?? '—'} / ${item.edad_maxima ?? '—'}</td>
-        <td data-label="Mostrar en Inicio">${item.mostrar_en_inicio ? 'Sí' : 'No'}</td>
-        <td data-label="Estado"><span class="status-pill ${statusClass}">${escapeHtml(item.status)}</span></td>
         <td data-label="Acciones" class="col-actions">
-          <button type="button" class="action-btn action-btn--view" data-id="${item.id}" aria-label="Ver producto">👁</button>
+          <button type="button" class="action-btn action-btn--edit" data-id="${item.id}" aria-label="Editar producto">✏️</button>
           <button type="button" class="action-btn action-btn--delete" data-id="${item.id}" aria-label="Eliminar producto">🗑️</button>
         </td>
       `;
       productosTableBody.appendChild(tr);
 
-      tr.querySelector('.action-btn--view').addEventListener('click', () => {
-        openProductoModal({ edit: false, item, viewOnly: true });
+      tr.querySelector('.action-btn--edit').addEventListener('click', () => {
+        openProductoModal({ edit: true, item });
       });
       tr.querySelector('.action-btn--delete').addEventListener('click', () => handleDeleteProducto(item.id));
     });
@@ -735,15 +791,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     submitProductoBtn.disabled = true;
     submitProductoBtn.textContent = isEditModeProducto ? 'Guardando...' : 'Registrando...';
 
+    const currentUser = getCurrentUserLabel();
+
     const payload = {
       aseguradora_id: productoAseguradoraSelect.value,
-      nombre: productoNombreInput.value.trim().toUpperCase(),
-      edad_minima: productoEdadMinInput.value === '' ? 0 : Number(productoEdadMinInput.value),
-      edad_maxima: productoEdadMaxInput.value === '' ? 99 : Number(productoEdadMaxInput.value),
-      status: productoStatusInput.value,
-      status_tarifa: productoStatusTarifaInput.value,
-      mostrar_en_inicio: productoMostrarInicioInput.checked,
+      nombre: productoNombreInput.value.trim(),
     };
+
+    if (isEditModeProducto) {
+      payload.usuario_modificacion = currentUser;
+    } else {
+      payload.usuario_creacion = currentUser;
+      payload.usuario_modificacion = currentUser;
+    }
 
     try {
       let error;
