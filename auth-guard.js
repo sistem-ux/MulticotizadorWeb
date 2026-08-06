@@ -32,6 +32,7 @@ const PAGE_PERMISSIONS = {
   'dashboard.html': [ROLES.ADMIN, ROLES.COLABORADOR, ROLES.ASESOR],
   'usuarios.html': [ROLES.ADMIN],
   'aseguradoras.html': [ROLES.ADMIN],
+  'planes.html': [ROLES.ADMIN],
   'perfiles.html': [ROLES.ADMIN],
   'cotizador.html': [ROLES.ADMIN, ROLES.COLABORADOR, ROLES.ASESOR, ROLES.VISITANTE],
 };
