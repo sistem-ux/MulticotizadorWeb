@@ -382,6 +382,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     items.forEach((item) => {
       const tr = document.createElement('tr');
+      const isActivo = item.status === 'Activo';
+      const statusClass = isActivo ? 'status-pill--activo' : 'status-pill--inactivo';
+      const toggleIcon = isActivo ? '✕' : '✓';
+      const toggleClass = isActivo ? 'action-btn--toggle-on' : 'action-btn--toggle-off';
+      const toggleLabel = isActivo ? 'Inactivar aseguradora' : 'Activar aseguradora';
 
       tr.innerHTML = `
         <td data-label="Aseguradora">
@@ -390,8 +395,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             : `<span class="logo-placeholder-cell" aria-hidden="true">—</span>`}
           ${escapeHtml(item.nombre)}
         </td>
+        <td data-label="Status Aseguradora"><span class="status-pill ${statusClass}">${escapeHtml(item.status)}</span></td>
         <td data-label="Acciones" class="col-actions">
           <button type="button" class="action-btn action-btn--edit" data-id="${item.id}" aria-label="Editar aseguradora">✏️</button>
+          <button type="button" class="action-btn ${toggleClass}" data-id="${item.id}" aria-label="${toggleLabel}">${toggleIcon}</button>
           <button type="button" class="action-btn action-btn--delete" data-id="${item.id}" aria-label="Eliminar aseguradora">🗑️</button>
         </td>
       `;
@@ -400,6 +407,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       tr.querySelector('.action-btn--edit').addEventListener('click', () => {
         openAseguradoraModal({ edit: true, item });
       });
+      tr.querySelector(`.${toggleClass}`).addEventListener('click', () => handleToggleStatusAseguradora(item));
       tr.querySelector('.action-btn--delete').addEventListener('click', () => handleDeleteAseguradora(item.id));
     });
   }
@@ -560,6 +568,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  async function handleToggleStatusAseguradora(item) {
+    const nextStatus = item.status === 'Activo' ? 'Inactivo' : 'Activo';
+    const currentUser = getCurrentUserLabel();
+
+    try {
+      const { error } = await supabaseClient
+        .from(TABLE_ASEGURADORAS)
+        .update({ status: nextStatus, usuario_modificacion: currentUser })
+        .eq('id', item.id);
+
+      if (error) {
+        showNotification('aseguradorasNotification', `No se pudo cambiar el status: ${getErrorMessage(error)}`, 'error');
+        return;
+      }
+      await loadAseguradoras();
+      showNotification('aseguradorasNotification', `Aseguradora "${item.nombre}" marcada como ${nextStatus}.`, 'success');
+    } catch (err) {
+      showNotification('aseguradorasNotification', `No se pudo cambiar el status: ${getErrorMessage(err)}`, 'error');
+    }
+  }
+
   async function handleDeleteAseguradora(id) {
     const item = allAseguradoras.find((a) => a.id === id);
     if (!item) return;
@@ -690,12 +719,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     items.forEach((item) => {
       const tr = document.createElement('tr');
       const aseguradoraNombre = item.aseguradoras?.nombre || allAseguradoras.find((a) => a.id === item.aseguradora_id)?.nombre || '—';
+      const isActivo = item.status === 'Activo';
+      const statusClass = isActivo ? 'status-pill--activo' : 'status-pill--inactivo';
+      const toggleIcon = isActivo ? '✕' : '✓';
+      const toggleClass = isActivo ? 'action-btn--toggle-on' : 'action-btn--toggle-off';
+      const toggleLabel = isActivo ? 'Inactivar producto' : 'Activar producto';
 
       tr.innerHTML = `
         <td data-label="Producto">${escapeHtml(item.nombre)}</td>
         <td data-label="Aseguradora">${escapeHtml(aseguradoraNombre)}</td>
+        <td data-label="Status Producto"><span class="status-pill ${statusClass}">${escapeHtml(item.status)}</span></td>
         <td data-label="Acciones" class="col-actions">
           <button type="button" class="action-btn action-btn--edit" data-id="${item.id}" aria-label="Editar producto">✏️</button>
+          <button type="button" class="action-btn ${toggleClass}" data-id="${item.id}" aria-label="${toggleLabel}">${toggleIcon}</button>
           <button type="button" class="action-btn action-btn--delete" data-id="${item.id}" aria-label="Eliminar producto">🗑️</button>
         </td>
       `;
@@ -704,6 +740,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       tr.querySelector('.action-btn--edit').addEventListener('click', () => {
         openProductoModal({ edit: true, item });
       });
+      tr.querySelector(`.${toggleClass}`).addEventListener('click', () => handleToggleStatusProducto(item));
       tr.querySelector('.action-btn--delete').addEventListener('click', () => handleDeleteProducto(item.id));
     });
   }
@@ -831,6 +868,27 @@ document.addEventListener('DOMContentLoaded', async () => {
       showFeedback('productoFormFeedback', `No se pudo conectar con Supabase: ${getErrorMessage(err)}`, 'error');
     }
   });
+
+  async function handleToggleStatusProducto(item) {
+    const nextStatus = item.status === 'Activo' ? 'Inactivo' : 'Activo';
+    const currentUser = getCurrentUserLabel();
+
+    try {
+      const { error } = await supabaseClient
+        .from(TABLE_PRODUCTOS)
+        .update({ status: nextStatus, usuario_modificacion: currentUser })
+        .eq('id', item.id);
+
+      if (error) {
+        showNotification('productosNotification', `No se pudo cambiar el status: ${getErrorMessage(error)}`, 'error');
+        return;
+      }
+      await loadProductos();
+      showNotification('productosNotification', `Producto "${item.nombre}" marcado como ${nextStatus}.`, 'success');
+    } catch (err) {
+      showNotification('productosNotification', `No se pudo cambiar el status: ${getErrorMessage(err)}`, 'error');
+    }
+  }
 
   async function handleDeleteProducto(id) {
     const item = allProductos.find((p) => p.id === id);

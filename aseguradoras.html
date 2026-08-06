@@ -218,6 +218,23 @@
     .tab-panel { display: none; }
     .tab-panel.is-active { display: block; }
 
+    .status-pill {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+    .status-pill--activo { background: #dff6e8; color: #235F2F; }
+    .status-pill--inactivo { background: #f5e2e2; color: #C0392B; }
+
+    .action-btn--toggle-on {
+      color: #C0392B;
+    }
+    .action-btn--toggle-off {
+      color: #235F2F;
+    }
+
     .logo-thumb {
       width: 34px;
       height: 34px;
@@ -356,6 +373,7 @@
               <thead>
                 <tr>
                   <th scope="col" class="is-sortable" data-sort-key="nombre">Aseguradora <span class="sort-indicator"></span></th>
+                  <th scope="col">Status Aseguradora</th>
                   <th scope="col" class="col-actions">Acciones</th>
                 </tr>
               </thead>
@@ -390,6 +408,7 @@
                 <tr>
                   <th scope="col" class="is-sortable" data-sort-key="nombre">Producto <span class="sort-indicator"></span></th>
                   <th scope="col">Aseguradora</th>
+                  <th scope="col">Status Producto</th>
                   <th scope="col" class="col-actions">Acciones</th>
                 </tr>
               </thead>
