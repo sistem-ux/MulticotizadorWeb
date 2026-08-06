@@ -235,6 +235,20 @@
       color: #235F2F;
     }
 
+    /* Los botones de Acciones (editar / activar-inactivar / eliminar) siempre
+       en línea, uno al lado del otro, sin importar cómo stylesusers.css
+       maneje la celda por defecto (incluida la vista de tarjeta en móvil). */
+    .users-table td.col-actions {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 0.4rem;
+      white-space: nowrap;
+    }
+    .users-table td.col-actions .action-btn {
+      flex-shrink: 0;
+    }
+
     .logo-thumb {
       width: 34px;
       height: 34px;
