@@ -326,6 +326,190 @@
 
     .logo-upload__actions .btn { padding: 0.5rem 0.9rem; font-size: 0.85rem; }
 
+    /* ---------------------------------------------------------------
+       Pestañas Planes / Tarifas: formularios extensos por secciones,
+       campos monetarios/porcentuales con prefijo/sufijo, checkboxes
+       que habilitan/deshabilitan campos, tarjetas de coberturas y
+       grilla de tarifas por rango etario.
+       --------------------------------------------------------------- */
+    .modal--wide { max-width: 760px; width: 94%; }
+
+    .form-section {
+      border-top: 1px solid var(--color-gray-border);
+      margin-top: 1.25rem;
+      padding-top: 1rem;
+    }
+    .form-section:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+
+    .form-section__title {
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--color-navy);
+      margin: 0 0 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.9rem 1rem;
+    }
+    .form-grid .modal__field.span-2 { grid-column: 1 / -1; }
+    @media (max-width: 640px) {
+      .form-grid { grid-template-columns: 1fr; }
+    }
+
+    .input-currency, .input-percent {
+      display: flex;
+      align-items: stretch;
+      border: 1px solid var(--color-gray-border);
+      border-radius: 6px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .input-currency__prefix, .input-percent__suffix {
+      display: flex;
+      align-items: center;
+      padding: 0 0.6rem;
+      background: var(--color-gray-light);
+      color: #5B6472;
+      font-weight: 600;
+      font-size: 0.9rem;
+      border-right: 1px solid var(--color-gray-border);
+    }
+    .input-percent__suffix { border-right: none; border-left: 1px solid var(--color-gray-border); order: 2; }
+    .input-currency input, .input-percent input {
+      border: none;
+      outline: none;
+      padding: 0.6rem 0.7rem;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.92rem;
+      flex: 1;
+      min-width: 0;
+      background: transparent;
+    }
+    .input-currency input:disabled, .input-percent input:disabled,
+    .text-input:disabled, select.text-input:disabled {
+      background: var(--color-gray-light);
+      color: #9BA0AB;
+      cursor: not-allowed;
+    }
+
+    .plan-preview-box {
+      background: var(--color-gray-light);
+      border: 1px dashed var(--color-gray-border);
+      border-radius: 6px;
+      padding: 0.65rem 0.85rem;
+      font-size: 0.85rem;
+      color: #3C4350;
+      margin-top: 0.75rem;
+    }
+    .plan-preview-box strong { color: var(--color-navy); }
+
+    .check-field {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+      color: #3C4350;
+      user-select: none;
+      cursor: pointer;
+    }
+    .check-field input[type="checkbox"] { width: 17px; height: 17px; accent-color: #2C7D3C; cursor: pointer; }
+
+    .check-with-field {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .check-with-field .input-currency,
+    .check-with-field .input-percent { flex: 1; min-width: 140px; }
+
+    .coverage-card {
+      border: 1px solid var(--color-gray-border);
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      margin-bottom: 0.85rem;
+      background: #FCFCFD;
+    }
+    .coverage-card__title {
+      font-weight: 700;
+      font-size: 0.88rem;
+      color: var(--color-navy);
+      margin-bottom: 0.6rem;
+    }
+    .coverage-card__row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.6rem 0.9rem;
+      align-items: end;
+    }
+    @media (max-width: 640px) {
+      .coverage-card__row { grid-template-columns: 1fr; }
+    }
+    .coverage-card__field label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #5B6472;
+      margin-bottom: 0.25rem;
+    }
+    .sum-row { display: flex; gap: 0.6rem; align-items: end; margin-bottom: 0.5rem; }
+    .sum-row .coverage-card__field { flex: 1; }
+    .btn-remove-sum {
+      background: none; border: 1px solid var(--color-gray-border); border-radius: 6px;
+      color: #C0392B; cursor: pointer; padding: 0.5rem 0.6rem; font-size: 0.85rem; flex-shrink: 0;
+    }
+    .btn-remove-sum:hover { background: #f5e2e2; }
+    .btn-add-sum {
+      background: none; border: 1px dashed #2C7D3C; border-radius: 6px; color: #235F2F;
+      cursor: pointer; padding: 0.4rem 0.75rem; font-size: 0.82rem; font-weight: 600; margin-top: 0.2rem;
+    }
+    .btn-add-sum:hover { background: #dff6e8; }
+
+    .age-range-plan-select {
+      margin-bottom: 0.75rem;
+    }
+    .age-range-hint {
+      font-size: 0.82rem;
+      color: #5B6472;
+      margin-bottom: 0.75rem;
+    }
+    .age-range-group__title {
+      font-weight: 700;
+      font-size: 0.85rem;
+      color: var(--color-navy);
+      margin: 0.75rem 0 0.5rem;
+    }
+    .age-range-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.6rem 0.8rem;
+    }
+    @media (max-width: 640px) {
+      .age-range-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    .age-range-item label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #5B6472;
+      margin-bottom: 0.25rem;
+    }
+    .age-range-empty {
+      font-size: 0.85rem;
+      color: #9BA0AB;
+      font-style: italic;
+    }
+
+    .modal--readonly .btn--primary { display: none; }
+    .modal--readonly select.text-input,
+    .modal--readonly input.text-input { pointer-events: none; }
+
     @media (max-width: 768px) {
       .sidebar { transform: translateX(-100%); }
       .sidebar.is-mobile-visible { transform: translateX(0); }
@@ -361,14 +545,16 @@
 
         <header class="page-header">
           <span class="page-header__eyebrow">Administración</span>
-          <h1 class="page-header__title">🏢 Aseguradoras y Productos</h1>
-          <p class="page-header__subtitle">Registra las compañías aseguradoras y los productos que ofrece cada una. Los planes se configuran desde el menú "Planes".</p>
+          <h1 class="page-header__title">🏢 Aseguradoras, Productos, Planes y Tarifas</h1>
+          <p class="page-header__subtitle">Registra las compañías aseguradoras, sus productos, los planes que ofrece cada producto y las tarifas asociadas a cada plan.</p>
         </header>
 
         <!-- PESTAÑAS -->
         <nav class="tabs-nav">
           <button type="button" class="tab-btn is-active" data-tab="aseguradoras">Aseguradoras</button>
           <button type="button" class="tab-btn" data-tab="productos">Productos</button>
+          <button type="button" class="tab-btn" data-tab="planes">Planes</button>
+          <button type="button" class="tab-btn" data-tab="tarifas">Tarifas</button>
         </nav>
 
         <!-- ============================================================
@@ -437,6 +623,74 @@
             </table>
             <div id="productosLoading" class="users-loading">Cargando productos...</div>
             <div id="productosEmpty" class="users-empty" style="display:none;">No se encontraron productos.</div>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             PESTAÑA: PLANES
+             ============================================================ -->
+        <section id="panelPlanes" class="tab-panel">
+
+          <div class="users-toolbar">
+            <div class="search-bar">
+              <span class="search-bar__icon" aria-hidden="true">🔎</span>
+              <input type="text" id="searchPlanes" class="search-bar__input" placeholder="Buscar por nombre de plan..." autocomplete="off">
+              <button type="button" id="clearSearchPlanes" class="search-bar__clear" aria-label="Limpiar búsqueda">✕</button>
+            </div>
+            <button type="button" id="openPlanModalBtn" class="btn btn--register">
+              <span aria-hidden="true">＋</span> Registrar Plan
+            </button>
+          </div>
+
+          <div id="planesNotification" class="page-notification" aria-live="polite" style="display:none;"></div>
+
+          <div class="users-table-wrapper">
+            <table class="users-table" id="planesTable">
+              <thead>
+                <tr>
+                  <th scope="col" class="is-sortable" data-sort-key="nombre_plan">Plan <span class="sort-indicator"></span></th>
+                  <th scope="col">Status Plan</th>
+                  <th scope="col" class="col-actions">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="planesTableBody"></tbody>
+            </table>
+            <div id="planesLoading" class="users-loading">Cargando planes...</div>
+            <div id="planesEmpty" class="users-empty" style="display:none;">No se encontraron planes.</div>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             PESTAÑA: TARIFAS
+             ============================================================ -->
+        <section id="panelTarifas" class="tab-panel">
+
+          <div class="users-toolbar">
+            <div class="search-bar">
+              <span class="search-bar__icon" aria-hidden="true">🔎</span>
+              <input type="text" id="searchTarifas" class="search-bar__input" placeholder="Buscar por plan..." autocomplete="off">
+              <button type="button" id="clearSearchTarifas" class="search-bar__clear" aria-label="Limpiar búsqueda">✕</button>
+            </div>
+            <button type="button" id="openTarifaModalBtn" class="btn btn--register">
+              <span aria-hidden="true">＋</span> Registrar Tarifa
+            </button>
+          </div>
+
+          <div id="tarifasNotification" class="page-notification" aria-live="polite" style="display:none;"></div>
+
+          <div class="users-table-wrapper">
+            <table class="users-table" id="tarifasTable">
+              <thead>
+                <tr>
+                  <th scope="col" class="is-sortable" data-sort-key="plan_nombre">Plan <span class="sort-indicator"></span></th>
+                  <th scope="col">Status Tarifa</th>
+                  <th scope="col" class="col-actions">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="tarifasTableBody"></tbody>
+            </table>
+            <div id="tarifasLoading" class="users-loading">Cargando tarifas...</div>
+            <div id="tarifasEmpty" class="users-empty" style="display:none;">No se encontraron tarifas.</div>
           </div>
         </section>
 
@@ -523,6 +777,227 @@
         <div class="modal__footer">
           <button type="button" class="btn btn--cancel" id="cancelProductoModalBtn">Cerrar</button>
           <button type="submit" class="btn btn--primary" id="submitProductoBtn">Registrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL: REGISTRAR / EDITAR / VER PLAN
+       ========================================================= -->
+  <div class="modal-overlay" id="planModalOverlay">
+    <div class="modal modal--wide" role="dialog" aria-modal="true" aria-labelledby="planModalTitle">
+      <div class="modal__header">
+        <h2 class="modal__title" id="planModalTitle">Registrar Plan</h2>
+        <button type="button" class="modal__close" id="planModalCloseBtn" aria-label="Cerrar">✕</button>
+      </div>
+
+      <form id="planForm" novalidate>
+        <input type="hidden" id="planId" value="">
+
+        <!-- DATOS PRINCIPALES -->
+        <div class="form-section">
+          <h3 class="form-section__title">📋 Datos Principales</h3>
+          <div class="form-grid">
+            <div class="modal__field" id="fieldPlanAseguradora">
+              <label for="planAseguradora" class="form-label">Aseguradora</label>
+              <select id="planAseguradora" class="text-input" required>
+                <option value="">Selecciona una aseguradora</option>
+              </select>
+              <span class="field-error">Selecciona la aseguradora.</span>
+            </div>
+
+            <div class="modal__field" id="fieldPlanProducto">
+              <label for="planProducto" class="form-label">Producto</label>
+              <select id="planProducto" class="text-input" required disabled>
+                <option value="">Selecciona primero una aseguradora</option>
+              </select>
+              <span class="field-error">Selecciona el producto.</span>
+            </div>
+
+            <div class="modal__field" id="fieldPlanTipoTarifa">
+              <label for="planTipoTarifa" class="form-label">Tipo de Tarifa</label>
+              <select id="planTipoTarifa" class="text-input" required>
+                <option value="">Selecciona el tipo</option>
+                <option value="Emisión">Emisión</option>
+                <option value="Continuidad">Continuidad</option>
+              </select>
+              <span class="field-error">Selecciona el tipo de tarifa.</span>
+            </div>
+
+            <div class="modal__field" id="fieldPlanSumaAsegurada">
+              <label for="planSumaAsegurada" class="form-label">Suma Asegurada</label>
+              <div class="input-currency"><span class="input-currency__prefix">$</span><input type="text" inputmode="numeric" id="planSumaAsegurada" required></div>
+              <span class="field-error">Ingresa la suma asegurada.</span>
+            </div>
+
+            <div class="modal__field" id="fieldPlanDeducibleVzla">
+              <label for="planDeducibleVzla" class="form-label">Deducible en Venezuela</label>
+              <div class="input-currency"><span class="input-currency__prefix">$</span><input type="text" inputmode="numeric" id="planDeducibleVzla" required></div>
+              <span class="field-error">Ingresa el deducible en Venezuela.</span>
+            </div>
+
+            <div class="modal__field" id="fieldPlanDeducibleExterior">
+              <label for="planDeducibleExterior" class="form-label">Deducible en el Exterior</label>
+              <div class="input-currency"><span class="input-currency__prefix">$</span><input type="text" inputmode="numeric" id="planDeducibleExterior" required></div>
+              <span class="field-error">Ingresa el deducible en el exterior.</span>
+            </div>
+          </div>
+
+          <div class="plan-preview-box">
+            <strong>Nombre del Plan (automático):</strong>
+            <div id="planNombrePreview">Completa los campos para generar el nombre del plan.</div>
+          </div>
+        </div>
+
+        <!-- AJUSTE DE EDADES -->
+        <div class="form-section">
+          <h3 class="form-section__title">🎂 Ajuste de Edades</h3>
+          <div class="form-grid">
+            <div class="modal__field" id="fieldPlanEdadMinMaternidad">
+              <label for="planEdadMinMaternidad" class="form-label">Edad mínima Maternidad</label>
+              <input type="number" min="0" max="60" step="1" id="planEdadMinMaternidad" class="text-input" required>
+              <span class="field-error">Ingresa un valor entre 0 y 60.</span>
+            </div>
+            <div class="modal__field" id="fieldPlanEdadMaxMaternidad">
+              <label for="planEdadMaxMaternidad" class="form-label">Edad máxima Maternidad</label>
+              <input type="number" min="0" max="60" step="1" id="planEdadMaxMaternidad" class="text-input" required>
+              <span class="field-error">Ingresa un valor entre 0 y 60, mayor o igual a la edad mínima.</span>
+            </div>
+            <div class="modal__field" id="fieldPlanEdadMinTitular">
+              <label for="planEdadMinTitular" class="form-label">Edad mínima Titular</label>
+              <input type="number" min="0" max="120" step="1" id="planEdadMinTitular" class="text-input" required>
+              <span class="field-error">Ingresa un valor entre 0 y 120.</span>
+            </div>
+            <div class="modal__field" id="fieldPlanEdadMaxTitular">
+              <label for="planEdadMaxTitular" class="form-label">Edad máxima Titular</label>
+              <input type="number" min="0" max="120" step="1" id="planEdadMaxTitular" class="text-input" required>
+              <span class="field-error">Ingresa un valor entre 0 y 120, mayor o igual a la edad mínima.</span>
+            </div>
+            <div class="modal__field" id="fieldPlanEdadMinFamiliares">
+              <label for="planEdadMinFamiliares" class="form-label">Edad mínima Familiares</label>
+              <input type="number" min="0" max="120" step="1" id="planEdadMinFamiliares" class="text-input" required>
+              <span class="field-error">Ingresa un valor entre 0 y 120.</span>
+            </div>
+            <div class="modal__field" id="fieldPlanEdadMaxFamiliares">
+              <label for="planEdadMaxFamiliares" class="form-label">Edad máxima Familiares</label>
+              <input type="number" min="0" max="120" step="1" id="planEdadMaxFamiliares" class="text-input" required>
+              <span class="field-error">Ingresa un valor entre 0 y 120, mayor o igual a la edad mínima.</span>
+            </div>
+            <div class="modal__field span-2" id="fieldPlanModoTarifaHijos">
+              <label for="planModoTarifaHijos" class="form-label">Modo Tarifa Hijos</label>
+              <select id="planModoTarifaHijos" class="text-input" required>
+                <option value="">Selecciona el modo</option>
+                <option value="Por hijo">Por hijo</option>
+                <option value="Por cantidad de hijos">Por cantidad de hijos</option>
+              </select>
+              <span class="field-error">Selecciona el modo de tarifa para hijos.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- FRACCIONAMIENTO -->
+        <div class="form-section">
+          <h3 class="form-section__title">📆 Fraccionamiento</h3>
+          <div class="modal__field">
+            <div class="check-with-field">
+              <label class="check-field"><input type="checkbox" id="planGastosFraccionamientoCheck"> Gastos por fraccionamiento</label>
+              <div class="input-currency"><span class="input-currency__prefix">$</span><input type="text" inputmode="numeric" id="planGastosFraccionamientoMonto" disabled></div>
+            </div>
+          </div>
+          <div class="modal__field" style="display:flex; gap:1.5rem; flex-wrap:wrap; margin-top:0.75rem;">
+            <label class="check-field"><input type="checkbox" id="planSemestral"> Semestral</label>
+            <label class="check-field"><input type="checkbox" id="planTrimestral"> Trimestral</label>
+            <label class="check-field"><input type="checkbox" id="planMensual"> Mensual</label>
+          </div>
+        </div>
+
+        <!-- FINANCIAMIENTO -->
+        <div class="form-section">
+          <h3 class="form-section__title">💳 Financiamiento</h3>
+          <div class="modal__field">
+            <label class="check-field"><input type="checkbox" id="planFinanciable"> Financiable</label>
+          </div>
+        </div>
+
+        <!-- BENEFICIOS -->
+        <div class="form-section">
+          <h3 class="form-section__title">🎁 Beneficios</h3>
+          <div class="modal__field">
+            <div class="check-with-field">
+              <label class="check-field"><input type="checkbox" id="planDescuentoDivisasCheck"> Descuento por pago en Divisas</label>
+              <div class="input-percent"><input type="number" min="0" max="100" step="1" id="planDescuentoDivisasPorcentaje" disabled><span class="input-percent__suffix">%</span></div>
+            </div>
+          </div>
+          <div class="modal__field" style="margin-top:0.75rem;">
+            <div class="check-with-field">
+              <label class="check-field"><input type="checkbox" id="planDescuentoContadoCheck"> Descuento por pago De Contado</label>
+              <div class="input-percent"><input type="number" min="0" max="100" step="1" id="planDescuentoContadoPorcentaje" disabled><span class="input-percent__suffix">%</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-feedback" id="planFormFeedback"></div>
+
+        <div class="modal__footer">
+          <button type="button" class="btn btn--cancel" id="cancelPlanModalBtn">Cerrar</button>
+          <button type="submit" class="btn btn--primary" id="submitPlanBtn">Registrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL: REGISTRAR / EDITAR / VER TARIFA
+       ========================================================= -->
+  <div class="modal-overlay" id="tarifaModalOverlay">
+    <div class="modal modal--wide" role="dialog" aria-modal="true" aria-labelledby="tarifaModalTitle">
+      <div class="modal__header">
+        <h2 class="modal__title" id="tarifaModalTitle">Registrar Tarifa</h2>
+        <button type="button" class="modal__close" id="tarifaModalCloseBtn" aria-label="Cerrar">✕</button>
+      </div>
+
+      <form id="tarifaForm" novalidate>
+        <input type="hidden" id="tarifaId" value="">
+
+        <!-- DATOS PRINCIPALES -->
+        <div class="form-section">
+          <h3 class="form-section__title">📋 Datos Principales</h3>
+          <div class="modal__field" id="fieldTarifaPlan">
+            <label for="tarifaPlan" class="form-label">Plan</label>
+            <select id="tarifaPlan" class="text-input" required>
+              <option value="">Selecciona un plan</option>
+            </select>
+            <span class="field-error">Selecciona el plan.</span>
+          </div>
+        </div>
+
+        <!-- COBERTURAS -->
+        <div class="form-section">
+          <h3 class="form-section__title">🛡️ Coberturas</h3>
+          <div id="tarifaCoberturasContainer"></div>
+        </div>
+
+        <!-- MATERNIDAD -->
+        <div class="form-section">
+          <h3 class="form-section__title">🤰 Maternidad</h3>
+          <div id="tarifaMaternidadContainer"></div>
+        </div>
+
+        <!-- TARIFAS POR RANGO ETARIO -->
+        <div class="form-section">
+          <h3 class="form-section__title">👥 Tarifas por Rango Etario</h3>
+          <p class="age-range-hint">Los rangos disponibles se calculan automáticamente según las edades mínima y máxima configuradas en el plan seleccionado.</p>
+          <div id="tarifaRangosContainer">
+            <p class="age-range-empty">Selecciona un plan para ver los rangos etarios disponibles.</p>
+          </div>
+        </div>
+
+        <div class="form-feedback" id="tarifaFormFeedback"></div>
+
+        <div class="modal__footer">
+          <button type="button" class="btn btn--cancel" id="cancelTarifaModalBtn">Cerrar</button>
+          <button type="submit" class="btn btn--primary" id="submitTarifaBtn">Registrar</button>
         </div>
       </form>
     </div>

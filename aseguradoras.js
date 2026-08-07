@@ -6,8 +6,47 @@ const SUPABASE_URL = 'https://cibtpkpxdrykozujaqba.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_zlp4_HGpTeAQKW55c_pZQA_2HEXRpaC';
 const TABLE_ASEGURADORAS = 'aseguradoras';
 const TABLE_PRODUCTOS = 'productos';
+const TABLE_PLANES = 'planes';
+const TABLE_TARIFAS = 'tarifas';
 const LOGO_BUCKET = 'logos-aseguradoras';
 const LOGO_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+
+/* =============================================================
+   CATÁLOGOS FIJOS: COBERTURAS Y RANGOS ETARIOS (pestaña Tarifas)
+   Provienen literalmente de los comentarios de Registro_de_Planes.xlsx
+   (hoja "Tarifas", sección "Tarifas por rango etario").
+   ============================================================= */
+const COVERAGE_LIST = [
+  { key: 'funerarios', label: 'Funerarios' },
+  { key: 'asistencia_viajes', label: 'Asistencia en viajes' },
+  { key: 'invalidez_permanente', label: 'Invalidez permanente' },
+  { key: 'muerte_accidental', label: 'Muerte accidental' },
+  { key: 'odontologia', label: 'Odontología' },
+  { key: 'oftalmologia', label: 'Oftalmología' },
+  { key: 'dermatologia', label: 'Dermatología' },
+  { key: 'psicologia', label: 'Psicología' },
+  { key: 'servicios_adicionales', label: 'Servicios Adicionales' },
+];
+
+const AGE_RANGES = [
+  { key: '00-09', min: 0, max: 9 }, { key: '10-15', min: 10, max: 15 }, { key: '16-17', min: 16, max: 17 },
+  { key: '18-18', min: 18, max: 18 }, { key: '19-19', min: 19, max: 19 }, { key: '20-24', min: 20, max: 24 },
+  { key: '25-29', min: 25, max: 29 }, { key: '30-30', min: 30, max: 30 }, { key: '31-34', min: 31, max: 34 },
+  { key: '35-35', min: 35, max: 35 }, { key: '36-39', min: 36, max: 39 }, { key: '40-40', min: 40, max: 40 },
+  { key: '41-44', min: 41, max: 44 }, { key: '45-45', min: 45, max: 45 }, { key: '46-49', min: 46, max: 49 },
+  { key: '50-50', min: 50, max: 50 }, { key: '51-54', min: 51, max: 54 }, { key: '55-55', min: 55, max: 55 },
+  { key: '56-59', min: 56, max: 59 }, { key: '60-60', min: 60, max: 60 }, { key: '61-64', min: 61, max: 64 },
+  { key: '65-65', min: 65, max: 65 }, { key: '66-69', min: 66, max: 69 }, { key: '70-70', min: 70, max: 70 },
+  { key: '71-74', min: 71, max: 74 }, { key: '75-75', min: 75, max: 75 }, { key: '76-79', min: 76, max: 79 },
+  { key: '80-80', min: 80, max: 80 }, { key: '81-84', min: 81, max: 84 }, { key: '85-85', min: 85, max: 85 },
+  { key: '86-89', min: 86, max: 89 }, { key: '90-90', min: 90, max: 90 }, { key: '91-94', min: 91, max: 94 },
+  { key: '95-95', min: 95, max: 95 }, { key: '96-99', min: 96, max: 99 },
+];
+
+function rangesForAges(edadMin, edadMax) {
+  if (edadMin == null || edadMax == null || Number.isNaN(edadMin) || Number.isNaN(edadMax)) return [];
+  return AGE_RANGES.filter((r) => r.max >= edadMin && r.min <= edadMax);
+}
 
 let supabaseClient = null;
 
@@ -87,6 +126,69 @@ function attachTitleCaseFormatter(inputEl) {
   });
 }
 
+/* =============================================================
+   FORMATEADOR DE MONTOS ENTEROS CON SEPARADOR DE MILES (Planes/Tarifas)
+   Usado en: Suma Asegurada, Deducibles, Gastos por fraccionamiento,
+   Sumas aseguradas de coberturas y maternidad ("sin decimales con
+   separador de miles"). Conserva la posición del cursor contando
+   dígitos, igual que el formateador de nombres de la Fase 1.
+   ============================================================= */
+function digitsOnly(str) {
+  return (str || '').toString().replace(/\D/g, '');
+}
+
+function formatThousands(digitsStr) {
+  const digits = digitsOnly(digitsStr);
+  if (!digits) return '';
+  return Number(digits).toLocaleString('es-VE');
+}
+
+function attachThousandsFormatter(inputEl) {
+  inputEl.addEventListener('input', () => {
+    const start = inputEl.selectionStart ?? inputEl.value.length;
+    const digitsBeforeCursor = digitsOnly(inputEl.value.slice(0, start)).length;
+    const formatted = formatThousands(inputEl.value);
+    inputEl.value = formatted;
+
+    let count = 0;
+    let pos = formatted.length;
+    for (let i = 0; i < formatted.length; i++) {
+      if (/\d/.test(formatted[i])) count++;
+      if (count === digitsBeforeCursor) { pos = i + 1; break; }
+    }
+    if (digitsBeforeCursor === 0) pos = 0;
+    inputEl.setSelectionRange(pos, pos);
+  });
+}
+
+function getThousandsValue(inputEl) {
+  const digits = digitsOnly(inputEl.value);
+  return digits ? Number(digits) : null;
+}
+
+function setThousandsValue(inputEl, value) {
+  inputEl.value = (value === null || value === undefined || value === '') ? '' : formatThousands(String(value));
+}
+
+/* =============================================================
+   HABILITAR / DESHABILITAR CAMPOS SEGÚN UN CHECKBOX
+   Patrón repetido en Planes (Gastos por fraccionamiento, Descuento
+   en Divisas, Descuento de Contado): casilla destildada -> campo(s)
+   deshabilitado(s) y vacío(s); casilla tildada -> campo(s) habilitado(s).
+   ============================================================= */
+function attachCheckToggle(checkboxEl, fieldEls) {
+  function apply() {
+    const enabled = checkboxEl.checked;
+    fieldEls.forEach((f) => {
+      f.disabled = !enabled;
+      if (!enabled) f.value = '';
+    });
+  }
+  checkboxEl.addEventListener('change', apply);
+  apply();
+  return apply;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
 
   /* =========================================================
@@ -94,8 +196,14 @@ document.addEventListener('DOMContentLoaded', async () => {
      ========================================================= */
   let allAseguradoras = [];
   let allProductos = [];
+  let allPlanes = [];
+  let allTarifas = [];
   let isEditModeAseguradora = false;
   let isEditModeProducto = false;
+  let isEditModePlan = false;
+  let isReadOnlyPlan = false;
+  let isEditModeTarifa = false;
+  let isReadOnlyTarifa = false;
   let confirmResolve = null;
 
   const notificationTimers = {};
@@ -168,6 +276,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     el.textContent = '';
   }
 
+  // Fuerza deshabilitado de todos los controles de un formulario para el
+  // modo "Ver" (solo lectura). Usado por Planes y Tarifas.
+  function setFormControlsForcedDisabled(formEl, disabled) {
+    formEl.querySelectorAll('input, select, textarea, button').forEach((el) => {
+      if (el.type === 'button' && (el.classList.contains('btn--cancel'))) return;
+      el.disabled = disabled;
+    });
+  }
+
   /* =========================================================
      USUARIO ACTUAL (auditoría) — viene de auth-guard.js
      ========================================================= */
@@ -184,6 +301,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const panels = {
     aseguradoras: document.getElementById('panelAseguradoras'),
     productos: document.getElementById('panelProductos'),
+    planes: document.getElementById('panelPlanes'),
+    tarifas: document.getElementById('panelTarifas'),
   };
 
   tabButtons.forEach((btn) => {
@@ -914,6 +1033,1155 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  /* =========================================================================
+     ==============================  PLANES  ====================================
+     ========================================================================= */
+
+  const searchPlanes = document.getElementById('searchPlanes');
+  const clearSearchPlanes = document.getElementById('clearSearchPlanes');
+  const planesTableBody = document.getElementById('planesTableBody');
+  const planesLoading = document.getElementById('planesLoading');
+  const planesEmpty = document.getElementById('planesEmpty');
+  const openPlanModalBtn = document.getElementById('openPlanModalBtn');
+
+  const planModalOverlay = document.getElementById('planModalOverlay');
+  const planModalTitle = document.getElementById('planModalTitle');
+  const planModalCloseBtn = document.getElementById('planModalCloseBtn');
+  const cancelPlanModalBtn = document.getElementById('cancelPlanModalBtn');
+  const planForm = document.getElementById('planForm');
+  const planIdInput = document.getElementById('planId');
+  const submitPlanBtn = document.getElementById('submitPlanBtn');
+
+  const planAseguradoraSelect = document.getElementById('planAseguradora');
+  const planProductoSelect = document.getElementById('planProducto');
+  const planTipoTarifaSelect = document.getElementById('planTipoTarifa');
+  const planSumaAseguradaInput = document.getElementById('planSumaAsegurada');
+  const planDeducibleVzlaInput = document.getElementById('planDeducibleVzla');
+  const planDeducibleExteriorInput = document.getElementById('planDeducibleExterior');
+  const planNombrePreview = document.getElementById('planNombrePreview');
+
+  const planEdadMinMaternidadInput = document.getElementById('planEdadMinMaternidad');
+  const planEdadMaxMaternidadInput = document.getElementById('planEdadMaxMaternidad');
+  const planEdadMinTitularInput = document.getElementById('planEdadMinTitular');
+  const planEdadMaxTitularInput = document.getElementById('planEdadMaxTitular');
+  const planEdadMinFamiliaresInput = document.getElementById('planEdadMinFamiliares');
+  const planEdadMaxFamiliaresInput = document.getElementById('planEdadMaxFamiliares');
+  const planModoTarifaHijosSelect = document.getElementById('planModoTarifaHijos');
+
+  const planGastosFraccionamientoCheck = document.getElementById('planGastosFraccionamientoCheck');
+  const planGastosFraccionamientoMontoInput = document.getElementById('planGastosFraccionamientoMonto');
+  const planSemestralCheck = document.getElementById('planSemestral');
+  const planTrimestralCheck = document.getElementById('planTrimestral');
+  const planMensualCheck = document.getElementById('planMensual');
+  const planFinanciableCheck = document.getElementById('planFinanciable');
+
+  const planDescuentoDivisasCheck = document.getElementById('planDescuentoDivisasCheck');
+  const planDescuentoDivisasPorcentajeInput = document.getElementById('planDescuentoDivisasPorcentaje');
+  const planDescuentoContadoCheck = document.getElementById('planDescuentoContadoCheck');
+  const planDescuentoContadoPorcentajeInput = document.getElementById('planDescuentoContadoPorcentaje');
+
+  const fieldPlanAseguradora = document.getElementById('fieldPlanAseguradora');
+  const fieldPlanProducto = document.getElementById('fieldPlanProducto');
+  const fieldPlanTipoTarifa = document.getElementById('fieldPlanTipoTarifa');
+  const fieldPlanSumaAsegurada = document.getElementById('fieldPlanSumaAsegurada');
+  const fieldPlanDeducibleVzla = document.getElementById('fieldPlanDeducibleVzla');
+  const fieldPlanDeducibleExterior = document.getElementById('fieldPlanDeducibleExterior');
+  const fieldPlanEdadMinMaternidad = document.getElementById('fieldPlanEdadMinMaternidad');
+  const fieldPlanEdadMaxMaternidad = document.getElementById('fieldPlanEdadMaxMaternidad');
+  const fieldPlanEdadMinTitular = document.getElementById('fieldPlanEdadMinTitular');
+  const fieldPlanEdadMaxTitular = document.getElementById('fieldPlanEdadMaxTitular');
+  const fieldPlanEdadMinFamiliares = document.getElementById('fieldPlanEdadMinFamiliares');
+  const fieldPlanEdadMaxFamiliares = document.getElementById('fieldPlanEdadMaxFamiliares');
+  const fieldPlanModoTarifaHijos = document.getElementById('fieldPlanModoTarifaHijos');
+
+  attachThousandsFormatter(planSumaAseguradaInput);
+  attachThousandsFormatter(planDeducibleVzlaInput);
+  attachThousandsFormatter(planDeducibleExteriorInput);
+  attachThousandsFormatter(planGastosFraccionamientoMontoInput);
+
+  attachCheckToggle(planGastosFraccionamientoCheck, [planGastosFraccionamientoMontoInput]);
+  attachCheckToggle(planDescuentoDivisasCheck, [planDescuentoDivisasPorcentajeInput]);
+  attachCheckToggle(planDescuentoContadoCheck, [planDescuentoContadoPorcentajeInput]);
+
+  let currentSortPlanes = { key: 'nombre_plan', direction: 'asc' };
+  const sortableHeadersPlanes = document.querySelectorAll('#planesTable th.is-sortable');
+
+  function populatePlanAseguradoraSelect() {
+    const previousValue = planAseguradoraSelect.value;
+    planAseguradoraSelect.innerHTML = '<option value="">Selecciona una aseguradora</option>';
+    allAseguradoras.forEach((a) => {
+      const opt = document.createElement('option');
+      opt.value = a.id;
+      opt.textContent = a.nombre;
+      planAseguradoraSelect.appendChild(opt);
+    });
+    if (previousValue) planAseguradoraSelect.value = previousValue;
+  }
+
+  function populatePlanProductoSelect(aseguradoraId, selectedProductoId = '') {
+    planProductoSelect.innerHTML = '';
+    const productos = aseguradoraId ? allProductos.filter((p) => p.aseguradora_id === aseguradoraId) : [];
+    if (!aseguradoraId) {
+      planProductoSelect.innerHTML = '<option value="">Selecciona primero una aseguradora</option>';
+      planProductoSelect.disabled = true;
+      return;
+    }
+    planProductoSelect.disabled = false;
+    planProductoSelect.innerHTML = '<option value="">Selecciona un producto</option>';
+    productos.forEach((p) => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.nombre;
+      planProductoSelect.appendChild(opt);
+    });
+    if (selectedProductoId) planProductoSelect.value = selectedProductoId;
+  }
+
+  function computePlanNombre() {
+    const aseguradoraNombre = planAseguradoraSelect.selectedOptions[0]?.value ? planAseguradoraSelect.selectedOptions[0].textContent : '';
+    const productoNombre = planProductoSelect.selectedOptions[0]?.value ? planProductoSelect.selectedOptions[0].textContent : '';
+    const suma = getThousandsValue(planSumaAseguradaInput);
+    const dedVzla = getThousandsValue(planDeducibleVzlaInput);
+    const dedExt = getThousandsValue(planDeducibleExteriorInput);
+
+    if (!aseguradoraNombre || !productoNombre || suma == null || dedVzla == null || dedExt == null) return null;
+
+    return `${aseguradoraNombre} - ${productoNombre} - $${formatThousands(String(suma))} - Ded Vzla $${formatThousands(String(dedVzla))} - Ded Ext $${formatThousands(String(dedExt))}`;
+  }
+
+  function updatePlanNombrePreview() {
+    const nombre = computePlanNombre();
+    planNombrePreview.textContent = nombre || 'Completa los campos para generar el nombre del plan.';
+  }
+
+  planAseguradoraSelect.addEventListener('change', () => {
+    populatePlanProductoSelect(planAseguradoraSelect.value);
+    updatePlanNombrePreview();
+  });
+  [planProductoSelect, planSumaAseguradaInput, planDeducibleVzlaInput, planDeducibleExteriorInput].forEach((el) => {
+    el.addEventListener('input', updatePlanNombrePreview);
+    el.addEventListener('change', updatePlanNombrePreview);
+  });
+
+  function openPlanModal({ edit = false, item = null, readOnly = false } = {}) {
+    isEditModePlan = edit;
+    isReadOnlyPlan = readOnly;
+    planForm.reset();
+    clearFeedback('planFormFeedback');
+    [fieldPlanAseguradora, fieldPlanProducto, fieldPlanTipoTarifa, fieldPlanSumaAsegurada, fieldPlanDeducibleVzla,
+      fieldPlanDeducibleExterior, fieldPlanEdadMinMaternidad, fieldPlanEdadMaxMaternidad, fieldPlanEdadMinTitular,
+      fieldPlanEdadMaxTitular, fieldPlanEdadMinFamiliares, fieldPlanEdadMaxFamiliares, fieldPlanModoTarifaHijos]
+      .forEach((f) => setFieldError(f, false));
+
+    populatePlanAseguradoraSelect();
+    populatePlanProductoSelect('');
+    setFormControlsForcedDisabled(planForm, false);
+    planGastosFraccionamientoMontoInput.disabled = !planGastosFraccionamientoCheck.checked;
+    planDescuentoDivisasPorcentajeInput.disabled = !planDescuentoDivisasCheck.checked;
+    planDescuentoContadoPorcentajeInput.disabled = !planDescuentoContadoCheck.checked;
+
+    if (item) {
+      planModalTitle.textContent = readOnly ? 'Ver Plan' : 'Editar Plan';
+      submitPlanBtn.textContent = 'Guardar Cambios';
+      planIdInput.value = item.id;
+      planAseguradoraSelect.value = item.aseguradora_id;
+      populatePlanProductoSelect(item.aseguradora_id, item.producto_id);
+      planTipoTarifaSelect.value = item.tipo_tarifa || '';
+      setThousandsValue(planSumaAseguradaInput, item.suma_asegurada);
+      setThousandsValue(planDeducibleVzlaInput, item.deducible_venezuela);
+      setThousandsValue(planDeducibleExteriorInput, item.deducible_exterior);
+
+      planEdadMinMaternidadInput.value = item.edad_min_maternidad ?? '';
+      planEdadMaxMaternidadInput.value = item.edad_max_maternidad ?? '';
+      planEdadMinTitularInput.value = item.edad_min_titular ?? '';
+      planEdadMaxTitularInput.value = item.edad_max_titular ?? '';
+      planEdadMinFamiliaresInput.value = item.edad_min_familiares ?? '';
+      planEdadMaxFamiliaresInput.value = item.edad_max_familiares ?? '';
+      planModoTarifaHijosSelect.value = item.modo_tarifa_hijos || '';
+
+      planGastosFraccionamientoCheck.checked = !!item.gastos_fraccionamiento_activo;
+      planGastosFraccionamientoMontoInput.disabled = !planGastosFraccionamientoCheck.checked;
+      setThousandsValue(planGastosFraccionamientoMontoInput, item.gastos_fraccionamiento_monto);
+      planSemestralCheck.checked = !!item.fraccionamiento_semestral;
+      planTrimestralCheck.checked = !!item.fraccionamiento_trimestral;
+      planMensualCheck.checked = !!item.fraccionamiento_mensual;
+      planFinanciableCheck.checked = !!item.financiable;
+
+      planDescuentoDivisasCheck.checked = !!item.descuento_divisas_activo;
+      planDescuentoDivisasPorcentajeInput.disabled = !planDescuentoDivisasCheck.checked;
+      planDescuentoDivisasPorcentajeInput.value = item.descuento_divisas_porcentaje ?? '';
+      planDescuentoContadoCheck.checked = !!item.descuento_contado_activo;
+      planDescuentoContadoPorcentajeInput.disabled = !planDescuentoContadoCheck.checked;
+      planDescuentoContadoPorcentajeInput.value = item.descuento_contado_porcentaje ?? '';
+
+      updatePlanNombrePreview();
+    } else {
+      planModalTitle.textContent = 'Registrar Plan';
+      submitPlanBtn.textContent = 'Registrar';
+      planIdInput.value = '';
+      updatePlanNombrePreview();
+    }
+
+    planModalOverlay.querySelector('.modal').classList.toggle('modal--readonly', readOnly);
+    submitPlanBtn.style.display = readOnly ? 'none' : 'inline-flex';
+    if (readOnly) setFormControlsForcedDisabled(planForm, true);
+
+    planModalOverlay.classList.add('is-open');
+  }
+
+  function closePlanModal() {
+    planModalOverlay.classList.remove('is-open');
+    planForm.reset();
+  }
+
+  openPlanModalBtn.addEventListener('click', () => openPlanModal({ edit: false }));
+  planModalCloseBtn.addEventListener('click', closePlanModal);
+  cancelPlanModalBtn.addEventListener('click', closePlanModal);
+  planModalOverlay.addEventListener('click', (e) => {
+    if (e.target === planModalOverlay) closePlanModal();
+  });
+
+  function validatePlanForm() {
+    let valid = true;
+    const check = (fieldEl, ok) => { setFieldError(fieldEl, !ok); if (!ok) valid = false; };
+
+    check(fieldPlanAseguradora, planAseguradoraSelect.value.trim().length > 0);
+    check(fieldPlanProducto, planProductoSelect.value.trim().length > 0);
+    check(fieldPlanTipoTarifa, planTipoTarifaSelect.value.trim().length > 0);
+    check(fieldPlanSumaAsegurada, getThousandsValue(planSumaAseguradaInput) !== null);
+    check(fieldPlanDeducibleVzla, getThousandsValue(planDeducibleVzlaInput) !== null);
+    check(fieldPlanDeducibleExterior, getThousandsValue(planDeducibleExteriorInput) !== null);
+    check(fieldPlanModoTarifaHijos, planModoTarifaHijosSelect.value.trim().length > 0);
+
+    const minMat = Number(planEdadMinMaternidadInput.value);
+    const maxMat = Number(planEdadMaxMaternidadInput.value);
+    check(fieldPlanEdadMinMaternidad, planEdadMinMaternidadInput.value !== '' && minMat >= 0 && minMat <= 60);
+    check(fieldPlanEdadMaxMaternidad, planEdadMaxMaternidadInput.value !== '' && maxMat >= 0 && maxMat <= 60 && maxMat >= minMat);
+
+    const minTit = Number(planEdadMinTitularInput.value);
+    const maxTit = Number(planEdadMaxTitularInput.value);
+    check(fieldPlanEdadMinTitular, planEdadMinTitularInput.value !== '' && minTit >= 0 && minTit <= 120);
+    check(fieldPlanEdadMaxTitular, planEdadMaxTitularInput.value !== '' && maxTit >= 0 && maxTit <= 120 && maxTit >= minTit);
+
+    const minFam = Number(planEdadMinFamiliaresInput.value);
+    const maxFam = Number(planEdadMaxFamiliaresInput.value);
+    check(fieldPlanEdadMinFamiliares, planEdadMinFamiliaresInput.value !== '' && minFam >= 0 && minFam <= 120);
+    check(fieldPlanEdadMaxFamiliares, planEdadMaxFamiliaresInput.value !== '' && maxFam >= 0 && maxFam <= 120 && maxFam >= minFam);
+
+    if (planGastosFraccionamientoCheck.checked && getThousandsValue(planGastosFraccionamientoMontoInput) === null) valid = false;
+    if (planDescuentoDivisasCheck.checked && planDescuentoDivisasPorcentajeInput.value === '') valid = false;
+    if (planDescuentoContadoCheck.checked && planDescuentoContadoPorcentajeInput.value === '') valid = false;
+
+    return valid;
+  }
+
+  function renderPlanes(items) {
+    planesTableBody.innerHTML = '';
+    if (!items.length) {
+      planesEmpty.style.display = 'block';
+      return;
+    }
+    planesEmpty.style.display = 'none';
+
+    items.forEach((item) => {
+      const tr = document.createElement('tr');
+      const isActivo = item.status === 'Activo';
+      const statusClass = isActivo ? 'status-pill--activo' : 'status-pill--inactivo';
+      const toggleIcon = isActivo ? '✕' : '✓';
+      const toggleClass = isActivo ? 'action-btn--toggle-on' : 'action-btn--toggle-off';
+      const toggleLabel = isActivo ? 'Inactivar plan' : 'Activar plan';
+
+      tr.innerHTML = `
+        <td data-label="Plan">${escapeHtml(item.nombre_plan)}</td>
+        <td data-label="Status Plan"><span class="status-pill ${statusClass}">${escapeHtml(item.status)}</span></td>
+        <td data-label="Acciones" class="col-actions">
+          <button type="button" class="action-btn action-btn--view" data-id="${item.id}" aria-label="Ver plan">👁️</button>
+          <button type="button" class="action-btn action-btn--edit" data-id="${item.id}" aria-label="Editar plan">✏️</button>
+          <button type="button" class="action-btn ${toggleClass}" data-id="${item.id}" aria-label="${toggleLabel}">${toggleIcon}</button>
+          <button type="button" class="action-btn action-btn--delete" data-id="${item.id}" aria-label="Eliminar plan">🗑️</button>
+        </td>
+      `;
+      planesTableBody.appendChild(tr);
+
+      tr.querySelector('.action-btn--view').addEventListener('click', () => {
+        openPlanModal({ edit: true, item, readOnly: true });
+      });
+      tr.querySelector('.action-btn--edit').addEventListener('click', () => {
+        openPlanModal({ edit: true, item });
+      });
+      tr.querySelector(`.${toggleClass}`).addEventListener('click', () => handleToggleStatusPlan(item));
+      tr.querySelector('.action-btn--delete').addEventListener('click', () => handleDeletePlan(item.id));
+    });
+  }
+
+  sortableHeadersPlanes.forEach((th) => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.sortKey;
+      if (currentSortPlanes.key === key) {
+        currentSortPlanes.direction = currentSortPlanes.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        currentSortPlanes = { key, direction: 'asc' };
+      }
+      updateSortIndicators(sortableHeadersPlanes, currentSortPlanes);
+      applyFilterPlanes();
+    });
+  });
+
+  function applyFilterPlanes() {
+    const term = searchPlanes.value.trim().toLowerCase();
+    clearSearchPlanes.classList.toggle('is-visible', term.length > 0);
+    let result = allPlanes;
+    if (term) {
+      result = result.filter((p) => (p.nombre_plan || '').toLowerCase().includes(term));
+    }
+    result = sortItems(result, currentSortPlanes.key, currentSortPlanes.direction);
+    renderPlanes(result);
+  }
+
+  searchPlanes.addEventListener('input', applyFilterPlanes);
+  clearSearchPlanes.addEventListener('click', () => {
+    searchPlanes.value = '';
+    applyFilterPlanes();
+    searchPlanes.focus();
+  });
+
+  async function loadPlanes() {
+    planesLoading.style.display = 'block';
+    planesEmpty.style.display = 'none';
+    planesTableBody.innerHTML = '';
+
+    if (!supabaseClient) {
+      planesLoading.style.display = 'none';
+      planesEmpty.textContent = 'Supabase no está inicializado.';
+      planesEmpty.style.display = 'block';
+      return;
+    }
+
+    try {
+      const { data, error } = await supabaseClient
+        .from(TABLE_PLANES)
+        .select('*')
+        .order('nombre_plan', { ascending: true });
+
+      planesLoading.style.display = 'none';
+
+      if (error) {
+        planesEmpty.textContent = `Error al cargar planes: ${getErrorMessage(error)}`;
+        planesEmpty.style.display = 'block';
+        return;
+      }
+
+      allPlanes = data || [];
+      applyFilterPlanes();
+      populateTarifaPlanSelect();
+    } catch (err) {
+      planesLoading.style.display = 'none';
+      planesEmpty.textContent = `No se pudo conectar con Supabase: ${getErrorMessage(err)}`;
+      planesEmpty.style.display = 'block';
+    }
+  }
+
+  planForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (isReadOnlyPlan) return;
+    clearFeedback('planFormFeedback');
+
+    if (!validatePlanForm()) {
+      showFeedback('planFormFeedback', 'Revisa los campos marcados antes de continuar.', 'error');
+      return;
+    }
+    if (!supabaseClient) {
+      showFeedback('planFormFeedback', 'No se pudo conectar con Supabase.', 'error');
+      return;
+    }
+
+    const nombrePlan = computePlanNombre();
+    if (!nombrePlan) {
+      showFeedback('planFormFeedback', 'No se pudo generar el nombre del plan. Revisa los campos de datos principales.', 'error');
+      return;
+    }
+
+    submitPlanBtn.disabled = true;
+    submitPlanBtn.textContent = isEditModePlan ? 'Guardando...' : 'Registrando...';
+
+    const currentUser = getCurrentUserLabel();
+
+    const payload = {
+      aseguradora_id: planAseguradoraSelect.value,
+      producto_id: planProductoSelect.value,
+      tipo_tarifa: planTipoTarifaSelect.value,
+      suma_asegurada: getThousandsValue(planSumaAseguradaInput),
+      deducible_venezuela: getThousandsValue(planDeducibleVzlaInput),
+      deducible_exterior: getThousandsValue(planDeducibleExteriorInput),
+      nombre_plan: nombrePlan,
+      edad_min_maternidad: Number(planEdadMinMaternidadInput.value),
+      edad_max_maternidad: Number(planEdadMaxMaternidadInput.value),
+      edad_min_titular: Number(planEdadMinTitularInput.value),
+      edad_max_titular: Number(planEdadMaxTitularInput.value),
+      edad_min_familiares: Number(planEdadMinFamiliaresInput.value),
+      edad_max_familiares: Number(planEdadMaxFamiliaresInput.value),
+      modo_tarifa_hijos: planModoTarifaHijosSelect.value,
+      gastos_fraccionamiento_activo: planGastosFraccionamientoCheck.checked,
+      gastos_fraccionamiento_monto: planGastosFraccionamientoCheck.checked ? getThousandsValue(planGastosFraccionamientoMontoInput) : null,
+      fraccionamiento_semestral: planSemestralCheck.checked,
+      fraccionamiento_trimestral: planTrimestralCheck.checked,
+      fraccionamiento_mensual: planMensualCheck.checked,
+      financiable: planFinanciableCheck.checked,
+      descuento_divisas_activo: planDescuentoDivisasCheck.checked,
+      descuento_divisas_porcentaje: planDescuentoDivisasCheck.checked ? Number(planDescuentoDivisasPorcentajeInput.value) : null,
+      descuento_contado_activo: planDescuentoContadoCheck.checked,
+      descuento_contado_porcentaje: planDescuentoContadoCheck.checked ? Number(planDescuentoContadoPorcentajeInput.value) : null,
+    };
+
+    if (isEditModePlan) {
+      payload.usuario_modificacion = currentUser;
+    } else {
+      payload.usuario_creacion = currentUser;
+      payload.usuario_modificacion = currentUser;
+    }
+
+    try {
+      let error;
+      if (isEditModePlan) {
+        ({ error } = await supabaseClient.from(TABLE_PLANES).update(payload).eq('id', planIdInput.value));
+      } else {
+        ({ error } = await supabaseClient.from(TABLE_PLANES).insert([payload]));
+      }
+
+      submitPlanBtn.disabled = false;
+      submitPlanBtn.textContent = isEditModePlan ? 'Guardar Cambios' : 'Registrar';
+
+      if (error) {
+        showFeedback('planFormFeedback', `No se pudo guardar el plan. ${getErrorMessage(error)}`, 'error');
+        return;
+      }
+
+      showFeedback('planFormFeedback', isEditModePlan ? 'Plan actualizado correctamente.' : 'Plan registrado correctamente.', 'success');
+      await loadPlanes();
+      setTimeout(closePlanModal, 700);
+    } catch (err) {
+      submitPlanBtn.disabled = false;
+      submitPlanBtn.textContent = isEditModePlan ? 'Guardar Cambios' : 'Registrar';
+      showFeedback('planFormFeedback', `No se pudo conectar con Supabase: ${getErrorMessage(err)}`, 'error');
+    }
+  });
+
+  async function handleToggleStatusPlan(item) {
+    const nextStatus = item.status === 'Activo' ? 'Inactivo' : 'Activo';
+    const currentUser = getCurrentUserLabel();
+
+    try {
+      const { error } = await supabaseClient
+        .from(TABLE_PLANES)
+        .update({ status: nextStatus, usuario_modificacion: currentUser })
+        .eq('id', item.id);
+
+      if (error) {
+        showNotification('planesNotification', `No se pudo cambiar el status: ${getErrorMessage(error)}`, 'error');
+        return;
+      }
+      await loadPlanes();
+      showNotification('planesNotification', `Plan "${item.nombre_plan}" marcado como ${nextStatus}.`, 'success');
+    } catch (err) {
+      showNotification('planesNotification', `No se pudo cambiar el status: ${getErrorMessage(err)}`, 'error');
+    }
+  }
+
+  async function handleDeletePlan(id) {
+    const item = allPlanes.find((p) => p.id === id);
+    if (!item) return;
+
+    const confirmed = await openConfirmDialog({
+      title: 'Eliminar plan',
+      message: `¿Eliminar "${item.nombre_plan}"? Esto también eliminará la tarifa asociada a este plan. Esta acción no se puede deshacer.`,
+      acceptLabel: 'Eliminar',
+    });
+    if (!confirmed) return;
+
+    try {
+      // Elimina primero la(s) tarifa(s) asociada(s) (además del ON DELETE CASCADE
+      // definido en la base de datos, se hace explícito aquí por seguridad).
+      await supabaseClient.from(TABLE_TARIFAS).delete().eq('plan_id', id);
+
+      const { error } = await supabaseClient.from(TABLE_PLANES).delete().eq('id', id);
+      if (error) {
+        showNotification('planesNotification', `No se pudo eliminar: ${getErrorMessage(error)}`, 'error');
+        return;
+      }
+      await loadPlanes();
+      await loadTarifas();
+      showNotification('planesNotification', 'Plan eliminado correctamente.', 'success');
+    } catch (err) {
+      showNotification('planesNotification', `No se pudo eliminar: ${getErrorMessage(err)}`, 'error');
+    }
+  }
+
+  /* =========================================================================
+     ==============================  TARIFAS  ===================================
+     ========================================================================= */
+
+  const searchTarifas = document.getElementById('searchTarifas');
+  const clearSearchTarifas = document.getElementById('clearSearchTarifas');
+  const tarifasTableBody = document.getElementById('tarifasTableBody');
+  const tarifasLoading = document.getElementById('tarifasLoading');
+  const tarifasEmpty = document.getElementById('tarifasEmpty');
+  const openTarifaModalBtn = document.getElementById('openTarifaModalBtn');
+
+  const tarifaModalOverlay = document.getElementById('tarifaModalOverlay');
+  const tarifaModalTitle = document.getElementById('tarifaModalTitle');
+  const tarifaModalCloseBtn = document.getElementById('tarifaModalCloseBtn');
+  const cancelTarifaModalBtn = document.getElementById('cancelTarifaModalBtn');
+  const tarifaForm = document.getElementById('tarifaForm');
+  const tarifaIdInput = document.getElementById('tarifaId');
+  const submitTarifaBtn = document.getElementById('submitTarifaBtn');
+
+  const tarifaPlanSelect = document.getElementById('tarifaPlan');
+  const fieldTarifaPlan = document.getElementById('fieldTarifaPlan');
+  const tarifaCoberturasContainer = document.getElementById('tarifaCoberturasContainer');
+  const tarifaMaternidadContainer = document.getElementById('tarifaMaternidadContainer');
+  const tarifaRangosContainer = document.getElementById('tarifaRangosContainer');
+
+  let currentSortTarifas = { key: 'plan_nombre', direction: 'asc' };
+  const sortableHeadersTarifas = document.querySelectorAll('#tarifasTable th.is-sortable');
+
+  /* ---------------------------------------------------------------------
+     Tarjeta reutilizable de cobertura estándar (con checkbox "Servicios").
+     Aplica para las 9 coberturas de la lista (Funerarios, Asistencia en
+     viajes, Invalidez permanente, Muerte accidental, Odontología,
+     Oftalmología, Dermatología, Psicología, Servicios Adicionales).
+     --------------------------------------------------------------------- */
+  function createCoverageCard(def) {
+    const wrap = document.createElement('div');
+    wrap.className = 'coverage-card';
+    wrap.dataset.key = def.key;
+    wrap.innerHTML = `
+      <div class="coverage-card__title">${escapeHtml(def.label)}</div>
+      <div class="coverage-card__row">
+        <div class="coverage-card__field">
+          <label>Estado</label>
+          <select class="text-input cov-estado">
+            <option value="No contempla">No contempla</option>
+            <option value="Incluido">Incluido</option>
+            <option value="Opcional">Opcional</option>
+          </select>
+        </div>
+        <div class="coverage-card__field" style="display:flex;align-items:flex-end;">
+          <label class="check-field"><input type="checkbox" class="cov-servicios"> Servicios</label>
+        </div>
+      </div>
+      <div class="cov-sums"></div>
+      <button type="button" class="btn-add-sum" style="display:none;">＋ Agregar suma asegurada</button>
+    `;
+
+    const estadoSelect = wrap.querySelector('.cov-estado');
+    const serviciosCheck = wrap.querySelector('.cov-servicios');
+    const sumsContainer = wrap.querySelector('.cov-sums');
+    const addBtn = wrap.querySelector('.btn-add-sum');
+
+    function addSumRow(sumaVal = '', primaVal = '') {
+      const row = document.createElement('div');
+      row.className = 'sum-row';
+      row.innerHTML = `
+        <div class="coverage-card__field">
+          <label>Suma Asegurada</label>
+          <div class="input-currency"><span class="input-currency__prefix">$</span><input type="text" inputmode="numeric" class="cov-suma"></div>
+        </div>
+        <div class="coverage-card__field cov-prima-field">
+          <label>Prima</label>
+          <div class="input-currency"><span class="input-currency__prefix">$</span><input type="number" min="0" step="0.01" class="cov-prima"></div>
+        </div>
+        <button type="button" class="btn-remove-sum" title="Quitar esta suma">🗑️</button>
+      `;
+      const sumaInput = row.querySelector('.cov-suma');
+      attachThousandsFormatter(sumaInput);
+      setThousandsValue(sumaInput, sumaVal);
+      const primaInput = row.querySelector('.cov-prima');
+      if (primaVal !== '' && primaVal != null) primaInput.value = primaVal;
+      row.querySelector('.btn-remove-sum').addEventListener('click', () => {
+        if (sumsContainer.children.length > 1) row.remove();
+        applyState();
+      });
+      sumsContainer.appendChild(row);
+      return row;
+    }
+
+    function applyState() {
+      const estado = estadoSelect.value;
+      if (estado === 'No contempla') {
+        serviciosCheck.checked = false;
+        serviciosCheck.disabled = true;
+        addBtn.style.display = 'none';
+        Array.from(sumsContainer.children).forEach((row, idx) => { if (idx > 0) row.remove(); });
+        const first = sumsContainer.children[0];
+        if (first) {
+          first.querySelector('.cov-suma').disabled = true;
+          first.querySelector('.cov-suma').value = '';
+          first.querySelector('.cov-prima').disabled = true;
+          first.querySelector('.cov-prima').value = '';
+          first.querySelector('.cov-prima-field').style.display = 'none';
+          first.querySelector('.btn-remove-sum').style.display = 'none';
+        }
+        return;
+      }
+
+      serviciosCheck.disabled = false;
+      const isOpcional = estado === 'Opcional';
+      addBtn.style.display = isOpcional ? 'inline-block' : 'none';
+      if (!isOpcional) {
+        Array.from(sumsContainer.children).forEach((row, idx) => { if (idx > 0) row.remove(); });
+      }
+      Array.from(sumsContainer.children).forEach((row) => {
+        const sumaInput = row.querySelector('.cov-suma');
+        const primaInput = row.querySelector('.cov-prima');
+        const primaField = row.querySelector('.cov-prima-field');
+        primaField.style.display = isOpcional ? '' : 'none';
+        if (serviciosCheck.checked) {
+          sumaInput.disabled = true; sumaInput.value = '';
+          primaInput.disabled = true; primaInput.value = '';
+        } else {
+          sumaInput.disabled = false;
+          primaInput.disabled = !isOpcional;
+          if (!isOpcional) primaInput.value = '';
+        }
+        row.querySelector('.btn-remove-sum').style.display = (isOpcional && sumsContainer.children.length > 1) ? 'inline-flex' : 'none';
+      });
+    }
+
+    estadoSelect.addEventListener('change', applyState);
+    serviciosCheck.addEventListener('change', applyState);
+    addBtn.addEventListener('click', () => { addSumRow(); applyState(); });
+
+    addSumRow();
+    applyState();
+
+    return {
+      element: wrap,
+      setData(data) {
+        estadoSelect.value = data?.estado || 'No contempla';
+        serviciosCheck.checked = !!data?.servicios;
+        sumsContainer.innerHTML = '';
+        const sums = (data?.sumas && data.sumas.length) ? data.sumas : [{ suma_asegurada: '', prima: '' }];
+        sums.forEach((s) => addSumRow(s.suma_asegurada, s.prima));
+        applyState();
+      },
+      getData() {
+        const sums = Array.from(sumsContainer.children).map((row) => ({
+          suma_asegurada: getThousandsValue(row.querySelector('.cov-suma')),
+          prima: row.querySelector('.cov-prima').value !== '' ? Number(row.querySelector('.cov-prima').value) : null,
+        })).filter((s) => s.suma_asegurada !== null || s.prima !== null);
+        return { estado: estadoSelect.value, servicios: serviciosCheck.checked, sumas: sums };
+      },
+    };
+  }
+
+  /* ---------------------------------------------------------------------
+     Tarjeta de Maternidad (misma lógica de estado, pero con "Edad máxima"
+     en lugar del checkbox "Servicios").
+     --------------------------------------------------------------------- */
+  function createMaternidadCard() {
+    const wrap = document.createElement('div');
+    wrap.className = 'coverage-card';
+    wrap.innerHTML = `
+      <div class="coverage-card__row">
+        <div class="coverage-card__field">
+          <label>Estado</label>
+          <select class="text-input mat-estado">
+            <option value="No contempla">No contempla</option>
+            <option value="Incluido">Incluido</option>
+            <option value="Opcional">Opcional</option>
+          </select>
+        </div>
+        <div class="coverage-card__field">
+          <label>Edad Máxima</label>
+          <input type="number" min="0" max="60" step="1" class="text-input mat-edad-max" disabled>
+        </div>
+      </div>
+      <div class="mat-sums"></div>
+      <button type="button" class="btn-add-sum" style="display:none;">＋ Agregar suma asegurada</button>
+    `;
+
+    const estadoSelect = wrap.querySelector('.mat-estado');
+    const edadMaxInput = wrap.querySelector('.mat-edad-max');
+    const sumsContainer = wrap.querySelector('.mat-sums');
+    const addBtn = wrap.querySelector('.btn-add-sum');
+
+    function addSumRow(sumaVal = '', primaVal = '') {
+      const row = document.createElement('div');
+      row.className = 'sum-row';
+      row.innerHTML = `
+        <div class="coverage-card__field">
+          <label>Suma Asegurada</label>
+          <div class="input-currency"><span class="input-currency__prefix">$</span><input type="text" inputmode="numeric" class="mat-suma"></div>
+        </div>
+        <div class="coverage-card__field mat-prima-field">
+          <label>Prima</label>
+          <div class="input-currency"><span class="input-currency__prefix">$</span><input type="number" min="0" step="0.01" class="mat-prima"></div>
+        </div>
+        <button type="button" class="btn-remove-sum" title="Quitar esta suma">🗑️</button>
+      `;
+      const sumaInput = row.querySelector('.mat-suma');
+      attachThousandsFormatter(sumaInput);
+      setThousandsValue(sumaInput, sumaVal);
+      const primaInput = row.querySelector('.mat-prima');
+      if (primaVal !== '' && primaVal != null) primaInput.value = primaVal;
+      row.querySelector('.btn-remove-sum').addEventListener('click', () => {
+        if (sumsContainer.children.length > 1) row.remove();
+        applyState();
+      });
+      sumsContainer.appendChild(row);
+      return row;
+    }
+
+    function applyState() {
+      const estado = estadoSelect.value;
+      if (estado === 'No contempla') {
+        edadMaxInput.disabled = true;
+        edadMaxInput.value = '';
+        addBtn.style.display = 'none';
+        Array.from(sumsContainer.children).forEach((row, idx) => { if (idx > 0) row.remove(); });
+        const first = sumsContainer.children[0];
+        if (first) {
+          first.querySelector('.mat-suma').disabled = true;
+          first.querySelector('.mat-suma').value = '';
+          first.querySelector('.mat-prima').disabled = true;
+          first.querySelector('.mat-prima').value = '';
+          first.querySelector('.mat-prima-field').style.display = 'none';
+          first.querySelector('.btn-remove-sum').style.display = 'none';
+        }
+        return;
+      }
+
+      edadMaxInput.disabled = false;
+      const isOpcional = estado === 'Opcional';
+      addBtn.style.display = isOpcional ? 'inline-block' : 'none';
+      if (!isOpcional) {
+        Array.from(sumsContainer.children).forEach((row, idx) => { if (idx > 0) row.remove(); });
+      }
+      Array.from(sumsContainer.children).forEach((row) => {
+        row.querySelector('.mat-suma').disabled = false;
+        const primaInput = row.querySelector('.mat-prima');
+        const primaField = row.querySelector('.mat-prima-field');
+        primaField.style.display = isOpcional ? '' : 'none';
+        primaInput.disabled = !isOpcional;
+        if (!isOpcional) primaInput.value = '';
+        row.querySelector('.btn-remove-sum').style.display = (isOpcional && sumsContainer.children.length > 1) ? 'inline-flex' : 'none';
+      });
+    }
+
+    estadoSelect.addEventListener('change', applyState);
+    addBtn.addEventListener('click', () => { addSumRow(); applyState(); });
+
+    addSumRow();
+    applyState();
+
+    return {
+      element: wrap,
+      setData(data) {
+        estadoSelect.value = data?.estado || 'No contempla';
+        edadMaxInput.value = data?.edad_maxima ?? '';
+        sumsContainer.innerHTML = '';
+        const sums = (data?.sumas && data.sumas.length) ? data.sumas : [{ suma_asegurada: '', prima: '' }];
+        sums.forEach((s) => addSumRow(s.suma_asegurada, s.prima));
+        applyState();
+      },
+      getData() {
+        const sums = Array.from(sumsContainer.children).map((row) => ({
+          suma_asegurada: getThousandsValue(row.querySelector('.mat-suma')),
+          prima: row.querySelector('.mat-prima').value !== '' ? Number(row.querySelector('.mat-prima').value) : null,
+        })).filter((s) => s.suma_asegurada !== null || s.prima !== null);
+        return {
+          estado: estadoSelect.value,
+          edad_maxima: edadMaxInput.value !== '' ? Number(edadMaxInput.value) : null,
+          sumas: sums,
+        };
+      },
+    };
+  }
+
+  // Se construyen una sola vez y se reutilizan (setData/getData) en cada apertura del modal.
+  const tarifaCoverageControls = {};
+  COVERAGE_LIST.forEach((def) => {
+    const card = createCoverageCard(def);
+    tarifaCoverageControls[def.key] = card;
+    tarifaCoberturasContainer.appendChild(card.element);
+  });
+  const tarifaMaternidadControl = createMaternidadCard();
+  tarifaMaternidadContainer.appendChild(tarifaMaternidadControl.element);
+
+  /* ---------------------------------------------------------------------
+     Tarifas por rango etario: se generan dinámicamente según la edad
+     mínima/máxima de Titular y de Familiares configuradas en el Plan
+     seleccionado, replicando los mismos rangos para ambos grupos.
+     --------------------------------------------------------------------- */
+  let tarifaRangeInputs = { titular: {}, familiares: {} };
+
+  function renderTarifaRangos(plan) {
+    tarifaRangosContainer.innerHTML = '';
+    tarifaRangeInputs = { titular: {}, familiares: {} };
+
+    if (!plan) {
+      tarifaRangosContainer.innerHTML = '<p class="age-range-empty">Selecciona un plan para ver los rangos etarios disponibles.</p>';
+      return;
+    }
+
+    const titularRanges = rangesForAges(plan.edad_min_titular, plan.edad_max_titular);
+    const familiaresRanges = rangesForAges(plan.edad_min_familiares, plan.edad_max_familiares);
+
+    function buildGroup(title, ranges, storeKey) {
+      const groupTitle = document.createElement('div');
+      groupTitle.className = 'age-range-group__title';
+      groupTitle.textContent = title;
+      tarifaRangosContainer.appendChild(groupTitle);
+
+      if (!ranges.length) {
+        const p = document.createElement('p');
+        p.className = 'age-range-empty';
+        p.textContent = 'No hay rangos configurados para este grupo en el plan seleccionado.';
+        tarifaRangosContainer.appendChild(p);
+        return;
+      }
+
+      const grid = document.createElement('div');
+      grid.className = 'age-range-grid';
+      ranges.forEach((r) => {
+        const item = document.createElement('div');
+        item.className = 'age-range-item';
+        item.innerHTML = `
+          <label>${r.key} años</label>
+          <div class="input-currency"><span class="input-currency__prefix">$</span><input type="number" min="0" step="0.01" data-range="${r.key}"></div>
+        `;
+        grid.appendChild(item);
+        tarifaRangeInputs[storeKey][r.key] = item.querySelector('input');
+      });
+      tarifaRangosContainer.appendChild(grid);
+    }
+
+    buildGroup('Titular', titularRanges, 'titular');
+    buildGroup('Familiares', familiaresRanges, 'familiares');
+  }
+
+  function setTarifaRangosData(titularData = {}, familiaresData = {}) {
+    Object.entries(tarifaRangeInputs.titular).forEach(([key, input]) => {
+      if (titularData && titularData[key] != null) input.value = titularData[key];
+    });
+    Object.entries(tarifaRangeInputs.familiares).forEach(([key, input]) => {
+      if (familiaresData && familiaresData[key] != null) input.value = familiaresData[key];
+    });
+  }
+
+  function getTarifaRangosData() {
+    const titular = {};
+    const familiares = {};
+    Object.entries(tarifaRangeInputs.titular).forEach(([key, input]) => {
+      if (input.value !== '') titular[key] = Number(input.value);
+    });
+    Object.entries(tarifaRangeInputs.familiares).forEach(([key, input]) => {
+      if (input.value !== '') familiares[key] = Number(input.value);
+    });
+    return { titular, familiares };
+  }
+
+  function populateTarifaPlanSelect() {
+    const previousValue = tarifaPlanSelect.value;
+    tarifaPlanSelect.innerHTML = '<option value="">Selecciona un plan</option>';
+    allPlanes.forEach((p) => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.nombre_plan;
+      tarifaPlanSelect.appendChild(opt);
+    });
+    if (previousValue) tarifaPlanSelect.value = previousValue;
+  }
+
+  tarifaPlanSelect.addEventListener('change', () => {
+    const plan = allPlanes.find((p) => p.id === tarifaPlanSelect.value);
+    renderTarifaRangos(plan);
+  });
+
+  function resetTarifaCoverageControls() {
+    COVERAGE_LIST.forEach((def) => tarifaCoverageControls[def.key].setData(null));
+    tarifaMaternidadControl.setData(null);
+  }
+
+  function openTarifaModal({ edit = false, item = null, readOnly = false } = {}) {
+    isEditModeTarifa = edit;
+    isReadOnlyTarifa = readOnly;
+    tarifaForm.reset();
+    clearFeedback('tarifaFormFeedback');
+    setFieldError(fieldTarifaPlan, false);
+    setFormControlsForcedDisabled(tarifaForm, false);
+
+    populateTarifaPlanSelect();
+    resetTarifaCoverageControls();
+    renderTarifaRangos(null);
+
+    if (item) {
+      tarifaModalTitle.textContent = readOnly ? 'Ver Tarifa' : 'Editar Tarifa';
+      submitTarifaBtn.textContent = 'Guardar Cambios';
+      tarifaIdInput.value = item.id;
+      tarifaPlanSelect.value = item.plan_id;
+
+      const plan = allPlanes.find((p) => p.id === item.plan_id);
+      renderTarifaRangos(plan);
+      setTarifaRangosData(item.tarifas_titular || {}, item.tarifas_familiares || {});
+
+      const cob = item.coberturas || {};
+      COVERAGE_LIST.forEach((def) => tarifaCoverageControls[def.key].setData(cob[def.key]));
+      tarifaMaternidadControl.setData(item.maternidad || null);
+    } else {
+      tarifaModalTitle.textContent = 'Registrar Tarifa';
+      submitTarifaBtn.textContent = 'Registrar';
+      tarifaIdInput.value = '';
+    }
+
+    tarifaModalOverlay.querySelector('.modal').classList.toggle('modal--readonly', readOnly);
+    submitTarifaBtn.style.display = readOnly ? 'none' : 'inline-flex';
+    if (readOnly) setFormControlsForcedDisabled(tarifaForm, true);
+
+    tarifaModalOverlay.classList.add('is-open');
+  }
+
+  function closeTarifaModal() {
+    tarifaModalOverlay.classList.remove('is-open');
+    tarifaForm.reset();
+  }
+
+  openTarifaModalBtn.addEventListener('click', () => openTarifaModal({ edit: false }));
+  tarifaModalCloseBtn.addEventListener('click', closeTarifaModal);
+  cancelTarifaModalBtn.addEventListener('click', closeTarifaModal);
+  tarifaModalOverlay.addEventListener('click', (e) => {
+    if (e.target === tarifaModalOverlay) closeTarifaModal();
+  });
+
+  function validateTarifaForm() {
+    let valid = true;
+    const planOk = tarifaPlanSelect.value.trim().length > 0;
+    setFieldError(fieldTarifaPlan, !planOk);
+    if (!planOk) valid = false;
+    return valid;
+  }
+
+  function renderTarifas(items) {
+    tarifasTableBody.innerHTML = '';
+    if (!items.length) {
+      tarifasEmpty.style.display = 'block';
+      return;
+    }
+    tarifasEmpty.style.display = 'none';
+
+    items.forEach((item) => {
+      const tr = document.createElement('tr');
+      const planNombre = item.planes?.nombre_plan || allPlanes.find((p) => p.id === item.plan_id)?.nombre_plan || '—';
+      const isActualizada = item.status === 'Actualizada';
+      const statusClass = isActualizada ? 'status-pill--activo' : 'status-pill--inactivo';
+      const toggleIcon = isActualizada ? '✕' : '✓';
+      const toggleClass = isActualizada ? 'action-btn--toggle-on' : 'action-btn--toggle-off';
+      const toggleLabel = isActualizada ? 'Marcar como En revisión' : 'Marcar como Actualizada';
+
+      tr.innerHTML = `
+        <td data-label="Plan">${escapeHtml(planNombre)}</td>
+        <td data-label="Status Tarifa"><span class="status-pill ${statusClass}">${escapeHtml(item.status)}</span></td>
+        <td data-label="Acciones" class="col-actions">
+          <button type="button" class="action-btn action-btn--view" data-id="${item.id}" aria-label="Ver tarifa">👁️</button>
+          <button type="button" class="action-btn action-btn--edit" data-id="${item.id}" aria-label="Editar tarifa">✏️</button>
+          <button type="button" class="action-btn ${toggleClass}" data-id="${item.id}" aria-label="${toggleLabel}">${toggleIcon}</button>
+          <button type="button" class="action-btn action-btn--delete" data-id="${item.id}" aria-label="Eliminar tarifa">🗑️</button>
+        </td>
+      `;
+      tarifasTableBody.appendChild(tr);
+
+      tr.querySelector('.action-btn--view').addEventListener('click', () => {
+        openTarifaModal({ edit: true, item, readOnly: true });
+      });
+      tr.querySelector('.action-btn--edit').addEventListener('click', () => {
+        openTarifaModal({ edit: true, item });
+      });
+      tr.querySelector(`.${toggleClass}`).addEventListener('click', () => handleToggleStatusTarifa(item));
+      tr.querySelector('.action-btn--delete').addEventListener('click', () => handleDeleteTarifa(item.id));
+    });
+  }
+
+  sortableHeadersTarifas.forEach((th) => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.sortKey;
+      if (currentSortTarifas.key === key) {
+        currentSortTarifas.direction = currentSortTarifas.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        currentSortTarifas = { key, direction: 'asc' };
+      }
+      updateSortIndicators(sortableHeadersTarifas, currentSortTarifas);
+      applyFilterTarifas();
+    });
+  });
+
+  function applyFilterTarifas() {
+    const term = searchTarifas.value.trim().toLowerCase();
+    clearSearchTarifas.classList.toggle('is-visible', term.length > 0);
+    let result = allTarifas;
+    if (term) {
+      result = result.filter((t) => (t.plan_nombre || '').toLowerCase().includes(term));
+    }
+    result = [...result].sort((a, b) => {
+      const factor = currentSortTarifas.direction === 'desc' ? -1 : 1;
+      const va = (a.plan_nombre || '').toLowerCase();
+      const vb = (b.plan_nombre || '').toLowerCase();
+      return va.localeCompare(vb, 'es', { sensitivity: 'base' }) * factor;
+    });
+    renderTarifas(result);
+  }
+
+  searchTarifas.addEventListener('input', applyFilterTarifas);
+  clearSearchTarifas.addEventListener('click', () => {
+    searchTarifas.value = '';
+    applyFilterTarifas();
+    searchTarifas.focus();
+  });
+
+  async function loadTarifas() {
+    tarifasLoading.style.display = 'block';
+    tarifasEmpty.style.display = 'none';
+    tarifasTableBody.innerHTML = '';
+
+    if (!supabaseClient) {
+      tarifasLoading.style.display = 'none';
+      tarifasEmpty.textContent = 'Supabase no está inicializado.';
+      tarifasEmpty.style.display = 'block';
+      return;
+    }
+
+    try {
+      const { data, error } = await supabaseClient
+        .from(TABLE_TARIFAS)
+        .select('*, planes(nombre_plan)');
+
+      tarifasLoading.style.display = 'none';
+
+      if (error) {
+        tarifasEmpty.textContent = `Error al cargar tarifas: ${getErrorMessage(error)}`;
+        tarifasEmpty.style.display = 'block';
+        return;
+      }
+
+      allTarifas = (data || []).map((t) => ({ ...t, plan_nombre: t.planes?.nombre_plan || '' }));
+      applyFilterTarifas();
+    } catch (err) {
+      tarifasLoading.style.display = 'none';
+      tarifasEmpty.textContent = `No se pudo conectar con Supabase: ${getErrorMessage(err)}`;
+      tarifasEmpty.style.display = 'block';
+    }
+  }
+
+  tarifaForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (isReadOnlyTarifa) return;
+    clearFeedback('tarifaFormFeedback');
+
+    if (!validateTarifaForm()) {
+      showFeedback('tarifaFormFeedback', 'Selecciona un plan antes de continuar.', 'error');
+      return;
+    }
+    if (!supabaseClient) {
+      showFeedback('tarifaFormFeedback', 'No se pudo conectar con Supabase.', 'error');
+      return;
+    }
+
+    submitTarifaBtn.disabled = true;
+    submitTarifaBtn.textContent = isEditModeTarifa ? 'Guardando...' : 'Registrando...';
+
+    const currentUser = getCurrentUserLabel();
+
+    const coberturas = {};
+    COVERAGE_LIST.forEach((def) => { coberturas[def.key] = tarifaCoverageControls[def.key].getData(); });
+    const maternidad = tarifaMaternidadControl.getData();
+    const { titular, familiares } = getTarifaRangosData();
+
+    const payload = {
+      plan_id: tarifaPlanSelect.value,
+      coberturas,
+      maternidad,
+      tarifas_titular: titular,
+      tarifas_familiares: familiares,
+    };
+
+    if (isEditModeTarifa) {
+      payload.usuario_modificacion = currentUser;
+    } else {
+      payload.usuario_creacion = currentUser;
+      payload.usuario_modificacion = currentUser;
+    }
+
+    try {
+      let error;
+      if (isEditModeTarifa) {
+        ({ error } = await supabaseClient.from(TABLE_TARIFAS).update(payload).eq('id', tarifaIdInput.value));
+      } else {
+        ({ error } = await supabaseClient.from(TABLE_TARIFAS).insert([payload]));
+      }
+
+      submitTarifaBtn.disabled = false;
+      submitTarifaBtn.textContent = isEditModeTarifa ? 'Guardar Cambios' : 'Registrar';
+
+      if (error) {
+        const prefix = error.code === '23505' ? 'Ya existe una tarifa registrada para este plan.' : 'No se pudo guardar la tarifa.';
+        showFeedback('tarifaFormFeedback', `${prefix} ${getErrorMessage(error)}`, 'error');
+        return;
+      }
+
+      showFeedback('tarifaFormFeedback', isEditModeTarifa ? 'Tarifa actualizada correctamente.' : 'Tarifa registrada correctamente.', 'success');
+      await loadTarifas();
+      setTimeout(closeTarifaModal, 700);
+    } catch (err) {
+      submitTarifaBtn.disabled = false;
+      submitTarifaBtn.textContent = isEditModeTarifa ? 'Guardar Cambios' : 'Registrar';
+      showFeedback('tarifaFormFeedback', `No se pudo conectar con Supabase: ${getErrorMessage(err)}`, 'error');
+    }
+  });
+
+  async function handleToggleStatusTarifa(item) {
+    const nextStatus = item.status === 'Actualizada' ? 'En revisión' : 'Actualizada';
+    const currentUser = getCurrentUserLabel();
+
+    try {
+      const { error } = await supabaseClient
+        .from(TABLE_TARIFAS)
+        .update({ status: nextStatus, usuario_modificacion: currentUser })
+        .eq('id', item.id);
+
+      if (error) {
+        showNotification('tarifasNotification', `No se pudo cambiar el status: ${getErrorMessage(error)}`, 'error');
+        return;
+      }
+      await loadTarifas();
+      showNotification('tarifasNotification', `Tarifa marcada como ${nextStatus}.`, 'success');
+    } catch (err) {
+      showNotification('tarifasNotification', `No se pudo cambiar el status: ${getErrorMessage(err)}`, 'error');
+    }
+  }
+
+  async function handleDeleteTarifa(id) {
+    const item = allTarifas.find((t) => t.id === id);
+    if (!item) return;
+
+    const confirmed = await openConfirmDialog({
+      title: 'Eliminar tarifa',
+      message: `¿Eliminar la tarifa de "${item.plan_nombre}"? Esta acción no se puede deshacer.`,
+      acceptLabel: 'Eliminar',
+    });
+    if (!confirmed) return;
+
+    try {
+      const { error } = await supabaseClient.from(TABLE_TARIFAS).delete().eq('id', id);
+      if (error) {
+        showNotification('tarifasNotification', `No se pudo eliminar: ${getErrorMessage(error)}`, 'error');
+        return;
+      }
+      await loadTarifas();
+      showNotification('tarifasNotification', 'Tarifa eliminada correctamente.', 'success');
+    } catch (err) {
+      showNotification('tarifasNotification', `No se pudo eliminar: ${getErrorMessage(err)}`, 'error');
+    }
+  }
+
   /* =========================================================
      TECLA ESCAPE (cierra modal o confirmación activa)
      ========================================================= */
@@ -922,6 +2190,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (confirmOverlay.style.display === 'flex') { closeConfirmDialog(); return; }
     if (aseguradoraModalOverlay.classList.contains('is-open')) closeAseguradoraModal();
     if (productoModalOverlay.classList.contains('is-open')) closeProductoModal();
+    if (planModalOverlay.classList.contains('is-open')) closePlanModal();
+    if (tarifaModalOverlay.classList.contains('is-open')) closeTarifaModal();
   });
 
   /* =========================================================
@@ -929,7 +2199,11 @@ document.addEventListener('DOMContentLoaded', async () => {
      ========================================================= */
   updateSortIndicators(sortableHeadersAseguradoras, currentSortAseguradoras);
   updateSortIndicators(sortableHeadersProductos, currentSortProductos);
+  updateSortIndicators(sortableHeadersPlanes, currentSortPlanes);
+  updateSortIndicators(sortableHeadersTarifas, currentSortTarifas);
   await initSupabase();
   await loadAseguradoras();
   await loadProductos();
+  await loadPlanes();
+  await loadTarifas();
 });
