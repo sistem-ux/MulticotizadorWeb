@@ -1,4 +1,46 @@
-document.addEventListener('DOMContentLoaded', () => {
+/* =============================================================
+   CONFIGURACIÓN DE SUPABASE
+   (Misma configuración que aseguradoras.js / usuarios.js —
+   Project Settings > API en tu proyecto de Supabase)
+   ============================================================= */
+const SUPABASE_URL = 'https://cibtpkpxdrykozujaqba.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_zlp4_HGpTeAQKW55c_pZQA_2HEXRpaC';
+const TABLE_PLANES = 'planes';
+const TABLE_TARIFAS = 'tarifas';
+
+/* Debe coincidir con las 9 coberturas fijas definidas en aseguradoras.js
+   (COVERAGE_LIST), ya que las tarifas se guardan en la BD con estas mismas
+   claves dentro de la columna jsonb "coberturas". */
+const COVERAGE_LIST = [
+  { key: 'funerarios', label: 'Funerarios' },
+  { key: 'asistencia_viajes', label: 'Asistencia en viajes' },
+  { key: 'invalidez_permanente', label: 'Invalidez permanente' },
+  { key: 'muerte_accidental', label: 'Muerte accidental' },
+  { key: 'odontologia', label: 'Odontología' },
+  { key: 'oftalmologia', label: 'Oftalmología' },
+  { key: 'dermatologia', label: 'Dermatología' },
+  { key: 'psicologia', label: 'Psicología' },
+  { key: 'servicios_adicionales', label: 'Servicios Adicionales' },
+];
+
+let supabaseClient = null;
+
+async function initSupabase() {
+  if (window.supabase && typeof window.supabase.createClient === 'function') {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.info('Supabase inicializado desde UMD.');
+    return;
+  }
+  try {
+    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm');
+    supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.info('Supabase inicializado desde ESM fallback.');
+  } catch (err) {
+    console.error('No se pudo importar Supabase:', err);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
 
   /* =========================================================
      REFERENCIAS DEL DOM
@@ -21,6 +63,9 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentSelectedPlanId = null; // Para saber a qué plan le estamos agregando adicionales
   let planSelectionHistory = []; // Guarda el orden y momento de cada selección de plan
   let isFamilyLocked = false;
+
+  // Se inicializa temprano para que esté listo cuando el usuario presione "Mostrar planes"
+  await initSupabase();
 
   /* =========================================================
      1. FORMATEO "TIPO ORACIÓN" DEL NOMBRE
@@ -421,80 +466,98 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /* =========================================================
-     5. MOTOR DE COTIZACIÓN
+     5. MOTOR DE COTIZACIÓN — datos reales desde Supabase
      ========================================================= */
-  
-  // Estructura de planes con coberturas y sus respectivas sumas
-  const planesDb = [
-    { 
-      id: 1, 
-      aseguradora: 'Seguros Venezuela', 
-      producto: 'Salud Individual', 
-      sumaAsegurada: '50.000', 
-      edadMin: 0, 
-      edadMax: 60, 
-      coberturasAdicionales: [
-        { nombre: 'Maternidad', sumas: ['$5.000'] },
-        { nombre: 'Asistencia en Viajes', sumas: ['$40.000'] },
-        { nombre: 'Servicios Funerarios', sumas: ['$2.000'] },
-        { nombre: 'Plan Integral de Salud', sumas: ['5 Servicios', '6 Servicios'] }
-      ] 
-    },
-    { 
-      id: 2, 
-      aseguradora: 'Seguros Caracas', 
-      producto: 'Salud Exterior', 
-      sumaAsegurada: '200.000', 
-      edadMin: 18, 
-      edadMax: 60, 
-      coberturasAdicionales: [
-        { nombre: 'Maternidad', sumas: ['$5.000', '$10.000', '$20.000'] },
-        { nombre: 'Servicios Funerarios', sumas: ['$3.000', '$4.000', '$5.000', '$6.000'] },
-        { nombre: 'Odontología', sumas: ['Servicios'] },
-        { nombre: 'Oftalmología', sumas: ['Servicios'] },
-        { nombre: 'Psicología', sumas: ['Servicios'] },
-        { nombre: 'Dermatología', sumas: ['Servicios'] }
-      ] 
-    },
-    { 
-      id: 3, 
-      aseguradora: 'Seguros Caracas', 
-      producto: 'Salud Local', 
-      sumaAsegurada: '30.000', 
-      edadMin: 0, 
-      // --- NUEVO: Restricción granular en días (6 meses = 180 días) ---
-      edadMinDias: 180, 
-      // ----------------------------------------------------------------
-      edadMax: 65, 
-      coberturasAdicionales: [
-        { nombre: 'Maternidad', sumas: ['$5.000', '$10.000'] },
-        { nombre: 'Servicios Funerarios', sumas: ['$3.000', '$4.000', '$5.000', '$6.000'] },
-        { nombre: 'Odontología', sumas: ['Servicios'] },
-        { nombre: 'Oftalmología', sumas: ['Servicios'] },
-        { nombre: 'Psicología', sumas: ['Servicios'] },
-        { nombre: 'Dermatología', sumas: ['Servicios'] }
-      ] 
-    },
-        { 
-      id: 4, 
-      aseguradora: 'Seguros Caracas', 
-      producto: 'Salud Local', 
-      sumaAsegurada: '75.000', 
-      edadMin: 0, 
-      // --- NUEVO: Restricción granular en días (6 meses = 180 días) ---
-      edadMinDias: 180, 
-      // ----------------------------------------------------------------
-      edadMax: 65, 
-      coberturasAdicionales: [
-        { nombre: 'Maternidad', sumas: ['$5.000', '$10.000'] },
-        { nombre: 'Servicios Funerarios', sumas: ['$3.000', '$4.000', '$5.000', '$6.000'] },
-        { nombre: 'Odontología', sumas: ['Servicios'] },
-        { nombre: 'Oftalmología', sumas: ['Servicios'] },
-        { nombre: 'Psicología', sumas: ['Servicios'] },
-        { nombre: 'Dermatología', sumas: ['Servicios'] }
-      ] 
+
+  // Formatea un número con separador de miles (mismo criterio que aseguradoras.js)
+  function formatCurrencyThousands(value) {
+    if (value === null || value === undefined || value === '') return '';
+    return Number(value).toLocaleString('es-VE');
+  }
+
+  // Escapa texto antes de insertarlo como HTML (nombre del plan, mensajes de error)
+  function escapeHtmlLocal(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+
+  /* Convierte la columna jsonb "coberturas" (y "maternidad") de una tarifa
+     en la lista de "adicionales" seleccionables que espera el modal de
+     Coberturas Adicionales de este cotizador. Solo se incluyen las
+     coberturas marcadas como "Opcional" en Registro de Planes: las que
+     están "Incluido" ya forman parte del plan base (no se seleccionan) y
+     las "No contempla" no aplican para ese plan. */
+  function buildCoberturasAdicionales(tarifa) {
+    if (!tarifa) return [];
+    const adicionales = [];
+
+    COVERAGE_LIST.forEach((def) => {
+      const cov = tarifa.coberturas ? tarifa.coberturas[def.key] : null;
+      if (!cov || cov.estado !== 'Opcional') return;
+      const sumas = (cov.sumas || [])
+        .map((s) => (s.suma_asegurada != null ? `$${formatCurrencyThousands(s.suma_asegurada)}` : null))
+        .filter(Boolean);
+      if (!sumas.length) return;
+      adicionales.push({ nombre: def.label, sumas });
+    });
+
+    const mat = tarifa.maternidad;
+    if (mat && mat.estado === 'Opcional') {
+      const sumas = (mat.sumas || [])
+        .map((s) => (s.suma_asegurada != null ? `$${formatCurrencyThousands(s.suma_asegurada)}` : null))
+        .filter(Boolean);
+      if (sumas.length) {
+        adicionales.push({ nombre: 'Maternidad', sumas });
+      }
     }
-  ];
+
+    return adicionales;
+  }
+
+  /* Trae de Supabase los planes con status "Activo" que además tengan una
+     tarifa con status "Actualizada" asociada (sin tarifa actualizada, el
+     plan no se puede cotizar). Devuelve cada plan ya enriquecido con su
+     tarifa y con "coberturasAdicionales" listo para el modal. */
+  async function fetchPlanesCotizables() {
+    if (!supabaseClient) {
+      return { planes: [], error: 'No se pudo conectar con Supabase.' };
+    }
+
+    const [planesRes, tarifasRes] = await Promise.all([
+      supabaseClient.from(TABLE_PLANES).select('*').eq('status', 'Activo'),
+      supabaseClient.from(TABLE_TARIFAS).select('*').eq('status', 'Actualizada'),
+    ]);
+
+    if (planesRes.error) return { planes: [], error: getErrorMessage(planesRes.error) };
+    if (tarifasRes.error) return { planes: [], error: getErrorMessage(tarifasRes.error) };
+
+    const tarifaPorPlanId = new Map((tarifasRes.data || []).map((t) => [t.plan_id, t]));
+
+    const planes = (planesRes.data || [])
+      .filter((plan) => tarifaPorPlanId.has(plan.id)) // solo planes con tarifa actualizada
+      .map((plan) => {
+        const tarifa = tarifaPorPlanId.get(plan.id);
+        return {
+          ...plan,
+          _tarifa: tarifa,
+          coberturasAdicionales: buildCoberturasAdicionales(tarifa),
+        };
+      });
+
+    return { planes, error: null };
+  }
+
+  function getErrorMessage(error) {
+    if (!error) return 'Error desconocido.';
+    if (typeof error === 'string') return error;
+    const parts = [];
+    if (error.message) parts.push(error.message);
+    if (error.code) parts.push(`code ${error.code}`);
+    if (error.details) parts.push(error.details);
+    if (error.hint) parts.push(error.hint);
+    return parts.filter(Boolean).join(' | ') || JSON.stringify(error);
+  }
 
   function getNumericAge(dateStr) {
     const bd = parseDateValue(dateStr);
@@ -542,7 +605,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  showPlansBtn.addEventListener('click', () => {
+  showPlansBtn.addEventListener('click', async () => {
     if (!validateApplicantName()) {
       applicantNameInput.focus();
       window.alert('El nombre del solicitante es obligatorio y debe tener al menos 3 letras.');
@@ -556,6 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setFamilyFormLocked(true);
     showPlansBtn.disabled = true;
+    showPlansBtn.textContent = 'Cargando...';
     modifyDataBtn.disabled = false;
 
     const rows = Array.from(tableBody.querySelectorAll('.family-row'));
@@ -571,49 +635,56 @@ document.addEventListener('DOMContentLoaded', () => {
       };
     }).filter(member => member.incluido && member.fechaNacimiento);
 
-    plansContainer.innerHTML = ''; // Limpiar lista
+    plansContainer.innerHTML = '<p style="text-align:center; color:#A6A9B0; margin-top:20px;">Cargando planes...</p>';
     plansContainer.className = 'plans-list';
     plansContainer.style.display = 'block';
 
-    // 1. Filtrar por límites de edad (NUEVA LÓGICA INTEGRADA)
-    const planesDisponibles = planesDb.filter(plan => {
-      // Verificamos si el plan es apto para TODOS los integrantes incluidos
-      return integrantes.every(miembro => {
-        // Cálculo de edad en años (lógica existente)
-        const edadNum = getNumericAge(miembro.fechaNacimiento);
-        
-        // --- NUEVO: Cálculo de edad en días exactos ---
-        const edadEnDias = calculateAgeInDays(miembro.fechaNacimiento);
+    // 1. Traer de Supabase solo los planes Activos que tengan una tarifa
+    //    Actualizada asociada (si un plan no tiene tarifa "Actualizada", no
+    //    se puede cotizar y queda descartado desde la propia consulta).
+    const { planes: planesCotizables, error } = await fetchPlanesCotizables();
 
-        // --- REGLA NUEVA: Validar Edad Mínima en Días si el plan la define ---
-        if (plan.edadMinDias && edadEnDias < plan.edadMinDias) {
-          // El integrante tiene menos días de los requeridos (ej: bebé < 6 meses)
-          return false; // Descarta este plan para todo el grupo
-        }
+    showPlansBtn.disabled = false;
+    showPlansBtn.textContent = 'Mostrar planes';
 
-        // --- Reglas existentes de edad Min/Max en años ---
-        if (edadNum < plan.edadMin || edadNum > plan.edadMax) {
-          return false; // Descarta si no cumple años
-        }
-
-        // Si pasa todas las validaciones (días y años), cumple
-        return true;
-      });
-    });
-
-    if (planesDisponibles.length === 0) {
-      plansContainer.innerHTML = '<p style="text-align:center; color:#A6A9B0; margin-top:20px;">No hay planes disponibles para estas edades.</p>';
+    if (error) {
+      plansContainer.innerHTML = `<p style="text-align:center; color:#C0392B; margin-top:20px;">No se pudieron cargar los planes: ${escapeHtmlLocal(error)}</p>`;
       return;
     }
 
-    // 2. Regla de Maternidad global (Titular o Cónyuge F entre 18 y 50 años)
-    const aplicaMaternidad = integrantes.some(miembro => {
-      const edadNum = getNumericAge(miembro.fechaNacimiento);
-      return (miembro.parentesco === 'Titular' || miembro.parentesco === 'Cónyuge') &&
-             miembro.genero === 'F' && edadNum >= 18 && edadNum <= 50;
+    // 2. Edad del Titular, para compararla contra el rango de edad de
+    //    Titular configurado en cada plan (edad_min_titular / edad_max_titular).
+    const titular = integrantes.find(miembro => miembro.parentesco === 'Titular');
+    const edadTitular = titular ? getNumericAge(titular.fechaNacimiento) : -1;
+
+    const planesDisponibles = planesCotizables.filter(plan => {
+      if (plan.edad_min_titular != null && edadTitular < plan.edad_min_titular) return false;
+      if (plan.edad_max_titular != null && edadTitular > plan.edad_max_titular) return false;
+      return true;
     });
 
-    // 3. Imprimir tarjetas de planes en formato lista
+    if (planesDisponibles.length === 0) {
+      plansContainer.innerHTML = '<p style="text-align:center; color:#A6A9B0; margin-top:20px;">No hay planes disponibles para la edad del titular.</p>';
+      return;
+    }
+
+    plansContainer.innerHTML = '';
+
+    // 3. Regla de Maternidad: aplica por Titular o Cónyuge (mujer) cuya edad
+    //    esté dentro del rango de maternidad propio de CADA plan
+    //    (edad_min_maternidad / edad_max_maternidad, definidos en el plan).
+    function aplicaMaternidadParaPlan(plan) {
+      return integrantes.some(miembro => {
+        if (miembro.parentesco !== 'Titular' && miembro.parentesco !== 'Cónyuge') return false;
+        if (miembro.genero !== 'F') return false;
+        const edadNum = getNumericAge(miembro.fechaNacimiento);
+        if (plan.edad_min_maternidad != null && edadNum < plan.edad_min_maternidad) return false;
+        if (plan.edad_max_maternidad != null && edadNum > plan.edad_max_maternidad) return false;
+        return true;
+      });
+    }
+
+    // 4. Imprimir tarjetas de planes en formato lista
     planesDisponibles.forEach(plan => {
       const card = document.createElement('div');
       card.className = 'plan-item';
@@ -621,8 +692,8 @@ document.addEventListener('DOMContentLoaded', () => {
       card.innerHTML = `
         <div class="plan-header-row">
           <div>
-            <h3 class="plan-title">${plan.aseguradora} - ${plan.producto}</h3>
-            <p class="plan-details">Suma Asegurada: $${plan.sumaAsegurada}</p>
+            <h3 class="plan-title">${escapeHtmlLocal(plan.nombre_plan)}</h3>
+            <p class="plan-details">Suma Asegurada: $${formatCurrencyThousands(plan.suma_asegurada)}</p>
           </div>
           <button type="button" class="btn btn--secondary open-modal-btn" style="padding: 6px 12px; font-size: 13px;">+ Adicionales</button>
         </div>
@@ -665,6 +736,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const divTextoActual = document.getElementById(`selected_cov_text_${plan.id}`);
         const textoActual = divTextoActual.textContent;
+        const aplicaMaternidad = aplicaMaternidadParaPlan(plan);
 
         plan.coberturasAdicionales.forEach((adicional, index) => {
           let disabled = '';
