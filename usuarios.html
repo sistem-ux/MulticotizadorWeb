@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Usuarios | Panel de Administración</title>
+  <title>Usuarios, Perfiles y Sucursales | Panel de Administración</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -199,7 +199,7 @@
       justify-content: center;
       transition: transform 0.2s ease, filter 0.2s ease;
     }
-    
+
     .icon-btn:hover {
       transform: scale(1.15);
       filter: brightness(1.2);
@@ -216,6 +216,102 @@
         margin-left: 0 !important;
       }
     }
+
+    /* ---------------------------------------------------------------
+       Pestañas Usuarios / Perfiles / Sucursales (mismo patrón visual
+       usado en aseguradoras.html, con los tokens de color y tipografía
+       del resto del sistema).
+       --------------------------------------------------------------- */
+    .tabs-nav {
+      display: flex;
+      gap: 0.5rem;
+      border-bottom: 1px solid var(--color-gray-border);
+      margin-bottom: 1.5rem;
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      border-bottom: 3px solid transparent;
+      padding: 0.75rem 0.25rem;
+      margin-right: 1.5rem;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #5B6472;
+      cursor: pointer;
+      transition: color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .tab-btn:hover { color: var(--color-navy); }
+
+    .tab-btn.is-active {
+      color: var(--color-navy);
+      border-bottom-color: #2C7D3C;
+    }
+
+    .tab-panel { display: none; }
+    .tab-panel.is-active { display: block; }
+
+    /* Píldora de status (Activo / Inactivo) */
+    .status-pill {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+    .status-pill--activo { background: #dff6e8; color: #235F2F; }
+    .status-pill--inactivo { background: #f5e2e2; color: #C0392B; }
+
+    .action-btn--toggle-on { color: #C0392B; }
+    .action-btn--toggle-off { color: #235F2F; }
+
+    /* Los botones de Acciones siempre en línea, uno al lado del otro */
+    .users-table th.col-actions,
+    .users-table td.col-actions {
+      width: 1%;
+      white-space: nowrap;
+      padding-right: 1.25rem;
+    }
+    .users-table td.col-actions {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0.5rem;
+    }
+    .users-table td.col-actions .action-btn {
+      flex-shrink: 0;
+      margin: 0;
+    }
+
+    /* Bloque de detalle de solo lectura (pestaña "Ver") con los campos
+       de auditoría: Id, Status, fechas y usuarios de creación/modificación. */
+    .view-detail {
+      margin-top: 1.25rem;
+      border-top: 1px solid var(--color-gray-border);
+      padding-top: 0.9rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+    }
+    .view-detail__row {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      font-size: 0.85rem;
+      color: #3C4350;
+    }
+    .view-detail__row span:first-child {
+      font-weight: 600;
+      color: var(--color-navy);
+      flex-shrink: 0;
+    }
+    .view-detail__row span:last-child {
+      text-align: right;
+      word-break: break-word;
+    }
   </style>
 </head>
 <body>
@@ -230,7 +326,7 @@
 
   <!-- CONTENEDOR GENERAL DE LA DERECHA -->
   <div id="mainContent" class="main-wrapper">
-    
+
     <!-- BARRA SUPERIOR -->
     <header class="topbar">
       <div class="topbar__actions">
@@ -241,57 +337,140 @@
       </div>
     </header>
 
-    <!-- CONTENIDO DE LA PÁGINA DE USUARIOS -->
+    <!-- CONTENIDO DE LA PÁGINA -->
     <main class="page page--users">
       <div class="card">
 
         <!-- Encabezado -->
         <header class="page-header">
           <span class="page-header__eyebrow">Administración</span>
-          <h1 class="page-header__title">👥 Usuarios</h1>
-          <p class="page-header__subtitle">Busca, registra, edita o elimina usuarios del sistema.</p>
+          <h1 class="page-header__title">👥 Usuarios, Perfiles y Sucursales</h1>
+          <p class="page-header__subtitle">Administra los usuarios del sistema, los perfiles de acceso y las sucursales de la empresa.</p>
         </header>
 
-        <!-- Toolbar: buscador + registrar -->
-        <div class="users-toolbar">
-          <div class="search-bar">
-            <span class="search-bar__icon" aria-hidden="true">🔎</span>
-            <input
-              type="text"
-              id="searchInput"
-              class="search-bar__input"
-              placeholder="Buscar por nombre o correo..."
-              autocomplete="off"
-            >
-            <button type="button" id="clearSearchBtn" class="search-bar__clear" aria-label="Limpiar búsqueda">✕</button>
+        <!-- PESTAÑAS -->
+        <nav class="tabs-nav">
+          <button type="button" class="tab-btn is-active" data-tab="usuarios">Usuarios</button>
+          <button type="button" class="tab-btn" data-tab="perfiles">Perfiles</button>
+          <button type="button" class="tab-btn" data-tab="sucursales">Sucursales</button>
+        </nav>
+
+        <!-- ============================================================
+             PESTAÑA: USUARIOS
+             ============================================================ -->
+        <section id="panelUsuarios" class="tab-panel is-active">
+
+          <!-- Toolbar: buscador + registrar -->
+          <div class="users-toolbar">
+            <div class="search-bar">
+              <span class="search-bar__icon" aria-hidden="true">🔎</span>
+              <input
+                type="text"
+                id="searchInput"
+                class="search-bar__input"
+                placeholder="Buscar por nombre, correo, perfil o sucursal..."
+                autocomplete="off"
+              >
+              <button type="button" id="clearSearchBtn" class="search-bar__clear" aria-label="Limpiar búsqueda">✕</button>
+            </div>
+
+            <button type="button" id="openModalBtn" class="btn btn--register">
+              <span aria-hidden="true">＋</span> Registrar Usuario
+            </button>
           </div>
 
-          <button type="button" id="openModalBtn" class="btn btn--register">
-            <span aria-hidden="true">＋</span> Registrar Usuario
-          </button>
-        </div>
+          <div id="pageNotification" class="page-notification" aria-live="polite" style="display:none;"></div>
 
-        <div id="pageNotification" class="page-notification" aria-live="polite" style="display:none;"></div>
+          <!-- Listado de usuarios -->
+          <div class="users-table-wrapper">
+            <table class="users-table" id="usersTable">
+              <thead>
+                <tr>
+                  <th scope="col" class="is-sortable" data-sort-key="full_name">Nombres y Apellidos <span class="sort-indicator"></span></th>
+                  <th scope="col" class="is-sortable" data-sort-key="email">Correo <span class="sort-indicator"></span></th>
+                  <th scope="col">Sucursal</th>
+                  <th scope="col">Perfil</th>
+                  <th scope="col">Contraseña</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" class="col-actions">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="usersTableBody">
+                <!-- Filas generadas por JS -->
+              </tbody>
+            </table>
+            <div id="usersLoading" class="users-loading">Cargando usuarios...</div>
+            <div id="usersEmpty" class="users-empty" style="display:none;">No se encontraron usuarios.</div>
+          </div>
+        </section>
 
-        <!-- Listado de usuarios -->
-        <div class="users-table-wrapper">
-          <table class="users-table" id="usersTable">
-            <thead>
-              <tr>
-                <th scope="col" class="is-sortable" data-sort-key="full_name">Nombres y Apellidos <span class="sort-indicator"></span></th>
-                <th scope="col" class="is-sortable" data-sort-key="email">Correo <span class="sort-indicator"></span></th>
-                <th scope="col" class="is-sortable" data-sort-key="perfil">Perfil <span class="sort-indicator"></span></th>
-                <th scope="col">Contraseña</th>
-                <th scope="col" class="col-actions">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="usersTableBody">
-              <!-- Filas generadas por JS -->
-            </tbody>
-          </table>
-          <div id="usersLoading" class="users-loading">Cargando usuarios...</div>
-          <div id="usersEmpty" class="users-empty" style="display:none;">No se encontraron usuarios.</div>
-        </div>
+        <!-- ============================================================
+             PESTAÑA: PERFILES
+             ============================================================ -->
+        <section id="panelPerfiles" class="tab-panel">
+
+          <div class="users-toolbar">
+            <div class="search-bar">
+              <span class="search-bar__icon" aria-hidden="true">🔎</span>
+              <input type="text" id="searchPerfiles" class="search-bar__input" placeholder="Buscar por nombre de perfil..." autocomplete="off">
+              <button type="button" id="clearSearchPerfiles" class="search-bar__clear" aria-label="Limpiar búsqueda">✕</button>
+            </div>
+            <button type="button" id="openPerfilModalBtn" class="btn btn--register">
+              <span aria-hidden="true">＋</span> Registrar Perfil
+            </button>
+          </div>
+
+          <div id="perfilesNotification" class="page-notification" aria-live="polite" style="display:none;"></div>
+
+          <div class="users-table-wrapper">
+            <table class="users-table" id="perfilesTable">
+              <thead>
+                <tr>
+                  <th scope="col" class="is-sortable" data-sort-key="perfil">Perfil <span class="sort-indicator"></span></th>
+                  <th scope="col">Status</th>
+                  <th scope="col" class="col-actions">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="perfilesTableBody"></tbody>
+            </table>
+            <div id="perfilesLoading" class="users-loading">Cargando perfiles...</div>
+            <div id="perfilesEmpty" class="users-empty" style="display:none;">No se encontraron perfiles.</div>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             PESTAÑA: SUCURSALES
+             ============================================================ -->
+        <section id="panelSucursales" class="tab-panel">
+
+          <div class="users-toolbar">
+            <div class="search-bar">
+              <span class="search-bar__icon" aria-hidden="true">🔎</span>
+              <input type="text" id="searchSucursales" class="search-bar__input" placeholder="Buscar por nombre de sucursal..." autocomplete="off">
+              <button type="button" id="clearSearchSucursales" class="search-bar__clear" aria-label="Limpiar búsqueda">✕</button>
+            </div>
+            <button type="button" id="openSucursalModalBtn" class="btn btn--register">
+              <span aria-hidden="true">＋</span> Registrar Sucursal
+            </button>
+          </div>
+
+          <div id="sucursalesNotification" class="page-notification" aria-live="polite" style="display:none;"></div>
+
+          <div class="users-table-wrapper">
+            <table class="users-table" id="sucursalesTable">
+              <thead>
+                <tr>
+                  <th scope="col" class="is-sortable" data-sort-key="sucursal">Sucursal <span class="sort-indicator"></span></th>
+                  <th scope="col">Status</th>
+                  <th scope="col" class="col-actions">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="sucursalesTableBody"></tbody>
+            </table>
+            <div id="sucursalesLoading" class="users-loading">Cargando sucursales...</div>
+            <div id="sucursalesEmpty" class="users-empty" style="display:none;">No se encontraron sucursales.</div>
+          </div>
+        </section>
 
       </div>
     </main>
@@ -309,6 +488,15 @@
 
       <form id="userForm" novalidate>
         <input type="hidden" id="userId" value="">
+
+        <!-- Sucursal -->
+        <div class="modal__field" id="fieldSucursal">
+          <label for="sucursalSelect" class="form-label">Sucursal</label>
+          <select id="sucursalSelect" class="text-input" required>
+            <option value="">Selecciona una sucursal</option>
+          </select>
+          <span class="field-error">Selecciona una sucursal válida.</span>
+        </div>
 
         <!-- Nombres y Apellidos -->
         <div class="modal__field" id="fieldFullName">
@@ -343,9 +531,6 @@
           <label for="perfil" class="form-label">Perfil</label>
           <select id="perfil" class="text-input" required>
             <option value="">Selecciona un perfil</option>
-            <option value="Asesor">Asesor</option>
-            <option value="Colaborador">Colaborador</option>
-            <option value="Administrador">Administrador</option>
           </select>
           <span class="field-error">Selecciona un perfil válido.</span>
         </div>
@@ -367,25 +552,119 @@
           <span class="field-error">Alfanumérica, puede incluir caracteres especiales, mínimo 8 caracteres.</span>
         </div>
 
+        <!-- Detalle de solo lectura (visible únicamente en modo "Ver") -->
+        <div class="view-detail" id="userViewDetail" style="display:none;">
+          <div class="view-detail__row"><span>Id</span><span id="userViewId"></span></div>
+          <div class="view-detail__row"><span>Status</span><span id="userViewStatus"></span></div>
+          <div class="view-detail__row"><span>Fecha de creación</span><span id="userViewFechaCreacion"></span></div>
+          <div class="view-detail__row"><span>Usuario de creación</span><span id="userViewUsuarioCreacion"></span></div>
+          <div class="view-detail__row"><span>Fecha última modificación</span><span id="userViewFechaModificacion"></span></div>
+          <div class="view-detail__row"><span>Usuario última modificación</span><span id="userViewUsuarioModificacion"></span></div>
+        </div>
+
         <div class="form-feedback" id="formFeedback"></div>
 
         <div class="modal__footer">
-          <!-- Botón Cerrar solicitado (oculta/cierra la pantalla modal) -->
           <button type="button" class="btn btn--cancel" id="cancelModalBtn">Cerrar</button>
-          
-          <!-- Botones originales conservados y ocultos/manejados por usuarios.js -->
-          <button type="button" class="btn btn--secondary" id="editModalBtn" style="display:none;">Editar</button>
-          
-          <!-- Botón de registro -->
           <button type="submit" class="btn btn--primary" id="submitBtn">Registrar</button>
         </div>
       </form>
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="usuarios.js"></script>
+  <!-- =========================================================
+       MODAL: REGISTRAR / EDITAR / VER PERFIL
+       ========================================================= -->
+  <div class="modal-overlay" id="perfilModalOverlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="perfilModalTitle">
+      <div class="modal__header">
+        <h2 class="modal__title" id="perfilModalTitle">Registrar Perfil</h2>
+        <button type="button" class="modal__close" id="perfilModalCloseBtn" aria-label="Cerrar">✕</button>
+      </div>
 
+      <form id="perfilForm" novalidate>
+        <input type="hidden" id="perfilId" value="">
+
+        <div class="modal__field" id="fieldPerfilNombre">
+          <label for="perfilNombre" class="form-label">Perfil</label>
+          <input
+            type="text"
+            id="perfilNombre"
+            class="text-input"
+            placeholder="Ej: Asesor Comercial"
+            autocomplete="off"
+            required
+          >
+          <span class="field-error">Ingresa el nombre del perfil (mínimo 3 caracteres).</span>
+        </div>
+
+        <!-- Detalle de solo lectura (visible únicamente en modo "Ver") -->
+        <div class="view-detail" id="perfilViewDetail" style="display:none;">
+          <div class="view-detail__row"><span>Id</span><span id="perfilViewId"></span></div>
+          <div class="view-detail__row"><span>Status</span><span id="perfilViewStatus"></span></div>
+          <div class="view-detail__row"><span>Fecha de creación</span><span id="perfilViewFechaCreacion"></span></div>
+          <div class="view-detail__row"><span>Usuario de creación</span><span id="perfilViewUsuarioCreacion"></span></div>
+          <div class="view-detail__row"><span>Fecha última modificación</span><span id="perfilViewFechaModificacion"></span></div>
+          <div class="view-detail__row"><span>Usuario última modificación</span><span id="perfilViewUsuarioModificacion"></span></div>
+        </div>
+
+        <div class="form-feedback" id="perfilFormFeedback"></div>
+
+        <div class="modal__footer">
+          <button type="button" class="btn btn--cancel" id="cancelPerfilModalBtn">Cerrar</button>
+          <button type="submit" class="btn btn--primary" id="submitPerfilBtn">Registrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL: REGISTRAR / EDITAR / VER SUCURSAL
+       ========================================================= -->
+  <div class="modal-overlay" id="sucursalModalOverlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="sucursalModalTitle">
+      <div class="modal__header">
+        <h2 class="modal__title" id="sucursalModalTitle">Registrar Sucursal</h2>
+        <button type="button" class="modal__close" id="sucursalModalCloseBtn" aria-label="Cerrar">✕</button>
+      </div>
+
+      <form id="sucursalForm" novalidate>
+        <input type="hidden" id="sucursalId" value="">
+
+        <div class="modal__field" id="fieldSucursalNombre">
+          <label for="sucursalNombre" class="form-label">Sucursal</label>
+          <input
+            type="text"
+            id="sucursalNombre"
+            class="text-input"
+            placeholder="Ej: Sucursal Caracas Este"
+            autocomplete="off"
+            required
+          >
+          <span class="field-error">Ingresa el nombre de la sucursal (mínimo 3 caracteres).</span>
+        </div>
+
+        <!-- Detalle de solo lectura (visible únicamente en modo "Ver") -->
+        <div class="view-detail" id="sucursalViewDetail" style="display:none;">
+          <div class="view-detail__row"><span>Id</span><span id="sucursalViewId"></span></div>
+          <div class="view-detail__row"><span>Status</span><span id="sucursalViewStatus"></span></div>
+          <div class="view-detail__row"><span>Fecha de creación</span><span id="sucursalViewFechaCreacion"></span></div>
+          <div class="view-detail__row"><span>Usuario de creación</span><span id="sucursalViewUsuarioCreacion"></span></div>
+          <div class="view-detail__row"><span>Fecha última modificación</span><span id="sucursalViewFechaModificacion"></span></div>
+          <div class="view-detail__row"><span>Usuario última modificación</span><span id="sucursalViewUsuarioModificacion"></span></div>
+        </div>
+
+        <div class="form-feedback" id="sucursalFormFeedback"></div>
+
+        <div class="modal__footer">
+          <button type="button" class="btn btn--cancel" id="cancelSucursalModalBtn">Cerrar</button>
+          <button type="submit" class="btn btn--primary" id="submitSucursalBtn">Registrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- CONFIRMACIÓN COMPARTIDA (eliminar usuario / perfil / sucursal) -->
   <div id="confirmOverlay" class="confirm-overlay" style="display:none;">
     <div class="confirm-modal">
       <h3 id="confirmTitle">Confirmación</h3>
@@ -396,6 +675,9 @@
       </div>
     </div>
   </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="usuarios.js"></script>
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
