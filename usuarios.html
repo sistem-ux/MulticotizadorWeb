@@ -488,15 +488,6 @@
       <form id="userForm" novalidate>
         <input type="hidden" id="userId" value="">
 
-        <!-- Sucursal -->
-        <div class="modal__field" id="fieldSucursal">
-          <label for="sucursalSelect" class="form-label">Sucursal</label>
-          <select id="sucursalSelect" class="text-input" required>
-            <option value="">Selecciona una sucursal</option>
-          </select>
-          <span class="field-error">Selecciona una sucursal válida.</span>
-        </div>
-
         <!-- Nombres y Apellidos -->
         <div class="modal__field" id="fieldFullName">
           <label for="fullName" class="form-label">Nombres y Apellidos</label>
@@ -525,15 +516,6 @@
           <span class="field-error">Solo minúsculas, números y caracteres especiales (@ . _ -, etc.).</span>
         </div>
 
-        <!-- Perfil -->
-        <div class="modal__field" id="fieldPerfil">
-          <label for="perfil" class="form-label">Perfil</label>
-          <select id="perfil" class="text-input" required>
-            <option value="">Selecciona un perfil</option>
-          </select>
-          <span class="field-error">Selecciona un perfil válido.</span>
-        </div>
-
         <!-- Contraseña -->
         <div class="modal__field" id="fieldPassword">
           <label for="password" class="form-label">Contraseña</label>
@@ -549,6 +531,24 @@
             <button type="button" class="password-toggle" id="togglePasswordBtn" aria-label="Mostrar contraseña">👁</button>
           </div>
           <span class="field-error">Alfanumérica, puede incluir caracteres especiales, mínimo 8 caracteres.</span>
+        </div>
+
+        <!-- Perfil -->
+        <div class="modal__field" id="fieldPerfil">
+          <label for="perfil" class="form-label">Perfil</label>
+          <select id="perfil" class="text-input" required>
+            <option value="">Selecciona un perfil</option>
+          </select>
+          <span class="field-error">Selecciona un perfil válido.</span>
+        </div>
+
+        <!-- Sucursal -->
+        <div class="modal__field" id="fieldSucursal">
+          <label for="sucursalSelect" class="form-label">Sucursal</label>
+          <select id="sucursalSelect" class="text-input" required>
+            <option value="">Selecciona una sucursal</option>
+          </select>
+          <span class="field-error">Selecciona una sucursal válida.</span>
         </div>
 
         <!-- Detalle de solo lectura (visible únicamente en modo "Ver") -->
