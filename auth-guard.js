@@ -117,6 +117,54 @@ function filterSidebarByRole(sidebarElement, role) {
 }
 
 /* -----------------------------------------------------------------------
+   4b. ENLACE ACTIVO + ACORDEÓN DEL MENÚ LATERAL
+   sidebar.html ya no trae lógica propia embebida (ni onclick inline ni
+   hacks): todo el comportamiento del sidebar se centraliza aquí, que es
+   el único lugar desde donde realmente se carga (initAppShell). Así se
+   evita duplicar esta lógica en un segundo archivo que termine
+   desincronizado o sin conectarse a ninguna página.
+   ----------------------------------------------------------------------- */
+function highlightActiveSidebarLink(sidebarElement, pageName) {
+  if (!sidebarElement) return null;
+  let activeGroup = null;
+
+  sidebarElement.querySelectorAll('.menu-link').forEach((link) => {
+    const href = link.getAttribute('href');
+    // Se excluyen los href="" (enlaces placeholder aún sin implementar) para
+    // que no se marquen todos como "activos" al mismo tiempo.
+    if (href && href === pageName) {
+      link.style.background = 'rgba(255, 255, 255, 0.12)';
+      link.style.color = '#FFFFFF';
+      activeGroup = link.closest('.menu-group');
+    }
+  });
+
+  return activeGroup;
+}
+
+function setupSidebarAccordion(sidebarElement, initiallyOpenGroup) {
+  if (!sidebarElement) return;
+
+  const allGroups = sidebarElement.querySelectorAll('.menu-group');
+
+  // Expande el grupo del enlace activo (si el filtro por rol no lo ocultó)
+  if (initiallyOpenGroup && initiallyOpenGroup.style.display !== 'none') {
+    initiallyOpenGroup.classList.add('is-open');
+  }
+
+  sidebarElement.querySelectorAll('.menu-group__title').forEach((title) => {
+    title.addEventListener('click', () => {
+      const group = title.parentElement;
+      const wasOpen = group.classList.contains('is-open');
+      // Cierra cualquier grupo que esté desplegado en ese momento...
+      allGroups.forEach((g) => g.classList.remove('is-open'));
+      // ...y abre el que se acaba de presionar (si no era el que ya estaba abierto)
+      if (!wasOpen) group.classList.add('is-open');
+    });
+  });
+}
+
+/* -----------------------------------------------------------------------
    5. INICIALIZACIÓN COMÚN DE LAS PÁGINAS PROTEGIDAS
    Carga el sidebar, aplica el filtro por rol, conecta el botón de
    mostrar/ocultar menú, y pinta el nombre de usuario + botón de cerrar sesión.
@@ -132,6 +180,8 @@ async function initAppShell({ pageName }) {
       if (response.ok) {
         sidebarElement.innerHTML = await response.text();
         filterSidebarByRole(sidebarElement, session.role);
+        const activeGroup = highlightActiveSidebarLink(sidebarElement, pageName);
+        setupSidebarAccordion(sidebarElement, activeGroup);
       } else {
         console.error('No se pudo cargar el archivo sidebar.html');
       }
