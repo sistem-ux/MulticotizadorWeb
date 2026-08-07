@@ -13,7 +13,7 @@
 
   <!-- Opción 1: Administración -->
   <div class="menu-group" id="group-admin">
-    <div class="menu-group__title" onclick="const g = this.parentElement; const isOpen = g.classList.contains('is-open'); document.querySelectorAll('.menu-group').forEach(e => e.classList.remove('is-open')); if(!isOpen) g.classList.add('is-open');">
+    <div class="menu-group__title">
       <span>Administración</span>
       <span class="menu-arrow">›</span>
     </div>
@@ -29,7 +29,7 @@
 
   <!-- Opción 2: Operaciones -->
   <div class="menu-group" id="group-operations">
-    <div class="menu-group__title" onclick="const g = this.parentElement; const isOpen = g.classList.contains('is-open'); document.querySelectorAll('.menu-group').forEach(e => e.classList.remove('is-open')); if(!isOpen) g.classList.add('is-open');">
+    <div class="menu-group__title">
       <span>Operaciones</span>
       <span class="menu-arrow">›</span>
     </div>
@@ -48,7 +48,7 @@
 
   <!-- Opción 3: Recursos -->
   <div class="menu-group" id="group-recursos">
-    <div class="menu-group__title" onclick="const g = this.parentElement; const isOpen = g.classList.contains('is-open'); document.querySelectorAll('.menu-group').forEach(e => e.classList.remove('is-open')); if(!isOpen) g.classList.add('is-open');">
+    <div class="menu-group__title">
       <span>Recursos</span>
       <span class="menu-arrow">›</span>
     </div>
@@ -66,20 +66,6 @@
   </div>
 
 </nav>
-
-<!-- Hack para inicializar el estado activo (Evita el bloqueo de scripts inyectados por innerHTML) -->
-<img src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" onload="
-  const currentPath = window.location.pathname.split('/').pop();
-  document.querySelectorAll('.menu-link').forEach(link => {
-    if(link.getAttribute('href') === currentPath) {
-      link.style.background = 'rgba(255, 255, 255, 0.12)';
-      link.style.color = '#FFFFFF';
-      const parentGroup = link.closest('.menu-group');
-      if(parentGroup) parentGroup.classList.add('is-open');
-    }
-  });
-  this.remove();
-" style="display:none;" alt="" />
 
 <style>
   .menu-group {
