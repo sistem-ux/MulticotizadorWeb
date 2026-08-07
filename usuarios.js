@@ -475,7 +475,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td data-label="Correo">${escapeHtml(user.email)}</td>
         <td data-label="Sucursal">${escapeHtml(sucursalNombre)}</td>
         <td data-label="Perfil">${escapeHtml(perfilNombre)}</td>
-        <td data-label="Contraseña"><span class="password-mask">••••••••</span></td>
         <td data-label="Status"><span class="status-pill ${statusClass}">${escapeHtml(user.status || 'Activo')}</span></td>
         <td data-label="Acciones" class="col-actions">
           <button type="button" class="action-btn action-btn--edit" data-id="${user.id}" aria-label="Editar usuario">✏️</button>
