@@ -728,19 +728,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       card.innerHTML = `
         <span class="plan-insurer-tag">${escapeHtmlLocal(plan.aseguradora_nombre || 'Sin aseguradora')}</span>
         <div class="plan-header-row">
-          <div>
-            <h3 class="plan-title">${escapeHtmlLocal(plan.nombre_plan)}</h3>
-            <p class="plan-details">Suma Asegurada: $${formatCurrencyThousands(plan.suma_asegurada)}</p>
-          </div>
-          <button type="button" class="btn btn--secondary open-modal-btn" style="padding: 6px 12px; font-size: 13px;">+ Adicionales</button>
+          <h3 class="plan-title" title="${escapeHtmlLocal(plan.nombre_plan)}">${escapeHtmlLocal(plan.nombre_plan)}</h3>
+          <p class="plan-details">Suma Asegurada: $${formatCurrencyThousands(plan.suma_asegurada)}</p>
         </div>
 
-        <div class="plan-selection-badge">Sin seleccionar</div>
+        <div class="plan-actions-row">
+          <button type="button" class="btn btn--secondary open-modal-btn" style="padding: 6px 12px; font-size: 13px;">+ Adicionales</button>
+          <div class="plan-selection-badge">Sin seleccionar</div>
+        </div>
 
         <!-- Aquí aparecerán los adicionales seleccionados -->
         <div id="selected_cov_text_${plan.id}" class="selected-coverages-text" style="display: none;"></div>
 
-        <button type="button" class="btn btn--primary select-plan-btn" style="margin-top: 10px; width: 100%;">Comparar</button>
+        <button type="button" class="btn btn--primary select-plan-btn" style="width: 100%;">Comparar</button>
       `;
 
       plansContainer.appendChild(card);

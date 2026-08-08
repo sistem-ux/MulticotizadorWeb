@@ -200,17 +200,24 @@
     }
     .plan-header-row {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
+      flex-direction: column;
+      gap: 4px;
     }
     .plan-title {
       font-family: 'Poppins', sans-serif;
       font-size: 18px;
       font-weight: 700;
+      line-height: 1.3;
       color: #001F5B;
       margin: 0;
+      /* Reserva una altura fija (≈3.5 líneas) para que "+ Adicionales" quede
+         siempre a la misma altura, sin importar si el nombre del plan es
+         corto o largo. Si excede ese espacio, se recorta con "…". */
+      min-height: 4.55em;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+      overflow: hidden;
     }
     .plan-title.is-selected {
       color: #235F2F;
@@ -237,6 +244,14 @@
       font-size: 14px;
       color: #334155;
       margin: 0;
+      min-height: 1.4em;
+    }
+    .plan-actions-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
     }
     .selected-coverages-text {
       font-size: 13px;
