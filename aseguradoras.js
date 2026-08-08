@@ -1887,7 +1887,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   // plan: registro del plan (siempre requerido, fija el nombre no editable).
   // item: tarifa existente (null si aún no se ha registrado ninguna para el plan).
   // edit: true habilita los campos; readOnly: true fuerza "solo ver".
-  function openTarifaModal({ plan, item = null, edit = false, readOnly = false }) {
+  function openTarifaModal({ plan, item = null, readOnly = false }) {
+    // El modo "edición" (UPDATE vs INSERT) depende únicamente de si ya
+    // existe una tarifa para este plan, nunca de un parámetro aparte.
+    const edit = !!item;
     isEditModeTarifa = edit;
     isReadOnlyTarifa = readOnly;
     currentTarifaPlan = plan;
@@ -1933,9 +1936,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   function openTarifaModalForPlan(plan) {
     const item = allTarifas.find((t) => t.plan_id === plan.id) || null;
     if (item) {
-      openTarifaModal({ plan, item, edit: false, readOnly: true });
+      openTarifaModal({ plan, item, readOnly: true });
     } else {
-      openTarifaModal({ plan, item: null, edit: true, readOnly: false });
+      openTarifaModal({ plan, item: null, readOnly: false });
     }
   }
 
@@ -1948,7 +1951,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   editTarifaBtn.addEventListener('click', () => {
     if (!currentTarifaPlan) return;
-    openTarifaModal({ plan: currentTarifaPlan, item: currentTarifaItem, edit: true, readOnly: false });
+    openTarifaModal({ plan: currentTarifaPlan, item: currentTarifaItem, readOnly: false });
   });
   tarifaModalCloseBtn.addEventListener('click', closeTarifaModal);
   cancelTarifaModalBtn.addEventListener('click', closeTarifaModal);
