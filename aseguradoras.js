@@ -280,7 +280,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // modo "Ver" (solo lectura). Usado por Planes y Tarifas.
   function setFormControlsForcedDisabled(formEl, disabled) {
     formEl.querySelectorAll('input, select, textarea, button').forEach((el) => {
-      if (el.type === 'button' && (el.classList.contains('btn--cancel'))) return;
+      if (el.type === 'button' && (el.classList.contains('btn--cancel') || el.id === 'editTarifaBtn')) return;
       el.disabled = disabled;
     });
   }
@@ -302,7 +302,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     aseguradoras: document.getElementById('panelAseguradoras'),
     productos: document.getElementById('panelProductos'),
     planes: document.getElementById('panelPlanes'),
-    tarifas: document.getElementById('panelTarifas'),
   };
 
   tabButtons.forEach((btn) => {
@@ -1297,6 +1296,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td data-label="Acciones" class="col-actions">
           <button type="button" class="action-btn action-btn--view" data-id="${item.id}" aria-label="Ver plan">👁️</button>
           <button type="button" class="action-btn action-btn--edit" data-id="${item.id}" aria-label="Editar plan">✏️</button>
+          <button type="button" class="action-btn action-btn--tarifa" data-id="${item.id}" aria-label="Tarifa del plan">💲</button>
           <button type="button" class="action-btn ${toggleClass}" data-id="${item.id}" aria-label="${toggleLabel}">${toggleIcon}</button>
           <button type="button" class="action-btn action-btn--delete" data-id="${item.id}" aria-label="Eliminar plan">🗑️</button>
         </td>
@@ -1308,6 +1308,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
       tr.querySelector('.action-btn--edit').addEventListener('click', () => {
         openPlanModal({ edit: true, item });
+      });
+      tr.querySelector('.action-btn--tarifa').addEventListener('click', () => {
+        openTarifaModalForPlan(item);
       });
       tr.querySelector(`.${toggleClass}`).addEventListener('click', () => handleToggleStatusPlan(item));
       tr.querySelector('.action-btn--delete').addEventListener('click', () => handleDeletePlan(item.id));
@@ -1373,7 +1376,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       allPlanes = data || [];
       applyFilterPlanes();
-      populateTarifaPlanSelect();
     } catch (err) {
       planesLoading.style.display = 'none';
       planesEmpty.textContent = `No se pudo conectar con Supabase: ${getErrorMessage(err)}`;
@@ -1520,29 +1522,25 @@ document.addEventListener('DOMContentLoaded', async () => {
      ==============================  TARIFAS  ===================================
      ========================================================================= */
 
-  const searchTarifas = document.getElementById('searchTarifas');
-  const clearSearchTarifas = document.getElementById('clearSearchTarifas');
-  const tarifasTableBody = document.getElementById('tarifasTableBody');
-  const tarifasLoading = document.getElementById('tarifasLoading');
-  const tarifasEmpty = document.getElementById('tarifasEmpty');
-  const openTarifaModalBtn = document.getElementById('openTarifaModalBtn');
-
   const tarifaModalOverlay = document.getElementById('tarifaModalOverlay');
   const tarifaModalTitle = document.getElementById('tarifaModalTitle');
   const tarifaModalCloseBtn = document.getElementById('tarifaModalCloseBtn');
   const cancelTarifaModalBtn = document.getElementById('cancelTarifaModalBtn');
+  const editTarifaBtn = document.getElementById('editTarifaBtn');
   const tarifaForm = document.getElementById('tarifaForm');
   const tarifaIdInput = document.getElementById('tarifaId');
+  const tarifaPlanIdInput = document.getElementById('tarifaPlanId');
   const submitTarifaBtn = document.getElementById('submitTarifaBtn');
 
-  const tarifaPlanSelect = document.getElementById('tarifaPlan');
-  const fieldTarifaPlan = document.getElementById('fieldTarifaPlan');
+  const tarifaPlanNombreInput = document.getElementById('tarifaPlanNombre');
   const tarifaCoberturasContainer = document.getElementById('tarifaCoberturasContainer');
   const tarifaMaternidadContainer = document.getElementById('tarifaMaternidadContainer');
   const tarifaRangosContainer = document.getElementById('tarifaRangosContainer');
 
-  let currentSortTarifas = { key: 'plan_nombre', direction: 'asc' };
-  const sortableHeadersTarifas = document.querySelectorAll('#tarifasTable th.is-sortable');
+  // Se guarda el plan y la tarifa actualmente mostrados en el modal para
+  // poder pasar de "Ver" a "Editar" sin tener que volver a buscar los datos.
+  let currentTarifaPlan = null;
+  let currentTarifaItem = null;
 
   /* ---------------------------------------------------------------------
      Tarjeta reutilizable de cobertura estándar (con checkbox "Servicios").
@@ -1881,48 +1879,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     return { titular, familiares };
   }
 
-  function populateTarifaPlanSelect() {
-    const previousValue = tarifaPlanSelect.value;
-    tarifaPlanSelect.innerHTML = '<option value="">Selecciona un plan</option>';
-    allPlanes.forEach((p) => {
-      const opt = document.createElement('option');
-      opt.value = p.id;
-      opt.textContent = p.nombre_plan;
-      tarifaPlanSelect.appendChild(opt);
-    });
-    if (previousValue) tarifaPlanSelect.value = previousValue;
-  }
-
-  tarifaPlanSelect.addEventListener('change', () => {
-    const plan = allPlanes.find((p) => p.id === tarifaPlanSelect.value);
-    renderTarifaRangos(plan);
-  });
-
   function resetTarifaCoverageControls() {
     COVERAGE_LIST.forEach((def) => tarifaCoverageControls[def.key].setData(null));
     tarifaMaternidadControl.setData(null);
   }
 
-  function openTarifaModal({ edit = false, item = null, readOnly = false } = {}) {
+  // plan: registro del plan (siempre requerido, fija el nombre no editable).
+  // item: tarifa existente (null si aún no se ha registrado ninguna para el plan).
+  // edit: true habilita los campos; readOnly: true fuerza "solo ver".
+  function openTarifaModal({ plan, item = null, edit = false, readOnly = false }) {
     isEditModeTarifa = edit;
     isReadOnlyTarifa = readOnly;
+    currentTarifaPlan = plan;
+    currentTarifaItem = item;
+
     tarifaForm.reset();
     clearFeedback('tarifaFormFeedback');
-    setFieldError(fieldTarifaPlan, false);
     setFormControlsForcedDisabled(tarifaForm, false);
 
-    populateTarifaPlanSelect();
     resetTarifaCoverageControls();
-    renderTarifaRangos(null);
+    renderTarifaRangos(plan);
+
+    tarifaPlanIdInput.value = plan.id;
+    tarifaPlanNombreInput.value = plan.nombre_plan;
 
     if (item) {
       tarifaModalTitle.textContent = readOnly ? 'Ver Tarifa' : 'Editar Tarifa';
       submitTarifaBtn.textContent = 'Guardar Cambios';
       tarifaIdInput.value = item.id;
-      tarifaPlanSelect.value = item.plan_id;
-
-      const plan = allPlanes.find((p) => p.id === item.plan_id);
-      renderTarifaRangos(plan);
       setTarifaRangosData(item.tarifas_titular || {}, item.tarifas_familiares || {});
 
       const cob = item.coberturas || {};
@@ -1936,17 +1920,36 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     tarifaModalOverlay.querySelector('.modal').classList.toggle('modal--readonly', readOnly);
     submitTarifaBtn.style.display = readOnly ? 'none' : 'inline-flex';
+    editTarifaBtn.style.display = readOnly ? 'inline-flex' : 'none';
     if (readOnly) setFormControlsForcedDisabled(tarifaForm, true);
 
+    // El nombre del plan nunca es editable, ni siquiera en modo edición.
+    tarifaPlanNombreInput.disabled = true;
+
     tarifaModalOverlay.classList.add('is-open');
+  }
+
+  // Punto de entrada desde el botón 💲 de cada plan en la tabla de Planes.
+  function openTarifaModalForPlan(plan) {
+    const item = allTarifas.find((t) => t.plan_id === plan.id) || null;
+    if (item) {
+      openTarifaModal({ plan, item, edit: false, readOnly: true });
+    } else {
+      openTarifaModal({ plan, item: null, edit: true, readOnly: false });
+    }
   }
 
   function closeTarifaModal() {
     tarifaModalOverlay.classList.remove('is-open');
     tarifaForm.reset();
+    currentTarifaPlan = null;
+    currentTarifaItem = null;
   }
 
-  openTarifaModalBtn.addEventListener('click', () => openTarifaModal({ edit: false }));
+  editTarifaBtn.addEventListener('click', () => {
+    if (!currentTarifaPlan) return;
+    openTarifaModal({ plan: currentTarifaPlan, item: currentTarifaItem, edit: true, readOnly: false });
+  });
   tarifaModalCloseBtn.addEventListener('click', closeTarifaModal);
   cancelTarifaModalBtn.addEventListener('click', closeTarifaModal);
   tarifaModalOverlay.addEventListener('click', (e) => {
@@ -1954,120 +1957,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   function validateTarifaForm() {
-    let valid = true;
-    const planOk = tarifaPlanSelect.value.trim().length > 0;
-    setFieldError(fieldTarifaPlan, !planOk);
-    if (!planOk) valid = false;
-    return valid;
+    return !!tarifaPlanIdInput.value;
   }
-
-  function renderTarifas(items) {
-    tarifasTableBody.innerHTML = '';
-    if (!items.length) {
-      tarifasEmpty.style.display = 'block';
-      return;
-    }
-    tarifasEmpty.style.display = 'none';
-
-    items.forEach((item) => {
-      const tr = document.createElement('tr');
-      const planNombre = item.planes?.nombre_plan || allPlanes.find((p) => p.id === item.plan_id)?.nombre_plan || '—';
-      const isActualizada = item.status === 'Actualizada';
-      const statusClass = isActualizada ? 'status-pill--activo' : 'status-pill--inactivo';
-      const toggleIcon = isActualizada ? '✕' : '✓';
-      const toggleClass = isActualizada ? 'action-btn--toggle-on' : 'action-btn--toggle-off';
-      const toggleLabel = isActualizada ? 'Marcar como En revisión' : 'Marcar como Actualizada';
-
-      tr.innerHTML = `
-        <td data-label="Plan">${escapeHtml(planNombre)}</td>
-        <td data-label="Status Tarifa"><span class="status-pill ${statusClass}">${escapeHtml(item.status)}</span></td>
-        <td data-label="Acciones" class="col-actions">
-          <button type="button" class="action-btn action-btn--view" data-id="${item.id}" aria-label="Ver tarifa">👁️</button>
-          <button type="button" class="action-btn action-btn--edit" data-id="${item.id}" aria-label="Editar tarifa">✏️</button>
-          <button type="button" class="action-btn ${toggleClass}" data-id="${item.id}" aria-label="${toggleLabel}">${toggleIcon}</button>
-          <button type="button" class="action-btn action-btn--delete" data-id="${item.id}" aria-label="Eliminar tarifa">🗑️</button>
-        </td>
-      `;
-      tarifasTableBody.appendChild(tr);
-
-      tr.querySelector('.action-btn--view').addEventListener('click', () => {
-        openTarifaModal({ edit: true, item, readOnly: true });
-      });
-      tr.querySelector('.action-btn--edit').addEventListener('click', () => {
-        openTarifaModal({ edit: true, item });
-      });
-      tr.querySelector(`.${toggleClass}`).addEventListener('click', () => handleToggleStatusTarifa(item));
-      tr.querySelector('.action-btn--delete').addEventListener('click', () => handleDeleteTarifa(item.id));
-    });
-  }
-
-  sortableHeadersTarifas.forEach((th) => {
-    th.addEventListener('click', () => {
-      const key = th.dataset.sortKey;
-      if (currentSortTarifas.key === key) {
-        currentSortTarifas.direction = currentSortTarifas.direction === 'asc' ? 'desc' : 'asc';
-      } else {
-        currentSortTarifas = { key, direction: 'asc' };
-      }
-      updateSortIndicators(sortableHeadersTarifas, currentSortTarifas);
-      applyFilterTarifas();
-    });
-  });
-
-  function applyFilterTarifas() {
-    const term = searchTarifas.value.trim().toLowerCase();
-    clearSearchTarifas.classList.toggle('is-visible', term.length > 0);
-    let result = allTarifas;
-    if (term) {
-      result = result.filter((t) => (t.plan_nombre || '').toLowerCase().includes(term));
-    }
-    result = [...result].sort((a, b) => {
-      const factor = currentSortTarifas.direction === 'desc' ? -1 : 1;
-      const va = (a.plan_nombre || '').toLowerCase();
-      const vb = (b.plan_nombre || '').toLowerCase();
-      return va.localeCompare(vb, 'es', { sensitivity: 'base' }) * factor;
-    });
-    renderTarifas(result);
-  }
-
-  searchTarifas.addEventListener('input', applyFilterTarifas);
-  clearSearchTarifas.addEventListener('click', () => {
-    searchTarifas.value = '';
-    applyFilterTarifas();
-    searchTarifas.focus();
-  });
 
   async function loadTarifas() {
-    tarifasLoading.style.display = 'block';
-    tarifasEmpty.style.display = 'none';
-    tarifasTableBody.innerHTML = '';
-
-    if (!supabaseClient) {
-      tarifasLoading.style.display = 'none';
-      tarifasEmpty.textContent = 'Supabase no está inicializado.';
-      tarifasEmpty.style.display = 'block';
-      return;
-    }
-
+    if (!supabaseClient) return;
     try {
-      const { data, error } = await supabaseClient
-        .from(TABLE_TARIFAS)
-        .select('*, planes(nombre_plan)');
-
-      tarifasLoading.style.display = 'none';
-
+      const { data, error } = await supabaseClient.from(TABLE_TARIFAS).select('*');
       if (error) {
-        tarifasEmpty.textContent = `Error al cargar tarifas: ${getErrorMessage(error)}`;
-        tarifasEmpty.style.display = 'block';
+        console.error('Error al cargar tarifas:', getErrorMessage(error));
         return;
       }
-
-      allTarifas = (data || []).map((t) => ({ ...t, plan_nombre: t.planes?.nombre_plan || '' }));
-      applyFilterTarifas();
+      allTarifas = data || [];
     } catch (err) {
-      tarifasLoading.style.display = 'none';
-      tarifasEmpty.textContent = `No se pudo conectar con Supabase: ${getErrorMessage(err)}`;
-      tarifasEmpty.style.display = 'block';
+      console.error('No se pudo conectar con Supabase (tarifas):', getErrorMessage(err));
     }
   }
 
@@ -2077,7 +1980,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     clearFeedback('tarifaFormFeedback');
 
     if (!validateTarifaForm()) {
-      showFeedback('tarifaFormFeedback', 'Selecciona un plan antes de continuar.', 'error');
+      showFeedback('tarifaFormFeedback', 'No se pudo determinar el plan de esta tarifa.', 'error');
       return;
     }
     if (!supabaseClient) {
@@ -2096,7 +1999,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const { titular, familiares } = getTarifaRangosData();
 
     const payload = {
-      plan_id: tarifaPlanSelect.value,
+      plan_id: tarifaPlanIdInput.value,
       coberturas,
       maternidad,
       tarifas_titular: titular,
@@ -2137,51 +2040,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  async function handleToggleStatusTarifa(item) {
-    const nextStatus = item.status === 'Actualizada' ? 'En revisión' : 'Actualizada';
-    const currentUser = getCurrentUserLabel();
-
-    try {
-      const { error } = await supabaseClient
-        .from(TABLE_TARIFAS)
-        .update({ status: nextStatus, usuario_modificacion: currentUser })
-        .eq('id', item.id);
-
-      if (error) {
-        showNotification('tarifasNotification', `No se pudo cambiar el status: ${getErrorMessage(error)}`, 'error');
-        return;
-      }
-      await loadTarifas();
-      showNotification('tarifasNotification', `Tarifa marcada como ${nextStatus}.`, 'success');
-    } catch (err) {
-      showNotification('tarifasNotification', `No se pudo cambiar el status: ${getErrorMessage(err)}`, 'error');
-    }
-  }
-
-  async function handleDeleteTarifa(id) {
-    const item = allTarifas.find((t) => t.id === id);
-    if (!item) return;
-
-    const confirmed = await openConfirmDialog({
-      title: 'Eliminar tarifa',
-      message: `¿Eliminar la tarifa de "${item.plan_nombre}"? Esta acción no se puede deshacer.`,
-      acceptLabel: 'Eliminar',
-    });
-    if (!confirmed) return;
-
-    try {
-      const { error } = await supabaseClient.from(TABLE_TARIFAS).delete().eq('id', id);
-      if (error) {
-        showNotification('tarifasNotification', `No se pudo eliminar: ${getErrorMessage(error)}`, 'error');
-        return;
-      }
-      await loadTarifas();
-      showNotification('tarifasNotification', 'Tarifa eliminada correctamente.', 'success');
-    } catch (err) {
-      showNotification('tarifasNotification', `No se pudo eliminar: ${getErrorMessage(err)}`, 'error');
-    }
-  }
-
   /* =========================================================
      TECLA ESCAPE (cierra modal o confirmación activa)
      ========================================================= */
@@ -2200,7 +2058,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateSortIndicators(sortableHeadersAseguradoras, currentSortAseguradoras);
   updateSortIndicators(sortableHeadersProductos, currentSortProductos);
   updateSortIndicators(sortableHeadersPlanes, currentSortPlanes);
-  updateSortIndicators(sortableHeadersTarifas, currentSortTarifas);
   await initSupabase();
   await loadAseguradoras();
   await loadProductos();

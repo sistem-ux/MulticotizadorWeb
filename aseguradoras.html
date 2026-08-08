@@ -554,7 +554,6 @@
           <button type="button" class="tab-btn is-active" data-tab="aseguradoras">Aseguradoras</button>
           <button type="button" class="tab-btn" data-tab="productos">Productos</button>
           <button type="button" class="tab-btn" data-tab="planes">Planes</button>
-          <button type="button" class="tab-btn" data-tab="tarifas">Tarifas</button>
         </nav>
 
         <!-- ============================================================
@@ -657,40 +656,6 @@
             </table>
             <div id="planesLoading" class="users-loading">Cargando planes...</div>
             <div id="planesEmpty" class="users-empty" style="display:none;">No se encontraron planes.</div>
-          </div>
-        </section>
-
-        <!-- ============================================================
-             PESTAÑA: TARIFAS
-             ============================================================ -->
-        <section id="panelTarifas" class="tab-panel">
-
-          <div class="users-toolbar">
-            <div class="search-bar">
-              <span class="search-bar__icon" aria-hidden="true">🔎</span>
-              <input type="text" id="searchTarifas" class="search-bar__input" placeholder="Buscar por plan..." autocomplete="off">
-              <button type="button" id="clearSearchTarifas" class="search-bar__clear" aria-label="Limpiar búsqueda">✕</button>
-            </div>
-            <button type="button" id="openTarifaModalBtn" class="btn btn--register">
-              <span aria-hidden="true">＋</span> Registrar Tarifa
-            </button>
-          </div>
-
-          <div id="tarifasNotification" class="page-notification" aria-live="polite" style="display:none;"></div>
-
-          <div class="users-table-wrapper">
-            <table class="users-table" id="tarifasTable">
-              <thead>
-                <tr>
-                  <th scope="col" class="is-sortable" data-sort-key="plan_nombre">Plan <span class="sort-indicator"></span></th>
-                  <th scope="col">Status Tarifa</th>
-                  <th scope="col" class="col-actions">Acciones</th>
-                </tr>
-              </thead>
-              <tbody id="tarifasTableBody"></tbody>
-            </table>
-            <div id="tarifasLoading" class="users-loading">Cargando tarifas...</div>
-            <div id="tarifasEmpty" class="users-empty" style="display:none;">No se encontraron tarifas.</div>
           </div>
         </section>
 
@@ -959,16 +924,15 @@
 
       <form id="tarifaForm" novalidate>
         <input type="hidden" id="tarifaId" value="">
+        <input type="hidden" id="tarifaPlanId" value="">
 
         <!-- DATOS PRINCIPALES -->
         <div class="form-section">
           <h3 class="form-section__title">📋 Datos Principales</h3>
           <div class="modal__field" id="fieldTarifaPlan">
-            <label for="tarifaPlan" class="form-label">Plan</label>
-            <select id="tarifaPlan" class="text-input" required>
-              <option value="">Selecciona un plan</option>
-            </select>
-            <span class="field-error">Selecciona el plan.</span>
+            <label for="tarifaPlanNombre" class="form-label">Plan</label>
+            <input type="text" id="tarifaPlanNombre" class="text-input" disabled>
+            <span class="form-hint">El nombre del plan no se puede modificar desde esta pantalla.</span>
           </div>
         </div>
 
@@ -997,6 +961,7 @@
 
         <div class="modal__footer">
           <button type="button" class="btn btn--cancel" id="cancelTarifaModalBtn">Cerrar</button>
+          <button type="button" class="btn btn--secondary" id="editTarifaBtn" style="display:none;">✏️ Editar</button>
           <button type="submit" class="btn btn--primary" id="submitTarifaBtn">Registrar</button>
         </div>
       </form>
