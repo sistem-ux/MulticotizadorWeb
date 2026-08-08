@@ -59,9 +59,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   const modalCoveragesBody = document.getElementById('modalCoveragesBody');
   const saveCoveragesBtn = document.getElementById('saveCoveragesBtn');
 
+  // Referencias al filtro de aseguradoras y a la comparación de planes
+  const insurerFilterBar = document.getElementById('insurerFilterBar');
+  const comparisonBar = document.getElementById('comparisonBar');
+  const comparisonCountText = document.getElementById('comparisonCountText');
+  const viewComparisonBtn = document.getElementById('viewComparisonBtn');
+  const comparisonModal = document.getElementById('comparisonModal');
+  const closeComparisonModalBtn = document.getElementById('closeComparisonModalBtn');
+  const comparisonTableWrapper = document.getElementById('comparisonTableWrapper');
+  const exportComparisonBtn = document.getElementById('exportComparisonBtn');
+
+  const MAX_PLANES_COMPARACION = 5;
+
   let childCount = 0;
   let currentSelectedPlanId = null; // Para saber a qué plan le estamos agregando adicionales
-  let planSelectionHistory = []; // Guarda el orden y momento de cada selección de plan
+  let planSelectionOrder = []; // IDs de los planes marcados para comparar, en orden de selección
+  let planesDisponiblesActuales = []; // Últimos planes traídos de Supabase (sin filtrar por aseguradora)
+  let integrantesActuales = []; // Últimos integrantes usados para calcular la cotización
+  let activeInsurerFilters = new Set(); // Nombres de aseguradoras activas en el filtro
+  const coberturasSeleccionadasPorPlan = {}; // { [planId]: string[] } — persiste al re-renderizar tarjetas (filtro, etc.)
   let isFamilyLocked = false;
 
   // Se inicializa temprano para que esté listo cuando el usuario presione "Mostrar planes"
@@ -403,10 +419,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   modifyDataBtn.addEventListener('click', () => {
-    planSelectionHistory = [];
+    planSelectionOrder = [];
     currentSelectedPlanId = null;
+    planesDisponiblesActuales = [];
+    integrantesActuales = [];
+    activeInsurerFilters.clear();
+    Object.keys(coberturasSeleccionadasPorPlan).forEach(key => delete coberturasSeleccionadasPorPlan[key]);
     plansContainer.innerHTML = '';
     plansContainer.style.display = 'none';
+    insurerFilterBar.innerHTML = '';
+    insurerFilterBar.style.display = 'none';
+    comparisonBar.classList.remove('is-visible');
     setFamilyFormLocked(false);
     showPlansBtn.disabled = false;
     modifyDataBtn.disabled = true;
@@ -452,8 +475,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       return; 
     }
 
-    // Si todo está correcto, actualizamos la vista y cerramos el modal
-    const targetDiv = document.getElementById(`selected_cov_text_${currentSelectedPlanId}`);
+    // Si todo está correcto, guardamos en el estado persistente (sobrevive a
+    // que las tarjetas se vuelvan a dibujar, p. ej. al cambiar el filtro de
+    // aseguradora) y actualizamos la vista antes de cerrar el modal.
+    coberturasSeleccionadasPorPlan[currentSelectedPlanId] = seleccionados;
+    aplicarTextoCoberturasEnTarjeta(currentSelectedPlanId);
+
+    coveragesModal.classList.remove('active');
+  });
+
+  // Pinta (o limpia) el texto de adicionales de una tarjeta a partir del
+  // estado persistente. Se usa tanto al guardar en el modal como al volver
+  // a renderizar las tarjetas (por ejemplo, tras cambiar el filtro).
+  function aplicarTextoCoberturasEnTarjeta(planId) {
+    const targetDiv = document.getElementById(`selected_cov_text_${planId}`);
+    if (!targetDiv) return;
+    const seleccionados = coberturasSeleccionadasPorPlan[planId] || [];
     if (seleccionados.length > 0) {
       targetDiv.style.display = 'block';
       targetDiv.textContent = `Adicionales: ${seleccionados.join(', ')}`;
@@ -461,9 +498,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       targetDiv.style.display = 'none';
       targetDiv.textContent = '';
     }
-
-    coveragesModal.classList.remove('active');
-  });
+  }
 
   /* =========================================================
      5. MOTOR DE COTIZACIÓN — datos reales desde Supabase
@@ -525,7 +560,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const [planesRes, tarifasRes] = await Promise.all([
-      supabaseClient.from(TABLE_PLANES).select('*').eq('status', 'Activo'),
+      supabaseClient.from(TABLE_PLANES).select('*, aseguradoras(nombre)').eq('status', 'Activo'),
       supabaseClient.from(TABLE_TARIFAS).select('*').eq('status', 'Actualizada'),
     ]);
 
@@ -542,6 +577,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           ...plan,
           _tarifa: tarifa,
           coberturasAdicionales: buildCoberturasAdicionales(tarifa),
+          aseguradora_nombre: plan.aseguradoras?.nombre || 'Sin aseguradora',
         };
       });
 
@@ -569,29 +605,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     return age;
   }
 
-  function formatSelectionTimestamp(date) {
-    return date.toLocaleString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
-  }
-
+  // Actualiza el estado visual (tarjeta, título, insignia y botón) según si
+  // el plan está marcado o no para comparación. La insignia solo indica
+  // "Seleccionado", sin número de orden ni fecha/hora.
   function applyPlanSelectionState(card, planId) {
-    const selection = [...planSelectionHistory].reverse().find(item => item.planId === planId);
+    const isSelected = planSelectionOrder.includes(planId);
     const title = card.querySelector('.plan-title');
     const badge = card.querySelector('.plan-selection-badge');
     const button = card.querySelector('.select-plan-btn');
 
-    if (selection) {
+    if (isSelected) {
       card.classList.add('is-selected');
       title.classList.add('is-selected');
       badge.classList.add('is-active');
-      badge.textContent = `Selección #${selection.selectionNumber} · ${selection.selectedAt}`;
-      button.textContent = 'Quitar selección';
+      badge.textContent = 'Seleccionado';
+      button.textContent = 'Quitar de comparación';
       button.classList.remove('btn--primary');
       button.classList.add('btn--secondary');
     } else {
@@ -599,97 +627,106 @@ document.addEventListener('DOMContentLoaded', async () => {
       title.classList.remove('is-selected');
       badge.classList.remove('is-active');
       badge.textContent = 'Sin seleccionar';
-      button.textContent = 'Seleccionar este Plan';
+      button.textContent = 'Comparar';
       button.classList.remove('btn--secondary');
       button.classList.add('btn--primary');
     }
   }
 
-  showPlansBtn.addEventListener('click', async () => {
-    if (!validateApplicantName()) {
-      applicantNameInput.focus();
-      window.alert('El nombre del solicitante es obligatorio y debe tener al menos 3 letras.');
-      return;
-    }
+  // Actualiza la barra flotante de comparación (contador + botón "Ver comparación")
+  function updateComparisonBar() {
+    const count = planSelectionOrder.length;
+    comparisonCountText.textContent = `${count} de ${MAX_PLANES_COMPARACION} planes seleccionados`;
+    comparisonBar.classList.toggle('is-visible', count > 0);
+  }
 
-    if (!validateFamilyForm()) {
-      window.alert('Completa las fechas y géneros obligatorios de los integrantes incluidos.');
-      return;
-    }
-
-    setFamilyFormLocked(true);
-    showPlansBtn.disabled = true;
-    showPlansBtn.textContent = 'Cargando...';
-    modifyDataBtn.disabled = false;
-
-    const rows = Array.from(tableBody.querySelectorAll('.family-row'));
-    const integrantes = rows.map(row => {
-      const checkbox = row.querySelector('.row-checkbox');
-      const dateInput = row.querySelector('.date-input');
-      const genderSelect = row.querySelector('.gender-select');
-      return {
-        parentesco: row.dataset.relation,
-        incluido: checkbox.checked,
-        fechaNacimiento: dateInput.value,
-        genero: genderSelect ? genderSelect.value : null
-      };
-    }).filter(member => member.incluido && member.fechaNacimiento);
-
-    plansContainer.innerHTML = '<p style="text-align:center; color:#A6A9B0; margin-top:20px;">Cargando planes...</p>';
-    plansContainer.className = 'plans-list';
-    plansContainer.style.display = 'block';
-
-    // 1. Traer de Supabase solo los planes Activos que tengan una tarifa
-    //    Actualizada asociada (si un plan no tiene tarifa "Actualizada", no
-    //    se puede cotizar y queda descartado desde la propia consulta).
-    const { planes: planesCotizables, error } = await fetchPlanesCotizables();
-
-    showPlansBtn.disabled = false;
-    showPlansBtn.textContent = 'Mostrar planes';
-
-    if (error) {
-      plansContainer.innerHTML = `<p style="text-align:center; color:#C0392B; margin-top:20px;">No se pudieron cargar los planes: ${escapeHtmlLocal(error)}</p>`;
-      return;
-    }
-
-    // 2. Edad del Titular, para compararla contra el rango de edad de
-    //    Titular configurado en cada plan (edad_min_titular / edad_max_titular).
-    const titular = integrantes.find(miembro => miembro.parentesco === 'Titular');
-    const edadTitular = titular ? getNumericAge(titular.fechaNacimiento) : -1;
-
-    const planesDisponibles = planesCotizables.filter(plan => {
-      if (plan.edad_min_titular != null && edadTitular < plan.edad_min_titular) return false;
-      if (plan.edad_max_titular != null && edadTitular > plan.edad_max_titular) return false;
+  // Determina si la regla de maternidad de un plan aplica para el grupo
+  // familiar actualmente cotizado (Titular o Cónyuge mujer dentro del rango
+  // de edad de maternidad configurado en el plan).
+  function aplicaMaternidadParaPlan(plan) {
+    return integrantesActuales.some(miembro => {
+      if (miembro.parentesco !== 'Titular' && miembro.parentesco !== 'Cónyuge') return false;
+      if (miembro.genero !== 'F') return false;
+      const edadNum = getNumericAge(miembro.fechaNacimiento);
+      if (plan.edad_min_maternidad != null && edadNum < plan.edad_min_maternidad) return false;
+      if (plan.edad_max_maternidad != null && edadNum > plan.edad_max_maternidad) return false;
       return true;
     });
+  }
 
-    if (planesDisponibles.length === 0) {
-      plansContainer.innerHTML = '<p style="text-align:center; color:#A6A9B0; margin-top:20px;">No hay planes disponibles para la edad del titular.</p>';
+  /* =========================================================
+     5.1 FILTRO POR ASEGURADORA
+     ========================================================= */
+
+  // Dibuja los botones de aseguradora (uno por cada aseguradora presente en
+  // los planes disponibles) más el botón para liberar el filtro.
+  function renderInsurerFilterBar(planes) {
+    const nombres = Array.from(new Set(planes.map(p => p.aseguradora_nombre || 'Sin aseguradora')))
+      .sort((a, b) => a.localeCompare(b, 'es'));
+
+    insurerFilterBar.innerHTML = '';
+
+    if (nombres.length <= 1) {
+      insurerFilterBar.style.display = 'none';
+      return;
+    }
+    insurerFilterBar.style.display = 'flex';
+
+    const allBtn = document.createElement('button');
+    allBtn.type = 'button';
+    allBtn.className = 'insurer-filter-btn' + (activeInsurerFilters.size === 0 ? ' is-active' : '');
+    allBtn.textContent = 'Todas las aseguradoras';
+    allBtn.addEventListener('click', () => {
+      activeInsurerFilters.clear();
+      applyInsurerFilterAndRender();
+    });
+    insurerFilterBar.appendChild(allBtn);
+
+    nombres.forEach(nombre => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'insurer-filter-btn' + (activeInsurerFilters.has(nombre) ? ' is-active' : '');
+      btn.textContent = nombre;
+      btn.addEventListener('click', () => {
+        if (activeInsurerFilters.has(nombre)) {
+          activeInsurerFilters.delete(nombre);
+        } else {
+          activeInsurerFilters.add(nombre);
+        }
+        applyInsurerFilterAndRender();
+      });
+      insurerFilterBar.appendChild(btn);
+    });
+  }
+
+  // Vuelve a pintar la barra de filtros (para reflejar el estado activo) y
+  // las tarjetas de planes según las aseguradoras seleccionadas.
+  function applyInsurerFilterAndRender() {
+    renderInsurerFilterBar(planesDisponiblesActuales);
+    const planesFiltrados = activeInsurerFilters.size === 0
+      ? planesDisponiblesActuales
+      : planesDisponiblesActuales.filter(p => activeInsurerFilters.has(p.aseguradora_nombre || 'Sin aseguradora'));
+    renderPlanCards(planesFiltrados);
+  }
+
+  /* =========================================================
+     5.2 RENDERIZADO DE TARJETAS DE PLANES (grid de 3 en 3)
+     ========================================================= */
+  function renderPlanCards(planes) {
+    plansContainer.innerHTML = '';
+    plansContainer.className = 'plans-grid';
+
+    if (planes.length === 0) {
+      plansContainer.innerHTML = '<p style="text-align:center; color:#A6A9B0; margin-top:20px; grid-column: 1 / -1;">No hay planes que coincidan con el filtro seleccionado.</p>';
       return;
     }
 
-    plansContainer.innerHTML = '';
-
-    // 3. Regla de Maternidad: aplica por Titular o Cónyuge (mujer) cuya edad
-    //    esté dentro del rango de maternidad propio de CADA plan
-    //    (edad_min_maternidad / edad_max_maternidad, definidos en el plan).
-    function aplicaMaternidadParaPlan(plan) {
-      return integrantes.some(miembro => {
-        if (miembro.parentesco !== 'Titular' && miembro.parentesco !== 'Cónyuge') return false;
-        if (miembro.genero !== 'F') return false;
-        const edadNum = getNumericAge(miembro.fechaNacimiento);
-        if (plan.edad_min_maternidad != null && edadNum < plan.edad_min_maternidad) return false;
-        if (plan.edad_max_maternidad != null && edadNum > plan.edad_max_maternidad) return false;
-        return true;
-      });
-    }
-
-    // 4. Imprimir tarjetas de planes en formato lista
-    planesDisponibles.forEach(plan => {
+    planes.forEach(plan => {
       const card = document.createElement('div');
       card.className = 'plan-item';
-      
+
       card.innerHTML = `
+        <span class="plan-insurer-tag">${escapeHtmlLocal(plan.aseguradora_nombre || 'Sin aseguradora')}</span>
         <div class="plan-header-row">
           <div>
             <h3 class="plan-title">${escapeHtmlLocal(plan.nombre_plan)}</h3>
@@ -699,33 +736,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>
 
         <div class="plan-selection-badge">Sin seleccionar</div>
-        
+
         <!-- Aquí aparecerán los adicionales seleccionados -->
         <div id="selected_cov_text_${plan.id}" class="selected-coverages-text" style="display: none;"></div>
-        
-        <button type="button" class="btn btn--primary select-plan-btn" style="margin-top: 10px; width: 100%;">Seleccionar este Plan</button>
+
+        <button type="button" class="btn btn--primary select-plan-btn" style="margin-top: 10px; width: 100%;">Comparar</button>
       `;
-      
+
       plansContainer.appendChild(card);
       applyPlanSelectionState(card, plan.id);
+      aplicarTextoCoberturasEnTarjeta(plan.id); // Restaura adicionales guardados previamente (persisten entre filtros)
 
       const selectPlanBtn = card.querySelector('.select-plan-btn');
       selectPlanBtn.addEventListener('click', () => {
-        const existingSelectionIndex = planSelectionHistory.findIndex(item => item.planId === plan.id);
+        const existingIndex = planSelectionOrder.indexOf(plan.id);
 
-        if (existingSelectionIndex >= 0) {
-          planSelectionHistory.splice(existingSelectionIndex, 1);
+        if (existingIndex >= 0) {
+          planSelectionOrder.splice(existingIndex, 1);
           applyPlanSelectionState(card, plan.id);
+          updateComparisonBar();
           return;
         }
 
-        const selectedAt = formatSelectionTimestamp(new Date());
-        planSelectionHistory.push({
-          planId: plan.id,
-          selectionNumber: planSelectionHistory.length + 1,
-          selectedAt
-        });
+        if (planSelectionOrder.length >= MAX_PLANES_COMPARACION) {
+          window.alert(`Puedes comparar un máximo de ${MAX_PLANES_COMPARACION} planes. Quita uno para agregar otro.`);
+          return;
+        }
+
+        planSelectionOrder.push(plan.id);
         applyPlanSelectionState(card, plan.id);
+        updateComparisonBar();
       });
 
       // Evento para abrir el modal y pintar los checkboxes dinámicamente
@@ -741,7 +781,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         plan.coberturasAdicionales.forEach((adicional, index) => {
           let disabled = '';
           let tachado = '';
-          
+
           if (adicional.nombre === 'Maternidad' && !aplicaMaternidad) {
             disabled = 'disabled';
             tachado = 'style="color:#A6A9B0; text-decoration:line-through;"';
@@ -754,7 +794,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           // Contenedor por cada adicional (Fila: Checkbox + Nombre + Select de Suma)
           const itemRow = document.createElement('div');
           itemRow.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px;';
-          
+
           itemRow.innerHTML = `
             <div ${tachado} style="display:flex; align-items:center; gap:8px; cursor:pointer; flex: 1;">
               <input type="checkbox" class="modal-cov-checkbox" value="${adicional.nombre}" data-index="${index}" ${disabled} ${isChecked}>
@@ -785,6 +825,147 @@ document.addEventListener('DOMContentLoaded', async () => {
         coveragesModal.classList.add('active');
       });
     });
+  }
+
+  /* =========================================================
+     5.3 RESUMEN COMPARATIVO Y EXPORTACIÓN A PDF
+     ========================================================= */
+
+  function renderComparisonModal() {
+    const planesSeleccionados = planSelectionOrder
+      .map(id => planesDisponiblesActuales.find(p => p.id === id))
+      .filter(Boolean);
+
+    comparisonTableWrapper.innerHTML = '';
+
+    if (planesSeleccionados.length === 0) {
+      comparisonTableWrapper.innerHTML = '<p style="text-align:center; color:#A6A9B0;">No hay planes seleccionados para comparar.</p>';
+      return;
+    }
+
+    const filasDefinicion = [
+      { label: 'Aseguradora', get: (p) => p.aseguradora_nombre || 'Sin aseguradora' },
+      { label: 'Plan', get: (p) => p.nombre_plan },
+      { label: 'Suma Asegurada', get: (p) => `$${formatCurrencyThousands(p.suma_asegurada)}` },
+      {
+        label: 'Adicionales', get: (p) => {
+          const seleccionados = coberturasSeleccionadasPorPlan[p.id] || [];
+          return seleccionados.length > 0 ? seleccionados.join(', ') : 'Ninguno';
+        },
+      },
+    ];
+
+    const encabezado = '<thead><tr><th>Plan</th>' +
+      planesSeleccionados.map((_, i) => `<th>Opción ${i + 1}</th>`).join('') + '</tr></thead>';
+
+    const cuerpo = '<tbody>' + filasDefinicion.map(def => (
+      `<tr><td class="comparison-row-label">${escapeHtmlLocal(def.label)}</td>` +
+      planesSeleccionados.map(p => `<td>${escapeHtmlLocal(def.get(p))}</td>`).join('') +
+      '</tr>'
+    )).join('') + '</tbody>';
+
+    const table = document.createElement('table');
+    table.className = 'comparison-table';
+    table.innerHTML = encabezado + cuerpo;
+    comparisonTableWrapper.appendChild(table);
+  }
+
+  viewComparisonBtn.addEventListener('click', () => {
+    renderComparisonModal();
+    comparisonModal.classList.add('active');
+  });
+
+  closeComparisonModalBtn.addEventListener('click', () => {
+    comparisonModal.classList.remove('active');
+  });
+
+  // Exporta el resumen comparativo a PDF usando el diálogo de impresión del
+  // navegador (Guardar como PDF), aislando solo el modal de comparación.
+  exportComparisonBtn.addEventListener('click', () => {
+    document.body.classList.add('printing-comparison');
+    window.print();
+  });
+
+  window.addEventListener('afterprint', () => {
+    document.body.classList.remove('printing-comparison');
+  });
+
+  showPlansBtn.addEventListener('click', async () => {
+    if (!validateApplicantName()) {
+      applicantNameInput.focus();
+      window.alert('El nombre del solicitante es obligatorio y debe tener al menos 3 letras.');
+      return;
+    }
+
+    if (!validateFamilyForm()) {
+      window.alert('Completa las fechas y géneros obligatorios de los integrantes incluidos.');
+      return;
+    }
+
+    setFamilyFormLocked(true);
+    showPlansBtn.disabled = true;
+    showPlansBtn.textContent = 'Cargando...';
+    modifyDataBtn.disabled = false;
+
+    const rows = Array.from(tableBody.querySelectorAll('.family-row'));
+    integrantesActuales = rows.map(row => {
+      const checkbox = row.querySelector('.row-checkbox');
+      const dateInput = row.querySelector('.date-input');
+      const genderSelect = row.querySelector('.gender-select');
+      return {
+        parentesco: row.dataset.relation,
+        incluido: checkbox.checked,
+        fechaNacimiento: dateInput.value,
+        genero: genderSelect ? genderSelect.value : null
+      };
+    }).filter(member => member.incluido && member.fechaNacimiento);
+
+    // Reiniciar filtros, comparación y contenedores antes de la nueva búsqueda
+    activeInsurerFilters.clear();
+    planSelectionOrder = [];
+    Object.keys(coberturasSeleccionadasPorPlan).forEach(key => delete coberturasSeleccionadasPorPlan[key]);
+    updateComparisonBar();
+    insurerFilterBar.innerHTML = '';
+    insurerFilterBar.style.display = 'none';
+
+    plansContainer.innerHTML = '<p style="text-align:center; color:#A6A9B0; margin-top:20px;">Cargando planes...</p>';
+    plansContainer.className = 'plans-grid';
+    plansContainer.style.display = 'grid';
+
+    // 1. Traer de Supabase solo los planes Activos que tengan una tarifa
+    //    Actualizada asociada (si un plan no tiene tarifa "Actualizada", no
+    //    se puede cotizar y queda descartado desde la propia consulta).
+    const { planes: planesCotizables, error } = await fetchPlanesCotizables();
+
+    showPlansBtn.disabled = false;
+    showPlansBtn.textContent = 'Mostrar planes';
+
+    if (error) {
+      plansContainer.innerHTML = `<p style="text-align:center; color:#C0392B; margin-top:20px;">No se pudieron cargar los planes: ${escapeHtmlLocal(error)}</p>`;
+      return;
+    }
+
+    // 2. Edad del Titular, para compararla contra el rango de edad de
+    //    Titular configurado en cada plan (edad_min_titular / edad_max_titular).
+    const titular = integrantesActuales.find(miembro => miembro.parentesco === 'Titular');
+    const edadTitular = titular ? getNumericAge(titular.fechaNacimiento) : -1;
+
+    const planesDisponibles = planesCotizables.filter(plan => {
+      if (plan.edad_min_titular != null && edadTitular < plan.edad_min_titular) return false;
+      if (plan.edad_max_titular != null && edadTitular > plan.edad_max_titular) return false;
+      return true;
+    });
+
+    planesDisponiblesActuales = planesDisponibles;
+
+    if (planesDisponibles.length === 0) {
+      plansContainer.innerHTML = '<p style="text-align:center; color:#A6A9B0; margin-top:20px;">No hay planes disponibles para la edad del titular.</p>';
+      return;
+    }
+
+    // 3. Botones de filtro por aseguradora + tarjetas de planes (grid de 3 en 3)
+    renderInsurerFilterBar(planesDisponiblesActuales);
+    renderPlanCards(planesDisponiblesActuales);
   });
 
 });
