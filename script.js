@@ -1266,12 +1266,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // clase de celda para resaltar valores puntuales (suma asegurada, total
     // anual), igual al estilo del documento de referencia.
     const filasDefinicion = [
-      { label: 'Plan', get: (p) => p.nombre_plan || '—' },
       { label: 'Producto', get: (p) => p.producto_nombre || '—', rowClass: 'row-shaded' },
       { label: 'Suma Asegurada', get: (p) => `$${formatCurrencyThousands(p.suma_asegurada)}`, cellClass: 'comparison-suma-asegurada' },
-      { section: 'Total Estimado a Pagar Anual' },
-      { label: 'Total Cobertura Básica', get: (p) => `$${formatMoney(cotizaciones.get(p.id).basica)}` },
-      { label: 'Total Cob. Adicionales', get: (p) => `$${formatMoney(cotizaciones.get(p.id).adicionales)}`, rowClass: 'row-shaded' },
       {
         label: 'Detalle Adicionales', rowClass: 'row-shaded', cellClass: 'comparison-detalle-adicionales', get: (p) => {
           const seleccionados = coberturasSeleccionadasPorPlan[p.id] || [];
@@ -1280,6 +1276,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             : 'Ninguno';
         },
       },
+      { section: 'Total Estimado a Pagar Anual' },
+      { label: 'Total Cobertura Básica', get: (p) => `$${formatMoney(cotizaciones.get(p.id).basica)}` },
+      { label: 'Total Cob. Adicionales', get: (p) => `$${formatMoney(cotizaciones.get(p.id).adicionales)}`, rowClass: 'row-shaded' },
+
       { label: 'Maternidad', get: (p) => `$${formatMoney(cotizaciones.get(p.id).maternidad)}` },
       {
         label: 'Total Anual', rowClass: 'comparison-total-anual-row', get: (p) => `$${formatMoney(cotizaciones.get(p.id).totalAnual)}`,
