@@ -1214,14 +1214,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>
         <div class="print-header__main">
           <p class="print-header__title">Cotización Salud Individual</p>
-          ${contactoPartes ? `<p class="print-header__asesor-contacto">${escapeHtmlLocal(contactoPartes)}</p>` : ''}
           <p class="print-header__fecha">Fecha de la cotización: ${fechaHoy}</p>
         </div>
       </div>
       <div class="print-header__rows">
         <div class="print-info-row">
           <span><strong>Solicitante:</strong> ${escapeHtmlLocal(nombreSolicitante)}</span>
-          <span><strong>Asesor:</strong> ${escapeHtmlLocal(nombreAsesor)}</span>
+          <span><strong>Asesor:</strong> ${escapeHtmlLocal(nombreAsesor)} // ${escapeHtmlLocal(contactoPartes)}</span>
         </div>
         <div class="print-tarifa-row">
           <span class="print-tarifa-badge">Tarifa: ${escapeHtmlLocal(tarifaTipoActual || 'Emisión')}</span>
