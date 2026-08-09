@@ -1281,7 +1281,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function buildInsurerHeaderCell(plan) {
     const nombre = escapeHtmlLocal(plan.aseguradora_nombre || 'Sin aseguradora');
     const logoImg = plan.aseguradora_logo
-      ? `<img src="${escapeHtmlLocal(plan.aseguradora_logo)}" alt="${nombre}" onerror="this.style.display='none'">`
+      ? `<img src="${escapeHtmlLocal(plan.aseguradora_logo)}" onerror="this.style.display='none'">`
       : '';
     return `<div class="comparison-insurer-header">${logoImg}<span>${nombre}</span></div>`;
   }
