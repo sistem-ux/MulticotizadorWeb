@@ -447,9 +447,14 @@
     /* Modal de comparación (más ancho que el de adicionales) */
     .modal-content--wide {
       max-width: 960px;
+      max-height: 90vh;
+    }
+    .comparison-print-area {
+      overflow-y: auto;
+      min-height: 0;
+      flex: 1;
     }
     .comparison-table-wrapper {
-      max-height: 60vh;
       overflow: auto;
     }
 
