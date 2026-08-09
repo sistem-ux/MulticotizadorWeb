@@ -22,20 +22,21 @@
    Ajusta este objeto para cambiar quién puede ver cada pantalla.
    ----------------------------------------------------------------------- */
 const ROLES = {
-  ADMIN: 'Administrador',
+  ADMIN1: 'Administrador Nacional',
+  ADMIN2: 'Administrador Sucursal',
   COLABORADOR: 'Colaborador',
   ASESOR: 'Asesor',
   VISITANTE: 'Visitante',
 };
 
 const PAGE_PERMISSIONS = {
-  'dashboard.html': [ROLES.ADMIN, ROLES.COLABORADOR, ROLES.ASESOR],
-  'usuarios.html': [ROLES.ADMIN],
-  'aseguradoras.html': [ROLES.ADMIN],
-  'planes.html': [ROLES.ADMIN],
-  'perfiles.html': [ROLES.ADMIN],
-  'cotizador.html': [ROLES.ADMIN, ROLES.COLABORADOR, ROLES.ASESOR, ROLES.VISITANTE],
-  'cotizaciones.html': [ROLES.ADMIN, ROLES.COLABORADOR, ROLES.ASESOR],
+  'dashboard.html': [ROLES.ADMIN1,ROLES.ADMIN2, ROLES.COLABORADOR, ROLES.ASESOR],
+  'usuarios.html': [ROLES.ADMIN1],
+  'aseguradoras.html': [ROLES.ADMIN1],
+  'planes.html': [ROLES.ADMIN1],
+  'perfiles.html': [ROLES.ADMIN1],
+  'cotizador.html': [ROLES.ADMIN1,ROLES.ADMIN2, ROLES.COLABORADOR, ROLES.ASESOR, ROLES.VISITANTE],
+  'cotizaciones.html': [ROLES.ADMIN1,ROLES.ADMIN2, ROLES.COLABORADOR, ROLES.ASESOR],
 };
 
 /* -----------------------------------------------------------------------
