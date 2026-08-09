@@ -18,14 +18,14 @@ const LOGO_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
    ============================================================= */
 const COVERAGE_LIST = [
   { key: 'funerarios', label: 'Funerarios' },
-  { key: 'asistencia_viajes', label: 'Asistencia en viajes' },
-  { key: 'invalidez_permanente', label: 'Invalidez permanente' },
-  { key: 'muerte_accidental', label: 'Muerte accidental' },
+  { key: 'asistencia_viajes', label: 'Asist. viajes' },
+  { key: 'invalidez_permanente', label: 'Invalidez' },
+  { key: 'muerte_accidental', label: 'Muerte' },
   { key: 'odontologia', label: 'Odontología' },
   { key: 'oftalmologia', label: 'Oftalmología' },
   { key: 'dermatologia', label: 'Dermatología' },
   { key: 'psicologia', label: 'Psicología' },
-  { key: 'servicios_adicionales', label: 'Servicios Adicionales' },
+  { key: 'servicios_adicionales', label: 'Serv. Adicionales' },
 ];
 
 const AGE_RANGES = [
