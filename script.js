@@ -939,10 +939,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       card.innerHTML = `
         <div class="plan-header-row">
-          <h3 class="plan-title" title="${escapeHtmlLocal(plan.aseguradora_nombre || 'Sin aseguradora')} | ${escapeHtmlLocal(plan.producto_nombre || 'Sin producto')}">${escapeHtmlLocal(plan.aseguradora_nombre || 'Sin aseguradora')} | ${escapeHtmlLocal(plan.producto_nombre || 'Sin producto')}</h3>
-          <p class="plan-details">Suma Asegurada: $${formatCurrencyThousands(plan.suma_asegurada)}</p>
-          <p class="plan-details">Ded. Vzla: $${formatCurrencyThousands(plan.deducible_venezuela)} | Ded. Exterior: $${formatCurrencyThousands(plan.deducible_exterior)}</p>
-        </div>
+          <h3 class="plan-title" title="${escapeHtmlLocal(plan.aseguradora_nombre || 'Sin aseguradora')}">${escapeHtmlLocal(plan.aseguradora_nombre || 'Sin aseguradora')}</h3>
+          <h3 class="plan-details">Suma Asegurada: $${formatCurrencyThousands(plan.suma_asegurada)}</h3>
+          <p class="plan-details">Prod.: ${escapeHtmlLocal(plan.producto_nombre || 'Sin producto')}</p>
+          <p class="plan-details">Ded. Vzla: $${formatCurrencyThousands(plan.deducible_venezuela)}</p>
+          <p class="plan-details">Ded. Ext: $${formatCurrencyThousands(plan.deducible_exterior)}</p>
+          </div>
 
         <div class="plan-actions-row">
           <button type="button" class="btn btn--secondary open-modal-btn" style="padding: 6px 12px; font-size: 13px;">+ Adicionales</button>
@@ -1220,7 +1222,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       <div class="print-header__rows">
         <div class="print-info-row">
           <span><strong>Solicitante:</strong> ${escapeHtmlLocal(nombreSolicitante)}</span>
-          <span><strong>Asesor:</strong> ${escapeHtmlLocal(nombreAsesor)} // ${escapeHtmlLocal(contactoPartes)}</span>
+          <span><strong>Asesor:</strong> ${escapeHtmlLocal(nombreAsesor)} · ${escapeHtmlLocal(contactoPartes)}</span>
         </div>
         <div class="print-tarifa-row">
           <span class="print-tarifa-badge">Tarifa: ${escapeHtmlLocal(tarifaTipoActual || 'Emisión')}</span>
