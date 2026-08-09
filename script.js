@@ -99,7 +99,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const comparisonPrintHeader = document.getElementById('comparisonPrintHeader');
   const exportComparisonBtn = document.getElementById('exportComparisonBtn');
 
-  const MAX_PLANES_COMPARACION = 5;
+  const MAX_PLANES_COMPARACION = 4;
 
   let childCount = 0;
   let currentSelectedPlanId = null; // Para saber a qué plan le estamos agregando adicionales
