@@ -209,7 +209,7 @@
     .plan-header-row {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 2px;
     }
     .plan-title {
       font-family: 'Poppins', sans-serif;
@@ -218,13 +218,13 @@
       line-height: 1.3;
       color: #001F5B;
       margin: 0;
-      /* Reserva una altura fija (≈3.5 líneas) para que "+ Adicionales" quede
-         siempre a la misma altura, sin importar si el nombre del plan es
-         corto o largo. Si excede ese espacio, se recorta con "…". */
-      min-height: 4.55em;
+      /* Reserva una altura fija (≈2 líneas) para que "+ Adicionales" quede
+         siempre a la misma altura, sin importar si "Aseguradora | Producto"
+         es corto o largo. Si excede ese espacio, se recorta con "…". */
+      min-height: 2.6em;
       display: -webkit-box;
       -webkit-box-orient: vertical;
-      -webkit-line-clamp: 3;
+      -webkit-line-clamp: 2;
       overflow: hidden;
     }
     .plan-title.is-selected {

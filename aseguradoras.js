@@ -1700,14 +1700,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         const primaInput = row.querySelector('.cov-prima');
         const primaField = row.querySelector('.cov-prima-field');
         primaField.style.display = isOpcional ? '' : 'none';
+
+        // Suma Asegurada: se deshabilita y limpia cuando "Servicios" está
+        // marcado, tanto en Incluido como en Opcional.
         if (serviciosCheck.checked) {
           sumaInput.disabled = true; sumaInput.value = '';
-          primaInput.disabled = true; primaInput.value = '';
         } else {
           sumaInput.disabled = false;
-          primaInput.disabled = !isOpcional;
-          if (!isOpcional) primaInput.value = '';
         }
+
+        // Prima: solo aplica para "Opcional" y permanece habilitada tanto si
+        // "Servicios" está marcado como si no. Para "Incluido" siempre
+        // permanece deshabilitada.
+        primaInput.disabled = !isOpcional;
+        if (!isOpcional) primaInput.value = '';
+
         row.querySelector('.btn-remove-sum').style.display = (isOpcional && sumsContainer.children.length > 1) ? 'inline-flex' : 'none';
       });
     }
