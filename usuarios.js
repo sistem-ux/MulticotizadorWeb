@@ -304,15 +304,31 @@ document.addEventListener('DOMContentLoaded', async () => {
   let isReadOnlyUser = false;
   let currentSort = { key: 'full_name', direction: 'asc' };
 
+  // El catálogo de Perfiles es de texto libre (pestaña "Perfiles"), así que
+  // pueden existir variantes como "Administrador Nacional" o "Administrador
+  // Sucursal" además de "Administrador" a secas. Para la lógica de
+  // "Ejecutivo" (auto-referencia), cualquier perfil que EMPIECE con
+  // "Administrador" se trata igual que "Colaborador": es su propio ejecutivo.
+  function esPerfilAdministrador(perfilNombre) {
+    return (perfilNombre || '').trim().toLowerCase().startsWith('administrador');
+  }
+  function esPerfilColaborador(perfilNombre) {
+    return (perfilNombre || '').trim().toLowerCase() === 'colaborador';
+  }
+  function esPerfilAsesor(perfilNombre) {
+    return (perfilNombre || '').trim().toLowerCase() === 'asesor';
+  }
+
   attachTitleCaseFormatter(fullNameInput);
 
-  // Cuando el perfil es Administrador o Colaborador, el "Ejecutivo" mostrado
-  // es el propio nombre del usuario: si lo edita en vivo, se refleja también
-  // en la opción (aunque el campo permanezca no editable).
+  // Cuando el perfil es Administrador (o alguna de sus variantes) o
+  // Colaborador, el "Ejecutivo" mostrado es el propio nombre del usuario:
+  // si lo edita en vivo, se refleja también en la opción (aunque el campo
+  // permanezca no editable).
   fullNameInput.addEventListener('input', () => {
     const perfilSeleccionado = allPerfiles.find((p) => p.id === perfilInput.value);
     const perfilNombre = perfilSeleccionado ? perfilSeleccionado.perfil : '';
-    if (perfilNombre === 'Administrador' || perfilNombre === 'Colaborador') {
+    if (esPerfilAdministrador(perfilNombre) || esPerfilColaborador(perfilNombre)) {
       refreshEjecutivoField();
     }
   });
@@ -394,7 +410,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // se valida como selección del usuario.
     const perfilSeleccionadoValidacion = allPerfiles.find((p) => p.id === perfilInput.value);
     const perfilNombreValidacion = perfilSeleccionadoValidacion ? perfilSeleccionadoValidacion.perfil : '';
-    if (perfilNombreValidacion === 'Asesor') {
+    if (esPerfilAsesor(perfilNombreValidacion)) {
       const ejecutivoOk = ejecutivoSelect.value.trim().length > 0;
       setFieldError(fieldEjecutivo, !ejecutivoOk);
       if (!ejecutivoOk) valid = false;
@@ -455,7 +471,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     ejecutivoSelect.innerHTML = '';
     setFieldError(fieldEjecutivo, false);
 
-    if (perfilNombre === 'Administrador' || perfilNombre === 'Colaborador') {
+    if (esPerfilAdministrador(perfilNombre) || esPerfilColaborador(perfilNombre)) {
       const opt = document.createElement('option');
       opt.value = 'self';
       opt.textContent = fullNameInput.value.trim() || '(Nombre del propio usuario)';
@@ -466,7 +482,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    if (perfilNombre === 'Asesor') {
+    if (esPerfilAsesor(perfilNombre)) {
       ejecutivoSelect.disabled = false;
       const placeholder = document.createElement('option');
       placeholder.value = '';
@@ -482,7 +498,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const colaboradores = allUsers.filter((u) => {
         const perfilU = u.perfiles?.perfil || u.perfil || '';
-        return perfilU === 'Colaborador' && u.sucursal_id === sucursalId && (u.status || 'Activo') === 'Activo';
+        return esPerfilColaborador(perfilU) && u.sucursal_id === sucursalId && (u.status || 'Activo') === 'Activo';
       });
 
       colaboradores.forEach((u) => {
@@ -738,13 +754,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // "Ejecutivo": Administrador/Colaborador son su propio ejecutivo
     // (se autorreferencia); Asesor usa el colaborador elegido en el select;
     // cualquier otro perfil no aplica y queda en null.
-    const esAutoEjecutivo = perfilNombreSeleccionado === 'Administrador' || perfilNombreSeleccionado === 'Colaborador';
+    const esAutoEjecutivo = esPerfilAdministrador(perfilNombreSeleccionado) || esPerfilColaborador(perfilNombreSeleccionado);
     let ejecutivoIdPayload = null;
     if (esAutoEjecutivo) {
       // En edición ya conocemos el id propio; en registro se completa
       // después del insert (ver más abajo), porque el id aún no existe.
       ejecutivoIdPayload = isEditMode ? userIdInput.value : null;
-    } else if (perfilNombreSeleccionado === 'Asesor') {
+    } else if (esPerfilAsesor(perfilNombreSeleccionado)) {
       ejecutivoIdPayload = ejecutivoSelect.value || null;
     }
 
