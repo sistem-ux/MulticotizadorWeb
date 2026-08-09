@@ -164,7 +164,8 @@ document.addEventListener('DOMContentLoaded', async () => {
      ========================================================= */
   function validateElaboradoPor() {
     const session = getSession();
-    if (session.role === 'Administrador' || session.role === 'Colaborador') {
+    const esAdminOColaborador = esPerfilAdministrador(session.role) || session.role === 'Colaborador';
+    if (esAdminOColaborador) {
       const isValid = !!elaboradoPorSelect.value;
       elaboradoPorSelect.classList.toggle('has-error', !isValid);
       elaboradoPorSelect.setAttribute('aria-invalid', isValid ? 'false' : 'true');
@@ -183,7 +184,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function getElaboradoPorValue() {
     const session = getSession();
-    if (session.role === 'Administrador' || session.role === 'Colaborador') {
+    const esAdminOColaborador = esPerfilAdministrador(session.role) || session.role === 'Colaborador';
+    if (esAdminOColaborador) {
       return elaboradoPorSelect.value;
     }
     return elaboradoPorInput.value.trim();
@@ -200,7 +202,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const { data, error } = await supabaseClient
         .from(TABLE_USUARIOS)
-        .select('id, full_name, email, telefono, status')
+        .select('id, full_name, email, telefono, status, sucursal_id, ejecutivo_id')
         .eq('status', 'Activo')
         .order('full_name', { ascending: true });
 
@@ -220,6 +222,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.error('No se pudo conectar con Supabase (usuarios):', getErrorMessage(err));
       return [];
     }
+  }
+
+  // Restringe la lista de usuarios que puede elegir en "Elaborado por" según
+  // el alcance del perfil de la sesión (mismo criterio de visibilidad usado
+  // en cotizaciones.js / dashboard.js — ver getRoleScope() en auth-guard.js):
+  //   admin_nacional -> todos los usuarios activos
+  //   admin_sucursal -> solo los de su misma sucursal
+  //   colaborador    -> él mismo + los usuarios que lo tienen como ejecutivo
+  function filtrarUsuariosParaElaboradoPor(usuarios, session, scope) {
+    if (scope === 'admin_sucursal') {
+      return usuarios.filter((u) => u.sucursal_id && u.sucursal_id === session.sucursalId);
+    }
+    if (scope === 'colaborador') {
+      return usuarios.filter((u) => u.ejecutivo_id === session.id);
+    }
+    return usuarios; // admin_nacional: sin filtro
   }
 
   // Devuelve { email, telefono } para el nombre de asesor indicado, con
@@ -272,13 +290,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       elaboradoPorInput.disabled = true;
       elaboradoPorInput.value = session.fullName || session.email || '';
       elaboradoPorHint.textContent = 'Se usa el nombre de tu usuario registrado.';
-    } else {
-      // Administrador o Colaborador
+    } else if (esPerfilAdministrador(role) || role === 'Colaborador') {
+      // Administrador (Nacional/Sucursal) o Colaborador
       elaboradoPorInput.style.display = 'none';
       elaboradoPorSelect.style.display = '';
       elaboradoPorSelect.disabled = false;
       elaboradoPorHint.textContent = 'Por defecto se usa tu nombre; puedes seleccionar otro usuario registrado.';
-      await populateElaboradoPorSelect(session, usuarios);
+      const scope = getRoleScope(role);
+      const usuariosVisibles = filtrarUsuariosParaElaboradoPor(usuarios, session, scope);
+      await populateElaboradoPorSelect(session, usuariosVisibles);
+    } else {
+      // Perfil no reconocido: comportamiento más restrictivo, igual que Asesor
+      elaboradoPorInput.style.display = '';
+      elaboradoPorSelect.style.display = 'none';
+      elaboradoPorInput.disabled = true;
+      elaboradoPorInput.value = session.fullName || session.email || '';
+      elaboradoPorHint.textContent = 'Se usa el nombre de tu usuario registrado.';
     }
   }
 
@@ -1533,7 +1560,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (!validateElaboradoPor()) {
       const session = getSession();
-      const target = (session.role === 'Administrador' || session.role === 'Colaborador') ? elaboradoPorSelect : elaboradoPorInput;
+      const target = (esPerfilAdministrador(session.role) || session.role === 'Colaborador') ? elaboradoPorSelect : elaboradoPorInput;
       target.focus();
       window.alert('Indica quién elabora la cotización.');
       return;
