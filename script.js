@@ -8,6 +8,7 @@ const SUPABASE_ANON_KEY = 'sb_publishable_zlp4_HGpTeAQKW55c_pZQA_2HEXRpaC';
 const TABLE_PLANES = 'planes';
 const TABLE_TARIFAS = 'tarifas';
 const TABLE_USUARIOS = 'usuarios';
+const TABLE_COTIZACIONES = 'cotizaciones';
 
 /* Logo de Bareca Sociedad de Corretaje usado en el encabezado del PDF de
    cotización. Coloca el archivo entregado (bareca-logo.png) en esta ruta
@@ -98,6 +99,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const comparisonTableWrapper = document.getElementById('comparisonTableWrapper');
   const comparisonPrintHeader = document.getElementById('comparisonPrintHeader');
   const exportComparisonBtn = document.getElementById('exportComparisonBtn');
+  const finalizeQuoteBtn = document.getElementById('finalizeQuoteBtn');
+  const comparisonSaveFeedback = document.getElementById('comparisonSaveFeedback');
 
   const MAX_PLANES_COMPARACION = 5;
 
@@ -112,6 +115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let activeInsurerFilters = new Set(); // Nombres de aseguradoras activas en el filtro
   const coberturasSeleccionadasPorPlan = {}; // { [planId]: string[] } — persiste al re-renderizar tarjetas (filtro, etc.)
   let isFamilyLocked = false;
+  let cotizacionGuardadaId = null; // ID de la cotización ya guardada en Supabase para esta comparación (habilita "Exportar a PDF")
 
   // Se inicializa temprano para que esté listo cuando el usuario presione "Mostrar planes"
   await initSupabase();
@@ -414,6 +418,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   function setFamilyFormLocked(locked) {
     isFamilyLocked = locked;
 
+    // El nombre del solicitante y el tipo de tarifa se bloquean junto con
+    // el resto del formulario mientras los planes están en pantalla, para
+    // evitar que cambien datos que ya se usaron en la búsqueda/cotización.
+    applicantNameInput.disabled = locked;
+    tarifaTipoSelect.disabled = locked;
+
     // El campo "Elaborado por" se bloquea junto con el resto del formulario
     // (para Asesor ya viene deshabilitado siempre, así que no hay cambio).
     const session = getSession();
@@ -621,6 +631,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     insurerFilterBar.innerHTML = '';
     insurerFilterBar.style.display = 'none';
     comparisonBar.classList.remove('is-visible');
+    resetFinalizeState();
     setFamilyFormLocked(false);
     showPlansBtn.disabled = false;
     modifyDataBtn.disabled = true;
@@ -968,6 +979,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           <h3 class="plan-title" title="${escapeHtmlLocal(plan.aseguradora_nombre || 'Sin aseguradora')}">${escapeHtmlLocal(plan.aseguradora_nombre || 'Sin aseguradora')}</h3>
           <h3 class="plan-details">Suma Asegurada: $${formatCurrencyThousands(plan.suma_asegurada)}</h3>
           <p class="plan-details">Producto:${escapeHtmlLocal(plan.producto_nombre || 'Sin producto')}
+          <p class="plan-details">Tarifa: ${escapeHtmlLocal(plan.tipo_tarifa || '—')}</p>
           <p class="plan-details">Ded. Vzla: $${formatCurrencyThousands(plan.deducible_venezuela)}</p>
           <p class="plan-details">Ded. Ext: $${formatCurrencyThousands(plan.deducible_exterior)}</p>
         </div>
@@ -995,6 +1007,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           planSelectionOrder.splice(existingIndex, 1);
           applyPlanSelectionState(card, plan.id);
           updateComparisonBar();
+          resetFinalizeState(); // la selección cambió: hay que volver a finalizar antes de exportar
           return;
         }
 
@@ -1006,6 +1019,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         planSelectionOrder.push(plan.id);
         applyPlanSelectionState(card, plan.id);
         updateComparisonBar();
+        resetFinalizeState();
       });
 
       // Evento para abrir el modal y pintar los checkboxes dinámicamente
@@ -1381,6 +1395,113 @@ document.addEventListener('DOMContentLoaded', async () => {
     comparisonTableWrapper.appendChild(table);
   }
 
+  // Restablece el botón "Finalizar" / "Exportar a PDF" cada vez que se abre
+  // el modal, ya que cada apertura puede corresponder a una selección de
+  // planes distinta y toda cotización debe guardarse antes de exportarse.
+  function resetFinalizeState() {
+    cotizacionGuardadaId = null;
+    finalizeQuoteBtn.style.display = '';
+    finalizeQuoteBtn.disabled = false;
+    finalizeQuoteBtn.textContent = 'Finalizar';
+    exportComparisonBtn.style.display = 'none';
+    comparisonSaveFeedback.textContent = '';
+    comparisonSaveFeedback.style.color = '';
+  }
+
+  // Arma el registro completo que se guarda en la tabla "cotizaciones":
+  // datos del solicitante/asesor, tipo de tarifa, grupo familiar y el
+  // detalle de cada plan comparado (con sus coberturas opcionales y los
+  // montos ya calculados), para dejar una foto fiel de lo que se le
+  // presentó al cliente en ese momento.
+  function buildCotizacionPayload() {
+    const session = getSession();
+    const planesSeleccionados = planSelectionOrder
+      .map(id => planesDisponiblesActuales.find(p => p.id === id))
+      .filter(Boolean);
+
+    const planesDetalle = planesSeleccionados.map((p) => {
+      const calculo = calcularCotizacionPlan(p);
+      const seleccionAdicionales = coberturasSeleccionadasPorPlan[p.id] || [];
+      return {
+        plan_id: p.id,
+        aseguradora: p.aseguradora_nombre,
+        producto: p.producto_nombre,
+        tipo_tarifa: p.tipo_tarifa || null,
+        suma_asegurada: p.suma_asegurada,
+        deducible_venezuela: p.deducible_venezuela,
+        deducible_exterior: p.deducible_exterior,
+        coberturas_opcionales: seleccionAdicionales,
+        total_cobertura_basica: calculo.basica,
+        total_cobertura_adicionales: calculo.adicionales,
+        total_maternidad: calculo.maternidad,
+        total_anual: calculo.totalAnual,
+        fraccionamiento: calculo.fraccionamiento,
+      };
+    });
+
+    const nombreUsuario = session.fullName || session.email || (session.role === 'Visitante' ? 'Visitante' : '—');
+
+    return {
+      nombre_solicitante: applicantNameInput.value.trim(),
+      elaborado_por: elaboradoPorActual || getElaboradoPorValue(),
+      tipo_tarifa: tarifaTipoActual || 'Emisión',
+      vencimiento: computeVencimientoISO(),
+      grupo_familiar: integrantesActuales,
+      planes: planesDetalle,
+      usuario_creador_id: session.id || null,
+      usuario_creador_nombre: nombreUsuario,
+      usuario_modificador_id: session.id || null,
+      usuario_modificador_nombre: nombreUsuario,
+    };
+  }
+
+  // Igual que computeVencimiento() pero en formato ISO (AAAA-MM-DD), que es
+  // el que espera la columna "vencimiento" (tipo date) en Supabase.
+  function computeVencimientoISO() {
+    const hoy = new Date();
+    const venc = new Date(hoy);
+    venc.setDate(venc.getDate() + 7);
+    const y = venc.getFullYear();
+    const m = String(venc.getMonth() + 1).padStart(2, '0');
+    const d = String(venc.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  finalizeQuoteBtn.addEventListener('click', async () => {
+    if (planSelectionOrder.length === 0) {
+      window.alert('Selecciona al menos un plan para poder finalizar la cotización.');
+      return;
+    }
+
+    if (!supabaseClient) {
+      comparisonSaveFeedback.style.color = '#C0392B';
+      comparisonSaveFeedback.textContent = 'No se pudo conectar con Supabase.';
+      return;
+    }
+
+    finalizeQuoteBtn.disabled = true;
+    finalizeQuoteBtn.textContent = 'Guardando...';
+    comparisonSaveFeedback.style.color = '';
+    comparisonSaveFeedback.textContent = '';
+
+    const payload = buildCotizacionPayload();
+    const { data, error } = await supabaseClient.from(TABLE_COTIZACIONES).insert(payload).select('id').single();
+
+    if (error) {
+      finalizeQuoteBtn.disabled = false;
+      finalizeQuoteBtn.textContent = 'Finalizar';
+      comparisonSaveFeedback.style.color = '#C0392B';
+      comparisonSaveFeedback.textContent = `No se pudo guardar la cotización: ${getErrorMessage(error)}`;
+      return;
+    }
+
+    cotizacionGuardadaId = data.id;
+    finalizeQuoteBtn.style.display = 'none';
+    exportComparisonBtn.style.display = '';
+    comparisonSaveFeedback.style.color = '#2E7D32';
+    comparisonSaveFeedback.textContent = 'Cotización guardada correctamente.';
+  });
+
   viewComparisonBtn.addEventListener('click', () => {
     renderComparisonPrintHeader();
     renderComparisonModal();
@@ -1393,6 +1514,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Exporta el resumen comparativo a PDF usando el diálogo de impresión del
   // navegador (Guardar como PDF), aislando solo el modal de comparación.
+  // Solo queda disponible después de "Finalizar" (cotización ya guardada).
   exportComparisonBtn.addEventListener('click', () => {
     document.body.classList.add('printing-comparison');
     window.print();
@@ -1448,6 +1570,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     planSelectionOrder = [];
     Object.keys(coberturasSeleccionadasPorPlan).forEach(key => delete coberturasSeleccionadasPorPlan[key]);
     updateComparisonBar();
+    resetFinalizeState();
     insurerFilterBar.innerHTML = '';
     insurerFilterBar.style.display = 'none';
 
@@ -1476,6 +1599,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const planesDisponibles = planesCotizables.filter(plan => {
       if (plan.edad_min_titular != null && edadTitular < plan.edad_min_titular) return false;
       if (plan.edad_max_titular != null && edadTitular > plan.edad_max_titular) return false;
+      if (plan.tipo_tarifa && plan.tipo_tarifa !== tarifaTipoActual) return false;
       return true;
     });
 
