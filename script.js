@@ -965,8 +965,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       card.innerHTML = `
         <div class="plan-header-row">
-          <h3 class="plan-title" title="${escapeHtmlLocal(plan.aseguradora_nombre || 'Sin aseguradora')} | ${escapeHtmlLocal(plan.producto_nombre || 'Sin producto')}">${escapeHtmlLocal(plan.aseguradora_nombre || 'Sin aseguradora')} | ${escapeHtmlLocal(plan.producto_nombre || 'Sin producto')}</h3>
+          <h3 class="plan-title" title="${escapeHtmlLocal(plan.aseguradora_nombre || 'Sin aseguradora')}">${escapeHtmlLocal(plan.aseguradora_nombre || 'Sin aseguradora')}</h3>
           <h3 class="plan-details">Suma Asegurada: $${formatCurrencyThousands(plan.suma_asegurada)}</h3>
+          <p class="plan-details">Producto:${escapeHtmlLocal(plan.producto_nombre || 'Sin producto')}
           <p class="plan-details">Ded. Vzla: $${formatCurrencyThousands(plan.deducible_venezuela)}</p>
           <p class="plan-details">Ded. Ext: $${formatCurrencyThousands(plan.deducible_exterior)}</p>
         </div>
