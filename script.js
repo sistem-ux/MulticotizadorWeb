@@ -1266,7 +1266,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // clase de celda para resaltar valores puntuales (suma asegurada, total
     // anual), igual al estilo del documento de referencia.
     const filasDefinicion = [
-      { label: 'Plan', get: (p) => p.nombre_plan || '—' },
       { label: 'Producto', get: (p) => p.producto_nombre || '—', rowClass: 'row-shaded' },
       { label: 'Suma Asegurada', get: (p) => `$${formatCurrencyThousands(p.suma_asegurada)}`, cellClass: 'comparison-suma-asegurada' },
       { section: 'Total Estimado a Pagar Anual' },
