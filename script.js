@@ -116,6 +116,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const coberturasSeleccionadasPorPlan = {}; // { [planId]: string[] } — persiste al re-renderizar tarjetas (filtro, etc.)
   let isFamilyLocked = false;
   let cotizacionGuardadaId = null; // ID de la cotización ya guardada en Supabase para esta comparación (habilita "Exportar a PDF")
+  let familyFormHasRelativeAgeError = false; // true si Madre/Padre/Hijos incumplen el rango mínimo de 10 años vs. el Titular
 
   // Se inicializa temprano para que esté listo cuando el usuario presione "Mostrar planes"
   await initSupabase();
@@ -429,16 +430,103 @@ document.addEventListener('DOMContentLoaded', async () => {
     return hasValidGender;
   }
 
+  // --- NUEVO: Validación de rango de edad relativo al Titular ---
+  // Reglas de negocio:
+  //  - Madre / Padre deben ser al menos 10 años MAYORES que el Titular
+  //    (fecha de nacimiento igual o anterior a la del Titular menos 10 años).
+  //  - Hijos deben ser al menos 10 años MENORES que el Titular
+  //    (fecha de nacimiento igual o posterior a la del Titular más 10 años).
+  // Esta función es de solo lectura (no modifica el DOM); la aplicación
+  // visual del resultado se hace en validateRowFull().
+  function addYearsToDate(date, years) {
+    const result = new Date(date.getTime());
+    result.setFullYear(result.getFullYear() + years);
+    return result;
+  }
+
+  function validateRelativeAgeForRow(row) {
+    const relation = row.dataset.relation || '';
+    const isParentRelation = relation === 'Madre' || relation === 'Padre';
+    const isChildRelation = relation.startsWith('Hijo ');
+
+    // La regla solo aplica a Madre, Padre e Hijos.
+    if (!isParentRelation && !isChildRelation) return true;
+
+    const checkbox = row.querySelector('.row-checkbox');
+    const dateInput = row.querySelector('.date-input');
+
+    // Si la fila no está incluida (o su fecha está deshabilitada), no hay
+    // nada que validar todavía.
+    if (!checkbox.checked || dateInput.disabled) return true;
+
+    const currentDate = parseDateValue(dateInput.value);
+    if (!currentDate) return true; // La obligatoriedad de la fecha la valida validateDateForRow
+
+    const titularRow = tableBody.querySelector('.family-row[data-relation="Titular"]');
+    const titularDateInput = titularRow ? titularRow.querySelector('.date-input') : null;
+    const titularDate = titularDateInput ? parseDateValue(titularDateInput.value) : null;
+    if (!titularDate) return true; // Sin fecha del Titular aún no se puede comparar
+
+    if (isParentRelation) {
+      const limiteMasReciente = addYearsToDate(titularDate, -10);
+      return currentDate <= limiteMasReciente;
+    }
+    // isChildRelation
+    const limiteMasAntiguo = addYearsToDate(titularDate, 10);
+    return currentDate >= limiteMasAntiguo;
+  }
+
+  function relativeAgeErrorMessageForRow(row) {
+    const relation = row.dataset.relation || '';
+    if (relation === 'Madre' || relation === 'Padre') {
+      return `La fecha de nacimiento de "${relation}" debe ser al menos 10 años anterior a la del Titular.`;
+    }
+    if (relation.startsWith('Hijo ')) {
+      return `La fecha de nacimiento de "${relation}" debe ser al menos 10 años posterior a la del Titular.`;
+    }
+    return '';
+  }
+
+  // Valida una fila de forma completa (fecha requerida + género + rango de
+  // edad relativo) y aplica el resultado combinado al DOM (clase de error
+  // en la fila y aria-invalid en el input de fecha).
+  function validateRowFull(row) {
+    const validDate = validateDateForRow(row);
+    const validGender = validateGenderForRow(row);
+    const validRelativeAge = validateRelativeAgeForRow(row);
+    const dateInput = row.querySelector('.date-input');
+    const rowHasError = !validDate || !validGender || !validRelativeAge;
+    row.classList.toggle('has-error', rowHasError);
+    if (dateInput) {
+      dateInput.setAttribute('aria-invalid', (!validDate || !validRelativeAge) ? 'true' : 'false');
+      dateInput.title = !validRelativeAge ? relativeAgeErrorMessageForRow(row) : '';
+    }
+    return !rowHasError;
+  }
+
+  // Cuando cambia la fecha del Titular, Madre/Padre/Hijos deben re-evaluarse
+  // porque su validez depende de la fecha del Titular.
+  function revalidateRelativeAgeDependents() {
+    const rows = Array.from(tableBody.querySelectorAll('.family-row'));
+    rows.forEach((row) => {
+      const relation = row.dataset.relation || '';
+      if (relation === 'Madre' || relation === 'Padre' || relation.startsWith('Hijo ')) {
+        validateRowFull(row);
+      }
+    });
+  }
+  // -----------------------------------------------------------------------
+
   function validateFamilyForm() {
     const rows = Array.from(tableBody.querySelectorAll('.family-row'));
     let allValid = true;
+    let hasRelativeAgeError = false;
     rows.forEach((row) => {
-      const validDate = validateDateForRow(row);
-      const validGender = validateGenderForRow(row);
-      const rowHasError = !validDate || !validGender;
-      row.classList.toggle('has-error', rowHasError);
-      allValid = allValid && !rowHasError;
+      if (!validateRelativeAgeForRow(row)) hasRelativeAgeError = true;
+      const rowValid = validateRowFull(row);
+      allValid = allValid && rowValid;
     });
+    familyFormHasRelativeAgeError = hasRelativeAgeError;
     return allValid;
   }
 
@@ -566,7 +654,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         dateInput.disabled = false; ageInput.disabled = false;
         row.classList.remove('is-disabled');
       }
-      validateDateForRow(row);
+      validateRowFull(row);
       updateGenderControls();
       updateAddChildButtonState();
     });
@@ -580,12 +668,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     dateInput.addEventListener('input', () => {
       dateInput.value = formatDateInputValue(dateInput.value);
       ageInput.value = calculateAge(formatDateForDisplay(dateInput.value));
-      validateDateForRow(row);
+      validateRowFull(row);
+      // La fecha del Titular es la referencia para validar a Madre, Padre e
+      // Hijos, así que si cambia, hay que re-evaluar esas filas también.
+      if (relation === 'Titular') revalidateRelativeAgeDependents();
     });
 
     dateInput.addEventListener('blur', () => {
       dateInput.value = formatDateInputValue(dateInput.value);
-      validateDateForRow(row);
+      validateRowFull(row);
+      if (relation === 'Titular') revalidateRelativeAgeDependents();
     });
   }
 
@@ -1567,7 +1659,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (!validateFamilyForm()) {
-      window.alert('Completa las fechas y géneros obligatorios de los integrantes incluidos.');
+      if (familyFormHasRelativeAgeError) {
+        window.alert('Verifica las fechas de nacimiento: la Madre y el Padre deben tener al menos 10 años más que el Titular, y los Hijos deben tener al menos 10 años menos que el Titular.');
+      } else {
+        window.alert('Completa las fechas y géneros obligatorios de los integrantes incluidos.');
+      }
       return;
     }
 
