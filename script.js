@@ -1309,7 +1309,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       { label: 'Producto', get: (p) => p.producto_nombre || '—', rowClass: 'row-shaded' },
       { label: 'Suma Asegurada', get: (p) => `$${formatCurrencyThousands(p.suma_asegurada)}`, cellClass: 'comparison-suma-asegurada' },
       {
-        label: 'Detalle Adicionales', rowClass: 'row-shaded', cellClass: 'comparison-detalle-adicionales', get: (p) => {
+        label: 'Coberturas Opcionales', rowClass: 'row-shaded', cellClass: 'comparison-detalle-adicionales', get: (p) => {
           const seleccionados = coberturasSeleccionadasPorPlan[p.id] || [];
           return seleccionados.length > 0
             ? seleccionados.map((s) => s.porServicio ? s.nombre : `${s.nombre} `).join(', ')
@@ -1324,7 +1324,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       {
         label: 'Total Anual', rowClass: 'comparison-total-anual-row', get: (p) => `$${formatMoney(cotizaciones.get(p.id).totalAnual)}`,
       },
-      { section: 'Fraccionamiento' },
+      { section: 'Fraccionamiento · No incluye IGTF' },
       {
         label: 'Gasto Admin. por Fraccionamiento', get: (p) => {
           const g = cotizaciones.get(p.id).fraccionamiento.gastoAdmin;
@@ -1346,7 +1346,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       {
         label: 'Mensual', rowClass: 'row-shaded', get: (p) => {
           const f = cotizaciones.get(p.id).fraccionamiento;
-          return f.mensual != null ? `$${formatMoney(f.mensual)} (${f.mensualFracciones} cuotas)` : '—';
+          return f.mensual != null ? `$${formatMoney(f.mensual)}` : '—';
         },
       },
     ];
