@@ -47,13 +47,19 @@ function getSession() {
     email: localStorage.getItem('userEmail') || null,
     fullName: localStorage.getItem('userFullName') || null,
     role: localStorage.getItem('userRole') || null,
+    sucursalId: localStorage.getItem('userSucursalId') || null,
   };
 }
 
-function saveSession({ id, email, fullName, role }) {
+// NOTA: principal.html debe pasar `sucursalId` (columna `sucursal_id` de la
+// tabla usuarios) al hacer login, además de id/email/fullName/role. Sin este
+// dato, el filtrado por sucursal en cotizaciones.js (perfil "Administrador
+// Sucursal") no puede aplicarse.
+function saveSession({ id, email, fullName, role, sucursalId }) {
   if (id) localStorage.setItem('userId', id); else localStorage.removeItem('userId');
   if (email) localStorage.setItem('userEmail', email); else localStorage.removeItem('userEmail');
   if (fullName) localStorage.setItem('userFullName', fullName); else localStorage.removeItem('userFullName');
+  if (sucursalId) localStorage.setItem('userSucursalId', sucursalId); else localStorage.removeItem('userSucursalId');
   localStorage.setItem('userRole', role);
 }
 
@@ -62,6 +68,7 @@ function clearSession() {
   localStorage.removeItem('userEmail');
   localStorage.removeItem('userFullName');
   localStorage.removeItem('userRole');
+  localStorage.removeItem('userSucursalId');
 }
 
 function logout() {
@@ -74,6 +81,37 @@ function logout() {
    Si no hay sesión, o el rol actual no tiene permiso para esta página,
    redirige y devuelve null. Si todo está bien, devuelve la sesión.
    ----------------------------------------------------------------------- */
+// El perfil real de un usuario (columna `perfil` en la tabla usuarios) puede
+// venir con variantes como "Administrador Nacional" o "Administrador
+// Sucursal" además de "Administrador" a secas (ver perfiles.html). Para el
+// control de acceso por página, cualquier perfil que EMPIECE con
+// "Administrador" se trata como ROLES.ADMIN.
+function esPerfilAdministrador(perfilNombre) {
+  return (perfilNombre || '').trim().toLowerCase().startsWith('administrador');
+}
+
+// -----------------------------------------------------------------------
+// Alcance de visibilidad de datos (usado por cotizaciones.js y cualquier
+// otra pantalla que deba filtrar registros por perfil/sucursal/ejecutivo).
+//   admin_nacional  -> ve todo, sin filtrar
+//   admin_sucursal  -> ve solo lo asociado a su sucursal
+//   colaborador     -> ve lo propio + lo de los asesores que lo tienen
+//                       a él como ejecutivo
+//   asesor          -> ve solo lo propio
+// "Administrador" a secas (sin sufijo) se trata como alcance nacional, por
+// retrocompatibilidad con perfiles ya creados antes de existir la variante
+// "Administrador Sucursal".
+// -----------------------------------------------------------------------
+function getRoleScope(perfilNombre) {
+  const p = (perfilNombre || '').trim().toLowerCase();
+  if (p.startsWith('administrador')) {
+    return p.includes('sucursal') ? 'admin_sucursal' : 'admin_nacional';
+  }
+  if (p === 'colaborador') return 'colaborador';
+  if (p === 'asesor') return 'asesor';
+  return 'asesor'; // fallback más restrictivo ante un perfil no reconocido
+}
+
 function requireAccess(pageName) {
   const session = getSession();
   const allowedRoles = PAGE_PERMISSIONS[pageName] || [];
@@ -83,7 +121,10 @@ function requireAccess(pageName) {
     return null;
   }
 
-  if (!allowedRoles.includes(session.role)) {
+  const tieneAcceso = allowedRoles.includes(session.role)
+    || (esPerfilAdministrador(session.role) && allowedRoles.includes(ROLES.ADMIN));
+
+  if (!tieneAcceso) {
     alert('No tienes permisos para acceder a esta sección con tu perfil actual.');
     window.location.href = session.role === ROLES.VISITANTE ? 'cotizador.html' : 'dashboard.html';
     return null;
@@ -106,7 +147,9 @@ function filterSidebarByRole(sidebarElement, role) {
     // El contenedor a ocultar puede ser un <li> (dentro de un submenú) o el
     // propio wrapper .menu-single (enlaces sueltos como "Dashboard").
     const container = link.closest('li') || link.closest('.menu-single') || link;
-    container.style.display = allowedRoles.includes(role) ? '' : 'none';
+    const puedeVer = allowedRoles.includes(role)
+      || (esPerfilAdministrador(role) && allowedRoles.includes(ROLES.ADMIN));
+    container.style.display = puedeVer ? '' : 'none';
   });
 
   // Si un grupo del menú se quedó sin enlaces visibles, se oculta el grupo completo

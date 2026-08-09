@@ -329,6 +329,45 @@ document.addEventListener('DOMContentLoaded', async () => {
     searchCotizaciones.focus();
   });
 
+  /* =========================================================
+     VISIBILIDAD DE COTIZACIONES SEGÚN PERFIL
+     Requiere que `cotizaciones` tenga la columna `usuario_creador_id`
+     (uuid -> usuarios.id, NULL cuando la crea un Visitante sin sesión) y
+     que auth-guard.js exponga getSession()/getRoleScope() (ver ese archivo
+     para la definición de cada alcance).
+
+       admin_nacional -> todas las cotizaciones, incluidas las de Visitante
+       admin_sucursal -> solo las de usuarios de su misma sucursal
+       colaborador    -> las propias + las de asesores que lo tienen a él
+                         como ejecutivo (usuarios.ejecutivo_id = su id)
+       asesor         -> solo las propias
+     ========================================================= */
+  function buildCotizacionesQuery() {
+    const session = typeof getSession === 'function' ? getSession() : {};
+    const scope = typeof getRoleScope === 'function' ? getRoleScope(session.role) : 'asesor';
+
+    if (scope === 'admin_sucursal') {
+      return supabaseClient
+        .from(TABLE_COTIZACIONES)
+        .select('*, usuarios:usuario_creador_id!inner(sucursal_id)')
+        .eq('usuarios.sucursal_id', session.sucursalId);
+    }
+    if (scope === 'colaborador') {
+      return supabaseClient
+        .from(TABLE_COTIZACIONES)
+        .select('*, usuarios:usuario_creador_id!inner(ejecutivo_id)')
+        .eq('usuarios.ejecutivo_id', session.id);
+    }
+    if (scope === 'asesor') {
+      return supabaseClient
+        .from(TABLE_COTIZACIONES)
+        .select('*')
+        .eq('usuario_creador_id', session.id);
+    }
+    // admin_nacional (o alcance no reconocido): sin filtro, ve todo
+    return supabaseClient.from(TABLE_COTIZACIONES).select('*');
+  }
+
   async function loadCotizaciones() {
     cotizacionesLoading.style.display = 'block';
     cotizacionesEmpty.style.display = 'none';
@@ -342,9 +381,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     try {
-      const { data, error } = await supabaseClient
-        .from(TABLE_COTIZACIONES)
-        .select('*')
+      const { data, error } = await buildCotizacionesQuery()
         .order('fecha_creacion', { ascending: false });
 
       cotizacionesLoading.style.display = 'none';
@@ -355,7 +392,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      allCotizaciones = data || [];
+      // El join embebido `usuarios` solo se usa para filtrar en el servidor;
+      // se descarta para no interferir con el resto del render.
+      allCotizaciones = (data || []).map(({ usuarios, ...c }) => c);
       applyFilterCotizaciones();
     } catch (err) {
       cotizacionesLoading.style.display = 'none';
