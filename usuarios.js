@@ -603,8 +603,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td data-label="Nombres y Apellidos">${escapeHtml(user.full_name)}</td>
-        <td data-label="Correo">${escapeHtml(user.email)}</td>
-        <td data-label="Teléfono">${escapeHtml(user.telefono || '—')}</td>
         <td data-label="Sucursal">${escapeHtml(sucursalNombre)}</td>
         <td data-label="Perfil">${escapeHtml(perfilNombre)}</td>
         <td data-label="Status"><span class="status-pill ${statusClass}">${escapeHtml(user.status || 'Activo')}</span></td>
