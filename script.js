@@ -1008,16 +1008,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     comparisonBar.classList.toggle('is-visible', count > 0);
   }
 
-  // Determina si la regla de maternidad de un plan aplica para el grupo
-  // familiar actualmente cotizado (Titular o Cónyuge mujer dentro del rango
-  // de edad de maternidad configurado en el plan).
+  // Edad mínima fija (regla de negocio) para que un Titular o Cónyuge mujer
+  // pueda optar a la cobertura de Maternidad, sin importar cómo esté
+  // configurado el plan.
+  const EDAD_MINIMA_MATERNIDAD = 18;
+
+  // Determina si la regla de maternidad aplica para el grupo familiar
+  // actualmente cotizado: solo si hay un Titular o Cónyuge MUJER con edad
+  // >= 18 años (regla fija) y, si el plan la define, <= la "Edad Máxima"
+  // configurada en la tarjeta de Maternidad dentro de Tarifas
+  // (tarifa.maternidad.edad_maxima; NO los campos de edad de Maternidad del
+  // Plan, que no son la fuente de esta regla).
   function aplicaMaternidadParaPlan(plan) {
+    const edadMaximaMaternidad = plan._tarifa?.maternidad?.edad_maxima;
     return integrantesActuales.some(miembro => {
       if (miembro.parentesco !== 'Titular' && miembro.parentesco !== 'Cónyuge') return false;
       if (miembro.genero !== 'F') return false;
       const edadNum = getNumericAge(miembro.fechaNacimiento);
-      if (plan.edad_min_maternidad != null && edadNum < plan.edad_min_maternidad) return false;
-      if (plan.edad_max_maternidad != null && edadNum > plan.edad_max_maternidad) return false;
+      if (edadNum < EDAD_MINIMA_MATERNIDAD) return false;
+      if (edadMaximaMaternidad != null && edadNum > edadMaximaMaternidad) return false;
       return true;
     });
   }
