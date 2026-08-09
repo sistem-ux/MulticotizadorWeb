@@ -171,6 +171,60 @@ function setThousandsValue(inputEl, value) {
 }
 
 /* =============================================================
+   FORMATEADOR DE MONTOS CON DECIMALES: separador de miles "." y
+   decimales con ",". Usado en: campos "Prima" (coberturas y
+   maternidad) y Tarifas por rango etario (titular, familiares,
+   hijos por cantidad).
+   ============================================================= */
+function parseDecimalInput(rawStr) {
+  const raw = (rawStr || '').toString();
+  const commaIndex = raw.indexOf(',');
+  const hasComma = commaIndex >= 0;
+  const intPart = digitsOnly(hasComma ? raw.slice(0, commaIndex) : raw);
+  const decPart = digitsOnly(hasComma ? raw.slice(commaIndex + 1) : '').slice(0, 2);
+  return { intPart, decPart, hasComma };
+}
+
+function formatDecimalThousands(rawStr) {
+  const { intPart, decPart, hasComma } = parseDecimalInput(rawStr);
+  const intFormatted = intPart ? Number(intPart).toLocaleString('es-VE') : '';
+  return hasComma ? `${intFormatted},${decPart}` : intFormatted;
+}
+
+function attachDecimalThousandsFormatter(inputEl) {
+  inputEl.setAttribute('inputmode', 'decimal');
+  inputEl.addEventListener('input', () => {
+    const start = inputEl.selectionStart ?? inputEl.value.length;
+    const keepCharsBefore = inputEl.value.slice(0, start).replace(/[^\d,]/g, '').length;
+    const formatted = formatDecimalThousands(inputEl.value);
+    inputEl.value = formatted;
+
+    let count = 0;
+    let pos = formatted.length;
+    for (let i = 0; i < formatted.length; i++) {
+      if (/[\d,]/.test(formatted[i])) count++;
+      if (count === keepCharsBefore) { pos = i + 1; break; }
+    }
+    if (keepCharsBefore === 0) pos = 0;
+    inputEl.setSelectionRange(pos, pos);
+  });
+}
+
+function getDecimalThousandsValue(inputEl) {
+  const raw = (inputEl.value || '').toString();
+  if (!raw) return null;
+  const cleaned = raw.replace(/\./g, '').replace(',', '.');
+  const num = parseFloat(cleaned);
+  return Number.isNaN(num) ? null : num;
+}
+
+function setDecimalThousandsValue(inputEl, value) {
+  if (value === null || value === undefined || value === '') { inputEl.value = ''; return; }
+  const num = Number(value);
+  inputEl.value = Number.isNaN(num) ? '' : num.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/* =============================================================
    HABILITAR / DESHABILITAR CAMPOS SEGÚN UN CHECKBOX
    Patrón repetido en Planes (Gastos por fraccionamiento, Descuento
    en Divisas, Descuento de Contado): casilla destildada -> campo(s)
@@ -1598,7 +1652,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>
         <div class="coverage-card__field cov-prima-field">
           <label>Prima</label>
-          <div class="input-currency"><span class="input-currency__prefix">$</span><input type="number" min="0" step="0.01" class="cov-prima"></div>
+          <div class="input-currency"><span class="input-currency__prefix">$</span><input type="text" inputmode="decimal" class="cov-prima"></div>
         </div>
         <button type="button" class="btn-remove-sum" title="Quitar esta suma">🗑️</button>
       `;
@@ -1606,7 +1660,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       attachThousandsFormatter(sumaInput);
       setThousandsValue(sumaInput, sumaVal);
       const primaInput = row.querySelector('.cov-prima');
-      if (primaVal !== '' && primaVal != null) primaInput.value = primaVal;
+      attachDecimalThousandsFormatter(primaInput);
+      setDecimalThousandsValue(primaInput, primaVal);
       row.querySelector('.btn-remove-sum').addEventListener('click', () => {
         if (sumsContainer.children.length > 1) row.remove();
         applyState();
@@ -1677,9 +1732,32 @@ document.addEventListener('DOMContentLoaded', async () => {
       getData() {
         const sums = Array.from(sumsContainer.children).map((row) => ({
           suma_asegurada: getThousandsValue(row.querySelector('.cov-suma')),
-          prima: row.querySelector('.cov-prima').value !== '' ? Number(row.querySelector('.cov-prima').value) : null,
+          prima: getDecimalThousandsValue(row.querySelector('.cov-prima')),
         })).filter((s) => s.suma_asegurada !== null || s.prima !== null);
         return { estado: estadoSelect.value, servicios: serviciosCheck.checked, sumas: sums };
+      },
+      // Reglas de obligatoriedad:
+      // - Incluido + Servicios desmarcado: Suma Asegurada obligatoria.
+      // - Opcional + Servicios desmarcado: Suma Asegurada y Prima obligatorias.
+      // - Servicios marcado (Incluido u Opcional): sin validación (campos deshabilitados).
+      validate() {
+        const estado = estadoSelect.value;
+        if (estado === 'No contempla' || serviciosCheck.checked) return { valid: true };
+        const isOpcional = estado === 'Opcional';
+        const rows = Array.from(sumsContainer.children);
+        for (const row of rows) {
+          const sumaVal = getThousandsValue(row.querySelector('.cov-suma'));
+          if (sumaVal === null) {
+            return { valid: false, message: `${def.label}: la Suma Asegurada es obligatoria.` };
+          }
+          if (isOpcional) {
+            const primaVal = getDecimalThousandsValue(row.querySelector('.cov-prima'));
+            if (primaVal === null) {
+              return { valid: false, message: `${def.label}: la Prima es obligatoria.` };
+            }
+          }
+        }
+        return { valid: true };
       },
     };
   }
@@ -1725,7 +1803,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>
         <div class="coverage-card__field mat-prima-field">
           <label>Prima</label>
-          <div class="input-currency"><span class="input-currency__prefix">$</span><input type="number" min="0" step="0.01" class="mat-prima"></div>
+          <div class="input-currency"><span class="input-currency__prefix">$</span><input type="text" inputmode="decimal" class="mat-prima"></div>
         </div>
         <button type="button" class="btn-remove-sum" title="Quitar esta suma">🗑️</button>
       `;
@@ -1733,7 +1811,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       attachThousandsFormatter(sumaInput);
       setThousandsValue(sumaInput, sumaVal);
       const primaInput = row.querySelector('.mat-prima');
-      if (primaVal !== '' && primaVal != null) primaInput.value = primaVal;
+      attachDecimalThousandsFormatter(primaInput);
+      setDecimalThousandsValue(primaInput, primaVal);
       row.querySelector('.btn-remove-sum').addEventListener('click', () => {
         if (sumsContainer.children.length > 1) row.remove();
         applyState();
@@ -1797,7 +1876,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       getData() {
         const sums = Array.from(sumsContainer.children).map((row) => ({
           suma_asegurada: getThousandsValue(row.querySelector('.mat-suma')),
-          prima: row.querySelector('.mat-prima').value !== '' ? Number(row.querySelector('.mat-prima').value) : null,
+          prima: getDecimalThousandsValue(row.querySelector('.mat-prima')),
         })).filter((s) => s.suma_asegurada !== null || s.prima !== null);
         return {
           estado: estadoSelect.value,
@@ -1865,10 +1944,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         item.className = 'age-range-item';
         item.innerHTML = `
           <label>${r.key} años</label>
-          <div class="input-currency"><span class="input-currency__prefix">$</span><input type="number" min="0" step="0.01" data-range="${r.key}"></div>
+          <div class="input-currency"><span class="input-currency__prefix">$</span><input type="text" inputmode="decimal" data-range="${r.key}"></div>
         `;
         grid.appendChild(item);
-        tarifaRangeInputs[storeKey][r.key] = item.querySelector('input');
+        const rangeInput = item.querySelector('input');
+        attachDecimalThousandsFormatter(rangeInput);
+        tarifaRangeInputs[storeKey][r.key] = rangeInput;
       });
       tarifaRangosContainer.appendChild(grid);
     }
@@ -1892,10 +1973,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         item.className = 'age-range-item';
         item.innerHTML = `
           <label>${label}</label>
-          <div class="input-currency"><span class="input-currency__prefix">$</span><input type="number" min="0" step="0.01" data-hijos-cantidad="${key}"></div>
+          <div class="input-currency"><span class="input-currency__prefix">$</span><input type="text" inputmode="decimal" data-hijos-cantidad="${key}"></div>
         `;
         grid.appendChild(item);
-        tarifaRangeInputs.hijosCantidad[key] = item.querySelector('input');
+        const hijosInput = item.querySelector('input');
+        attachDecimalThousandsFormatter(hijosInput);
+        tarifaRangeInputs.hijosCantidad[key] = hijosInput;
       });
       tarifaRangosContainer.appendChild(grid);
     }
@@ -1903,13 +1986,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function setTarifaRangosData(titularData = {}, familiaresData = {}, hijosCantidadData = {}) {
     Object.entries(tarifaRangeInputs.titular).forEach(([key, input]) => {
-      if (titularData && titularData[key] != null) input.value = titularData[key];
+      setDecimalThousandsValue(input, titularData && titularData[key] != null ? titularData[key] : '');
     });
     Object.entries(tarifaRangeInputs.familiares).forEach(([key, input]) => {
-      if (familiaresData && familiaresData[key] != null) input.value = familiaresData[key];
+      setDecimalThousandsValue(input, familiaresData && familiaresData[key] != null ? familiaresData[key] : '');
     });
     Object.entries(tarifaRangeInputs.hijosCantidad).forEach(([key, input]) => {
-      if (hijosCantidadData && hijosCantidadData[key] != null) input.value = hijosCantidadData[key];
+      setDecimalThousandsValue(input, hijosCantidadData && hijosCantidadData[key] != null ? hijosCantidadData[key] : '');
     });
   }
 
@@ -1918,15 +2001,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     const familiares = {};
     const hijosCantidad = {};
     Object.entries(tarifaRangeInputs.titular).forEach(([key, input]) => {
-      if (input.value !== '') titular[key] = Number(input.value);
+      const val = getDecimalThousandsValue(input);
+      if (val !== null) titular[key] = val;
     });
     Object.entries(tarifaRangeInputs.familiares).forEach(([key, input]) => {
-      if (input.value !== '') familiares[key] = Number(input.value);
+      const val = getDecimalThousandsValue(input);
+      if (val !== null) familiares[key] = val;
     });
     Object.entries(tarifaRangeInputs.hijosCantidad).forEach(([key, input]) => {
-      if (input.value !== '') hijosCantidad[key] = Number(input.value);
+      const val = getDecimalThousandsValue(input);
+      if (val !== null) hijosCantidad[key] = val;
     });
     return { titular, familiares, hijosCantidad };
+  }
+
+  // Todos los campos de tarifas por rango etario (titular, familiares e
+  // hijos por cantidad, cuando aplique) son obligatorios.
+  function validateTarifaRangos() {
+    const allInputs = [
+      ...Object.values(tarifaRangeInputs.titular),
+      ...Object.values(tarifaRangeInputs.familiares),
+      ...Object.values(tarifaRangeInputs.hijosCantidad),
+    ];
+    return allInputs.every((input) => getDecimalThousandsValue(input) !== null);
   }
 
   function resetTarifaCoverageControls() {
@@ -2036,6 +2133,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       showFeedback('tarifaFormFeedback', 'No se pudo determinar el plan de esta tarifa.', 'error');
       return;
     }
+
+    for (const def of COVERAGE_LIST) {
+      const result = tarifaCoverageControls[def.key].validate();
+      if (!result.valid) {
+        showFeedback('tarifaFormFeedback', result.message, 'error');
+        return;
+      }
+    }
+
+    if (!validateTarifaRangos()) {
+      showFeedback('tarifaFormFeedback', 'Todos los campos de Tarifas por rango etario son obligatorios.', 'error');
+      return;
+    }
+
     if (!supabaseClient) {
       showFeedback('tarifaFormFeedback', 'No se pudo conectar con Supabase.', 'error');
       return;
