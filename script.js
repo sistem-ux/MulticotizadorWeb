@@ -770,7 +770,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       // relación y se agrega logo_url para el encabezado del PDF. Revisa
       // esta consulta cuando termines de conectar el motor de cotización
       // completo al esquema actual (tarifas, planes, etc.).
-      supabaseClient.from(TABLE_PLANES).select('*, aseguradora(nombre, logo_url), producto(nombre)').eq('status', 'Activo'),
+      supabaseClient.from(TABLE_PLANES).select('*, aseguradora:aseguradoras(nombre, logo_url), producto(nombre)').eq('status', 'Activo'),
       supabaseClient.from(TABLE_TARIFAS).select('*').eq('status', 'Actualizada'),
     ]);
 
