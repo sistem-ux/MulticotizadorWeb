@@ -99,7 +99,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const comparisonPrintHeader = document.getElementById('comparisonPrintHeader');
   const exportComparisonBtn = document.getElementById('exportComparisonBtn');
 
-  const MAX_PLANES_COMPARACION = 5;
+  const MAX_PLANES_COMPARACION = 4;
 
   let childCount = 0;
   let currentSelectedPlanId = null; // Para saber a qué plan le estamos agregando adicionales
@@ -1214,14 +1214,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>
         <div class="print-header__main">
           <p class="print-header__title">Cotización Salud Individual</p>
-          ${contactoPartes ? `<p class="print-header__asesor-contacto">${escapeHtmlLocal(contactoPartes)}</p>` : ''}
           <p class="print-header__fecha">Fecha de la cotización: ${fechaHoy}</p>
         </div>
       </div>
       <div class="print-header__rows">
         <div class="print-info-row">
           <span><strong>Solicitante:</strong> ${escapeHtmlLocal(nombreSolicitante)}</span>
-          <span><strong>Asesor:</strong> ${escapeHtmlLocal(nombreAsesor)}</span>
+          <span><strong>Asesor:</strong> ${escapeHtmlLocal(nombreAsesor)} // ${escapeHtmlLocal(contactoPartes)}</span>
         </div>
         <div class="print-tarifa-row">
           <span class="print-tarifa-badge">Tarifa: ${escapeHtmlLocal(tarifaTipoActual || 'Emisión')}</span>
@@ -1268,9 +1267,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const filasDefinicion = [
       { label: 'Producto', get: (p) => p.producto_nombre || '—', rowClass: 'row-shaded' },
       { label: 'Suma Asegurada', get: (p) => `$${formatCurrencyThousands(p.suma_asegurada)}`, cellClass: 'comparison-suma-asegurada' },
-      { section: 'Total Estimado a Pagar Anual' },
-      { label: 'Total Cobertura Básica', get: (p) => `$${formatMoney(cotizaciones.get(p.id).basica)}` },
-      { label: 'Total Cob. Adicionales', get: (p) => `$${formatMoney(cotizaciones.get(p.id).adicionales)}`, rowClass: 'row-shaded' },
+      
       {
         label: 'Detalle Adicionales', rowClass: 'row-shaded', cellClass: 'comparison-detalle-adicionales', get: (p) => {
           const seleccionados = coberturasSeleccionadasPorPlan[p.id] || [];
@@ -1279,6 +1276,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             : 'Ninguno';
         },
       },
+      
+      { section: 'Total Estimado a Pagar Anual' },
+      { label: 'Total Cobertura Básica', get: (p) => `$${formatMoney(cotizaciones.get(p.id).basica)}` },
+      { label: 'Total Cob. Adicionales', get: (p) => `$${formatMoney(cotizaciones.get(p.id).adicionales)}`, rowClass: 'row-shaded' },
+
       { label: 'Maternidad', get: (p) => `$${formatMoney(cotizaciones.get(p.id).maternidad)}` },
       {
         label: 'Total Anual', rowClass: 'comparison-total-anual-row', get: (p) => `$${formatMoney(cotizaciones.get(p.id).totalAnual)}`,
