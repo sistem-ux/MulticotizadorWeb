@@ -7,6 +7,7 @@ const SUPABASE_URL = 'https://cibtpkpxdrykozujaqba.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_zlp4_HGpTeAQKW55c_pZQA_2HEXRpaC';
 const TABLE_PLANES = 'planes';
 const TABLE_TARIFAS = 'tarifas';
+const TABLE_USUARIOS = 'usuarios';
 
 /* Debe coincidir con las 9 coberturas fijas definidas en aseguradoras.js
    (COVERAGE_LIST), ya que las tarifas se guardan en la BD con estas mismas
@@ -21,6 +22,24 @@ const COVERAGE_LIST = [
   { key: 'dermatologia', label: 'Dermatología' },
   { key: 'psicologia', label: 'Psicología' },
   { key: 'servicios_adicionales', label: 'Servicios Adicionales' },
+];
+
+/* Mismo catálogo de rangos etarios usado en aseguradoras.js (Tarifas por
+   rango etario), necesario aquí para ubicar la tarifa que corresponde a
+   la edad de cada integrante. */
+const AGE_RANGES = [
+  { key: '00-09', min: 0, max: 9 }, { key: '10-15', min: 10, max: 15 }, { key: '16-17', min: 16, max: 17 },
+  { key: '18-18', min: 18, max: 18 }, { key: '19-19', min: 19, max: 19 }, { key: '20-24', min: 20, max: 24 },
+  { key: '25-29', min: 25, max: 29 }, { key: '30-30', min: 30, max: 30 }, { key: '31-34', min: 31, max: 34 },
+  { key: '35-35', min: 35, max: 35 }, { key: '36-39', min: 36, max: 39 }, { key: '40-40', min: 40, max: 40 },
+  { key: '41-44', min: 41, max: 44 }, { key: '45-45', min: 45, max: 45 }, { key: '46-49', min: 46, max: 49 },
+  { key: '50-50', min: 50, max: 50 }, { key: '51-54', min: 51, max: 54 }, { key: '55-55', min: 55, max: 55 },
+  { key: '56-59', min: 56, max: 59 }, { key: '60-60', min: 60, max: 60 }, { key: '61-64', min: 61, max: 64 },
+  { key: '65-65', min: 65, max: 65 }, { key: '66-69', min: 66, max: 69 }, { key: '70-70', min: 70, max: 70 },
+  { key: '71-74', min: 71, max: 74 }, { key: '75-75', min: 75, max: 75 }, { key: '76-79', min: 76, max: 79 },
+  { key: '80-80', min: 80, max: 80 }, { key: '81-84', min: 81, max: 84 }, { key: '85-85', min: 85, max: 85 },
+  { key: '86-89', min: 86, max: 89 }, { key: '90-90', min: 90, max: 90 }, { key: '91-94', min: 91, max: 94 },
+  { key: '95-95', min: 95, max: 95 }, { key: '96-99', min: 96, max: 99 },
 ];
 
 let supabaseClient = null;
@@ -46,6 +65,9 @@ document.addEventListener('DOMContentLoaded', async () => {
      REFERENCIAS DEL DOM
      ========================================================= */
   const applicantNameInput = document.getElementById('applicantName');
+  const elaboradoPorInput = document.getElementById('elaboradoPorInput');
+  const elaboradoPorSelect = document.getElementById('elaboradoPorSelect');
+  const elaboradoPorHint = document.getElementById('elaboradoPorHint');
   const tableBody = document.getElementById('familyTableBody');
   const rowTemplate = document.getElementById('rowTemplate');
   const addChildBtn = document.getElementById('addChildBtn');
@@ -76,6 +98,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let planSelectionOrder = []; // IDs de los planes marcados para comparar, en orden de selección
   let planesDisponiblesActuales = []; // Últimos planes traídos de Supabase (sin filtrar por aseguradora)
   let integrantesActuales = []; // Últimos integrantes usados para calcular la cotización
+  let elaboradoPorActual = ''; // Nombre final de "Elaborado por" usado en la última cotización
   let activeInsurerFilters = new Set(); // Nombres de aseguradoras activas en el filtro
   const coberturasSeleccionadasPorPlan = {}; // { [planId]: string[] } — persiste al re-renderizar tarjetas (filtro, etc.)
   let isFamilyLocked = false;
@@ -116,6 +139,126 @@ document.addEventListener('DOMContentLoaded', async () => {
     input.setSelectionRange(cursorPos + diff, cursorPos + diff);
     validateApplicantName();
   });
+
+  /* =========================================================
+     1.1 "ELABORADO POR" — según el perfil de la sesión
+     (getSession() la expone auth-guard.js, cargado antes que este script)
+     - Visitante: escribe el nombre manualmente (mismo formato "tipo oración").
+     - Asesor: nombre de la sesión, fijo y deshabilitado.
+     - Colaborador / Administrador: por defecto el usuario de la sesión,
+       pero puede elegir cualquier otro usuario activo registrado.
+     ========================================================= */
+  function validateElaboradoPor() {
+    const session = getSession();
+    if (session.role === 'Administrador' || session.role === 'Colaborador') {
+      const isValid = !!elaboradoPorSelect.value;
+      elaboradoPorSelect.classList.toggle('has-error', !isValid);
+      elaboradoPorSelect.setAttribute('aria-invalid', isValid ? 'false' : 'true');
+      return isValid;
+    }
+    if (session.role === 'Asesor') return true; // valor fijo, siempre viene de la sesión
+
+    // Visitante: mismo criterio que el nombre del solicitante (mínimo 3 letras)
+    const value = elaboradoPorInput.value.trim();
+    const lettersCount = value.replace(/[^a-záéíóúñü]/gi, '').length;
+    const isValid = lettersCount >= 3;
+    elaboradoPorInput.classList.toggle('has-error', !isValid);
+    elaboradoPorInput.setAttribute('aria-invalid', isValid ? 'false' : 'true');
+    return isValid;
+  }
+
+  function getElaboradoPorValue() {
+    const session = getSession();
+    if (session.role === 'Administrador' || session.role === 'Colaborador') {
+      return elaboradoPorSelect.value;
+    }
+    return elaboradoPorInput.value.trim();
+  }
+
+  async function populateElaboradoPorSelect(session) {
+    elaboradoPorSelect.innerHTML = '<option value="">Selecciona un usuario</option>';
+    if (!supabaseClient) return;
+
+    try {
+      const { data, error } = await supabaseClient
+        .from(TABLE_USUARIOS)
+        .select('id, full_name, status')
+        .eq('status', 'Activo')
+        .order('full_name', { ascending: true });
+
+      if (error) {
+        console.error('No se pudo cargar la lista de usuarios:', getErrorMessage(error));
+        return;
+      }
+
+      const nombres = (data || []).map((u) => u.full_name).filter(Boolean);
+
+      // Si el usuario de la sesión no aparece entre los usuarios activos
+      // (caso borde), se agrega igual como opción para no perder el valor
+      // por defecto.
+      const currentName = session.fullName;
+      if (currentName && !nombres.includes(currentName)) nombres.unshift(currentName);
+
+      nombres.forEach((nombre) => {
+        const opt = document.createElement('option');
+        opt.value = nombre;
+        opt.textContent = nombre;
+        elaboradoPorSelect.appendChild(opt);
+      });
+
+      if (currentName && nombres.includes(currentName)) {
+        elaboradoPorSelect.value = currentName;
+      }
+    } catch (err) {
+      console.error('No se pudo conectar con Supabase (usuarios):', getErrorMessage(err));
+    }
+  }
+
+  async function setupElaboradoPor() {
+    const session = getSession();
+    const role = session.role;
+
+    if (role === 'Visitante') {
+      elaboradoPorInput.style.display = '';
+      elaboradoPorSelect.style.display = 'none';
+      elaboradoPorInput.disabled = false;
+      elaboradoPorInput.value = '';
+      elaboradoPorHint.textContent = 'Escribe el nombre de quien elabora la cotización.';
+    } else if (role === 'Asesor') {
+      elaboradoPorInput.style.display = '';
+      elaboradoPorSelect.style.display = 'none';
+      elaboradoPorInput.disabled = true;
+      elaboradoPorInput.value = session.fullName || session.email || '';
+      elaboradoPorHint.textContent = 'Se usa el nombre de tu usuario registrado.';
+    } else {
+      // Administrador o Colaborador
+      elaboradoPorInput.style.display = 'none';
+      elaboradoPorSelect.style.display = '';
+      elaboradoPorSelect.disabled = false;
+      elaboradoPorHint.textContent = 'Por defecto se usa tu nombre; puedes seleccionar otro usuario registrado.';
+      await populateElaboradoPorSelect(session);
+    }
+  }
+
+  elaboradoPorInput.addEventListener('input', (e) => {
+    // Solo tiene efecto cuando el campo está habilitado (perfil Visitante);
+    // para Asesor el campo está deshabilitado y no dispara "input".
+    const input = e.target;
+    const cursorPos = input.selectionStart;
+    const originalLength = input.value.length;
+
+    const formatted = toTitleCaseLive(input.value);
+    input.value = formatted;
+
+    const newLength = formatted.length;
+    const diff = newLength - originalLength;
+    input.setSelectionRange(cursorPos + diff, cursorPos + diff);
+    validateElaboradoPor();
+  });
+
+  elaboradoPorSelect.addEventListener('change', validateElaboradoPor);
+
+  await setupElaboradoPor();
 
   /* =========================================================
      2. UTILIDADES DE FECHA / EDAD
@@ -232,6 +375,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function setFamilyFormLocked(locked) {
     isFamilyLocked = locked;
+
+    // El campo "Elaborado por" se bloquea junto con el resto del formulario
+    // (para Asesor ya viene deshabilitado siempre, así que no hay cambio).
+    const session = getSession();
+    if (session.role === 'Administrador' || session.role === 'Colaborador') {
+      elaboradoPorSelect.disabled = locked;
+    } else if (session.role === 'Visitante') {
+      elaboradoPorInput.disabled = locked;
+    }
+
     const rows = Array.from(tableBody.querySelectorAll('.family-row'));
 
     rows.forEach((row) => {
@@ -444,11 +597,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     coveragesModal.classList.remove('active');
   });
 
-  // Guardar adicionales (incluyendo suma) y mostrarlos en el plan correspondiente
+  // Guardar adicionales (incluyendo suma y prima) y mostrarlos en el plan
+  // correspondiente. Se guarda el objeto completo (no solo el texto) para
+  // que el motor de cálculo pueda sumar las primas reales.
   saveCoveragesBtn.addEventListener('click', () => {
     const rows = modalCoveragesBody.querySelectorAll('div[style*="display: flex"]');
     const seleccionados = [];
     let validacionExitosa = true;
+    const plan = planesDisponiblesActuales.find((p) => p.id === currentSelectedPlanId);
 
     // Usamos un bucle for tradicional para poder detener la ejecución si falta una suma
     for (let i = 0; i < rows.length; i++) {
@@ -459,14 +615,25 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (chk && chk.checked) {
         // VALIDACIÓN: Si el checkbox está marcado, el select NO puede estar vacío
         if (!sel || !sel.value) {
-          alert(`Por favor selecciona una suma asegurada para la cobertura: ${chk.value}`);
+          const nombreCobertura = row.querySelector('span')?.textContent.trim() || 'la cobertura';
+          alert(`Por favor selecciona una suma asegurada para la cobertura: ${nombreCobertura}`);
           validacionExitosa = false;
           break; // Detenemos el bucle
         }
-        
-        // Si tiene valor, lo agregamos al arreglo
-        const sumaTexto = ` (${sel.value})`;
-        seleccionados.push(`${chk.value}${sumaTexto}`);
+
+        const index = Number(chk.dataset.index);
+        const adicional = plan?.coberturasAdicionales?.[index];
+        if (!adicional) continue;
+        const sumaValue = Number(sel.value);
+        const sumaObj = adicional.sumas.find((s) => Number(s.suma_asegurada) === sumaValue);
+
+        seleccionados.push({
+          key: adicional.key,
+          nombre: adicional.nombre,
+          sumaAsegurada: sumaValue,
+          prima: sumaObj ? Number(sumaObj.prima) : 0,
+          isMaternidad: !!adicional.isMaternidad,
+        });
       }
     }
 
@@ -493,7 +660,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const seleccionados = coberturasSeleccionadasPorPlan[planId] || [];
     if (seleccionados.length > 0) {
       targetDiv.style.display = 'block';
-      targetDiv.textContent = `Adicionales: ${seleccionados.join(', ')}`;
+      targetDiv.textContent = `Adicionales: ${seleccionados.map((s) => `${s.nombre} ($${formatCurrencyThousands(s.sumaAsegurada)})`).join(', ')}`;
     } else {
       targetDiv.style.display = 'none';
       targetDiv.textContent = '';
@@ -530,20 +697,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     COVERAGE_LIST.forEach((def) => {
       const cov = tarifa.coberturas ? tarifa.coberturas[def.key] : null;
       if (!cov || cov.estado !== 'Opcional') return;
-      const sumas = (cov.sumas || [])
-        .map((s) => (s.suma_asegurada != null ? `$${formatCurrencyThousands(s.suma_asegurada)}` : null))
-        .filter(Boolean);
+      const sumas = (cov.sumas || []).filter((s) => s.suma_asegurada != null && s.prima != null);
       if (!sumas.length) return;
-      adicionales.push({ nombre: def.label, sumas });
+      adicionales.push({ key: def.key, nombre: def.label, sumas, isMaternidad: false });
     });
 
+    // La Maternidad se mantiene disponible en el mismo modal de "+ Adicionales"
+    // (misma interacción para el usuario), pero se marca con isMaternidad para
+    // que el motor de cálculo la sume aparte y nunca dentro de "Coberturas
+    // Adicionales".
     const mat = tarifa.maternidad;
     if (mat && mat.estado === 'Opcional') {
-      const sumas = (mat.sumas || [])
-        .map((s) => (s.suma_asegurada != null ? `$${formatCurrencyThousands(s.suma_asegurada)}` : null))
-        .filter(Boolean);
+      const sumas = (mat.sumas || []).filter((s) => s.suma_asegurada != null && s.prima != null);
       if (sumas.length) {
-        adicionales.push({ nombre: 'Maternidad', sumas });
+        adicionales.push({ key: 'maternidad', nombre: 'Maternidad', sumas, isMaternidad: true });
       }
     }
 
@@ -560,7 +727,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const [planesRes, tarifasRes] = await Promise.all([
-      supabaseClient.from(TABLE_PLANES).select('*, aseguradoras(nombre)').eq('status', 'Activo'),
+      supabaseClient.from(TABLE_PLANES).select('*, aseguradoras(nombre), productos(nombre)').eq('status', 'Activo'),
       supabaseClient.from(TABLE_TARIFAS).select('*').eq('status', 'Actualizada'),
     ]);
 
@@ -578,6 +745,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           _tarifa: tarifa,
           coberturasAdicionales: buildCoberturasAdicionales(tarifa),
           aseguradora_nombre: plan.aseguradoras?.nombre || 'Sin aseguradora',
+          producto_nombre: plan.productos?.nombre || 'Sin producto',
         };
       });
 
@@ -774,22 +942,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentSelectedPlanId = plan.id;
         modalCoveragesBody.innerHTML = ''; // Limpiar modal anterior
 
-        const divTextoActual = document.getElementById(`selected_cov_text_${plan.id}`);
-        const textoActual = divTextoActual.textContent;
         const aplicaMaternidad = aplicaMaternidadParaPlan(plan);
+        const seleccionActualPlan = coberturasSeleccionadasPorPlan[plan.id] || [];
 
         plan.coberturasAdicionales.forEach((adicional, index) => {
           let disabled = '';
           let tachado = '';
 
-          if (adicional.nombre === 'Maternidad' && !aplicaMaternidad) {
+          if (adicional.isMaternidad && !aplicaMaternidad) {
             disabled = 'disabled';
             tachado = 'style="color:#A6A9B0; text-decoration:line-through;"';
           }
 
-          // Verificar si ya estaba seleccionado previamente en el texto del plan
-          const yaSeleccionado = textoActual.includes(adicional.nombre);
-          const isChecked = yaSeleccionado ? 'checked' : '';
+          // Verificar si ya estaba seleccionado previamente (estado persistente)
+          const seleccionPrevia = seleccionActualPlan.find((s) => s.key === adicional.key);
+          const isChecked = seleccionPrevia ? 'checked' : '';
 
           // Contenedor por cada adicional (Fila: Checkbox + Nombre + Select de Suma)
           const itemRow = document.createElement('div');
@@ -797,12 +964,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
           itemRow.innerHTML = `
             <div ${tachado} style="display:flex; align-items:center; gap:8px; cursor:pointer; flex: 1;">
-              <input type="checkbox" class="modal-cov-checkbox" value="${adicional.nombre}" data-index="${index}" ${disabled} ${isChecked}>
+              <input type="checkbox" class="modal-cov-checkbox" data-key="${adicional.key}" data-index="${index}" ${disabled} ${isChecked}>
               <span style="font-size: 14px;">${adicional.nombre} ${disabled ? '(No aplica)' : ''}</span>
             </div>
             <select class="text-input modal-cov-sum" data-index="${index}" style="width: 130px; padding: 4px 8px; font-size: 13px;" ${!isChecked || disabled ? 'disabled' : ''}>
               <option value="">Suma...</option>
-              ${adicional.sumas.map(suma => `<option value="${suma}" ${textoActual.includes(`${adicional.nombre} (${suma})`) ? 'selected' : ''}>${suma}</option>`).join('')}
+              ${adicional.sumas.map(s => `<option value="${s.suma_asegurada}" ${seleccionPrevia && Number(seleccionPrevia.sumaAsegurada) === Number(s.suma_asegurada) ? 'selected' : ''}>$${formatCurrencyThousands(s.suma_asegurada)}</option>`).join('')}
             </select>
           `;
 
@@ -828,7 +995,126 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   /* =========================================================
-     5.3 RESUMEN COMPARATIVO Y EXPORTACIÓN A PDF
+     5.3 MOTOR DE CÁLCULO DE COTIZACIÓN
+     (Cobertura Básica, Coberturas Adicionales, Maternidad, Total Anual
+     y Fraccionamiento — mismos campos que se mostrarán en el PDF final)
+     ========================================================= */
+
+  // Formatea un monto con 2 decimales fijos (a diferencia de
+  // formatCurrencyThousands, que se usa para montos enteros como Suma
+  // Asegurada). Se usa en todos los resultados del motor de cálculo.
+  function formatMoney(value) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return '0,00';
+    return num.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  // Ubica, dentro de un objeto de tarifas por rango etario (jsonb con
+  // claves tipo "20-24"), el valor que corresponde a una edad puntual.
+  function tarifaPorEdad(tarifasPorRango, edad) {
+    if (!tarifasPorRango || edad == null || edad < 0) return 0;
+    const rango = AGE_RANGES.find((r) => edad >= r.min && edad <= r.max);
+    if (!rango) return 0;
+    const valor = tarifasPorRango[rango.key];
+    return valor != null ? Number(valor) : 0;
+  }
+
+  // Cobertura Básica: suma de la tarifa por edad de cada integrante
+  // incluido (Titular y Familiares por rango etario). Los hijos se tratan
+  // según el modo configurado en el plan:
+  //  - "Por hijo": cada hijo se tarifica individualmente por su edad,
+  //    igual que el resto de familiares.
+  //  - "Por cantidad de hijos": se usa un monto fijo según el total de
+  //    hijos incluidos (tarifas_hijos_cantidad: claves "1","2","3","4+").
+  function calcularCoberturaBasica(plan, integrantes) {
+    const tarifa = plan._tarifa;
+    if (!tarifa) return 0;
+
+    let total = 0;
+    const hijosIncluidos = [];
+
+    integrantes.forEach((miembro) => {
+      const edad = getNumericAge(miembro.fechaNacimiento);
+      const esHijo = (miembro.parentesco || '').startsWith('Hijo ');
+
+      if (miembro.parentesco === 'Titular') {
+        total += tarifaPorEdad(tarifa.tarifas_titular, edad);
+      } else if (esHijo && plan.modo_tarifa_hijos === 'Por cantidad de hijos') {
+        hijosIncluidos.push(miembro);
+      } else {
+        // Cónyuge, Madre, Padre, o Hijos en modo "Por hijo"
+        total += tarifaPorEdad(tarifa.tarifas_familiares, edad);
+      }
+    });
+
+    if (plan.modo_tarifa_hijos === 'Por cantidad de hijos' && hijosIncluidos.length > 0) {
+      const clave = hijosIncluidos.length >= 4 ? '4+' : String(hijosIncluidos.length);
+      const tabla = tarifa.tarifas_hijos_cantidad || {};
+      total += Number(tabla[clave] || 0);
+    }
+
+    return total;
+  }
+
+  // Suma de todas las coberturas adicionales seleccionadas por el usuario
+  // (excluye Maternidad, que se calcula aparte), cada una multiplicada por
+  // el total de integrantes incluidos en la cotización.
+  function calcularCoberturasAdicionales(planId, totalIntegrantes) {
+    const seleccionados = coberturasSeleccionadasPorPlan[planId] || [];
+    return seleccionados
+      .filter((s) => !s.isMaternidad)
+      .reduce((acc, s) => acc + (Number(s.prima) || 0) * totalIntegrantes, 0);
+  }
+
+  // Prima de Maternidad: solo aplica si el plan la contempla y el grupo
+  // familiar es elegible (Titular o Cónyuge mujer dentro del rango de edad
+  // de maternidad del plan). Si está "Incluida" no genera costo adicional
+  // (ya forma parte de la Cobertura Básica); si es "Opcional" solo cuenta
+  // si el usuario la seleccionó explícitamente en "+ Adicionales".
+  function calcularMaternidad(plan, planId) {
+    const tarifa = plan._tarifa;
+    const mat = tarifa ? tarifa.maternidad : null;
+    if (!mat || mat.estado === 'No contempla') return 0;
+    if (!aplicaMaternidadParaPlan(plan)) return 0;
+    if (mat.estado === 'Incluido') return 0;
+
+    const seleccionados = coberturasSeleccionadasPorPlan[planId] || [];
+    const seleccion = seleccionados.find((s) => s.isMaternidad);
+    return seleccion ? (Number(seleccion.prima) || 0) : 0;
+  }
+
+  // Arma el desglose completo de la cotización para un plan: Cobertura
+  // Básica, Coberturas Adicionales, Maternidad, Total Anual y
+  // Fraccionamiento (según las frecuencias de pago habilitadas en el plan).
+  function calcularCotizacionPlan(plan) {
+    const integrantes = integrantesActuales;
+    const totalIntegrantes = integrantes.length;
+
+    const basica = calcularCoberturaBasica(plan, integrantes);
+    const adicionales = calcularCoberturasAdicionales(plan.id, totalIntegrantes);
+    const maternidad = calcularMaternidad(plan, plan.id);
+    const totalAnual = basica + adicionales + maternidad;
+
+    const fraccionamiento = {
+      semestral: plan.fraccionamiento_semestral ? totalAnual / 2 : null,
+      trimestral: plan.fraccionamiento_trimestral ? totalAnual / 4 : null,
+      mensual: plan.fraccionamiento_mensual ? totalAnual / (plan.fraccionamiento_mensual_fracciones || 12) : null,
+      mensualFracciones: plan.fraccionamiento_mensual_fracciones || 12,
+      gastoAdmin: plan.gastos_fraccionamiento_activo ? Number(plan.gastos_fraccionamiento_monto || 0) : 0,
+    };
+
+    return {
+      basica,
+      adicionales,
+      maternidad,
+      totalBasicaMasAdicionales: basica + adicionales,
+      totalAnual,
+      fraccionamiento,
+    };
+  }
+
+  /* =========================================================
+     5.4 RESUMEN COMPARATIVO Y EXPORTACIÓN A PDF
      ========================================================= */
 
   function renderComparisonModal() {
@@ -843,14 +1129,49 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
+    // Se calcula una sola vez por plan y se reutiliza en todas las filas de dinero.
+    const cotizaciones = new Map(planesSeleccionados.map((p) => [p.id, calcularCotizacionPlan(p)]));
+
     const filasDefinicion = [
       { label: 'Aseguradora', get: (p) => p.aseguradora_nombre || 'Sin aseguradora' },
       { label: 'Plan', get: (p) => p.nombre_plan },
+      { label: 'Producto', get: (p) => p.producto_nombre || '—' },
       { label: 'Suma Asegurada', get: (p) => `$${formatCurrencyThousands(p.suma_asegurada)}` },
       {
-        label: 'Adicionales', get: (p) => {
+        label: 'Detalle Adicionales', get: (p) => {
           const seleccionados = coberturasSeleccionadasPorPlan[p.id] || [];
-          return seleccionados.length > 0 ? seleccionados.join(', ') : 'Ninguno';
+          return seleccionados.length > 0
+            ? seleccionados.map((s) => `${s.nombre} ($${formatCurrencyThousands(s.sumaAsegurada)})`).join(', ')
+            : 'Ninguno';
+        },
+      },
+      { label: 'Total Cobertura Básica', get: (p) => `$${formatMoney(cotizaciones.get(p.id).basica)}` },
+      { label: 'Total Cob. Adicionales', get: (p) => `$${formatMoney(cotizaciones.get(p.id).adicionales)}` },
+      { label: 'Maternidad', get: (p) => `$${formatMoney(cotizaciones.get(p.id).maternidad)}` },
+      { label: 'Tot. Básica + Adicionales', get: (p) => `$${formatMoney(cotizaciones.get(p.id).totalBasicaMasAdicionales)}` },
+      { label: 'Total Estimado a Pagar Anual', get: (p) => `$${formatMoney(cotizaciones.get(p.id).totalAnual)}` },
+      {
+        label: 'Gasto Admin. por Fraccionamiento', get: (p) => {
+          const g = cotizaciones.get(p.id).fraccionamiento.gastoAdmin;
+          return g ? `$${formatMoney(g)}` : '—';
+        },
+      },
+      {
+        label: 'Semestral', get: (p) => {
+          const v = cotizaciones.get(p.id).fraccionamiento.semestral;
+          return v != null ? `$${formatMoney(v)}` : '—';
+        },
+      },
+      {
+        label: 'Trimestral', get: (p) => {
+          const v = cotizaciones.get(p.id).fraccionamiento.trimestral;
+          return v != null ? `$${formatMoney(v)}` : '—';
+        },
+      },
+      {
+        label: 'Mensual', get: (p) => {
+          const f = cotizaciones.get(p.id).fraccionamiento;
+          return f.mensual != null ? `$${formatMoney(f.mensual)} (${f.mensualFracciones} cuotas)` : '—';
         },
       },
     ];
@@ -897,10 +1218,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
+    if (!validateElaboradoPor()) {
+      const session = getSession();
+      const target = (session.role === 'Administrador' || session.role === 'Colaborador') ? elaboradoPorSelect : elaboradoPorInput;
+      target.focus();
+      window.alert('Indica quién elabora la cotización.');
+      return;
+    }
+
     if (!validateFamilyForm()) {
       window.alert('Completa las fechas y géneros obligatorios de los integrantes incluidos.');
       return;
     }
+
+    elaboradoPorActual = getElaboradoPorValue();
 
     setFamilyFormLocked(true);
     showPlansBtn.disabled = true;

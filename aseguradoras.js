@@ -1072,6 +1072,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const planSemestralCheck = document.getElementById('planSemestral');
   const planTrimestralCheck = document.getElementById('planTrimestral');
   const planMensualCheck = document.getElementById('planMensual');
+  const planMensualFraccionesSelect = document.getElementById('planMensualFracciones');
   const planFinanciableCheck = document.getElementById('planFinanciable');
 
   const planDescuentoDivisasCheck = document.getElementById('planDescuentoDivisasCheck');
@@ -1101,6 +1102,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   attachCheckToggle(planGastosFraccionamientoCheck, [planGastosFraccionamientoMontoInput]);
   attachCheckToggle(planDescuentoDivisasCheck, [planDescuentoDivisasPorcentajeInput]);
   attachCheckToggle(planDescuentoContadoCheck, [planDescuentoContadoPorcentajeInput]);
+  function applyMensualFraccionesToggle() {
+    const enabled = planMensualCheck.checked;
+    planMensualFraccionesSelect.disabled = !enabled;
+    if (!enabled) planMensualFraccionesSelect.value = '12';
+  }
+  planMensualCheck.addEventListener('change', applyMensualFraccionesToggle);
+  applyMensualFraccionesToggle();
 
   let currentSortPlanes = { key: 'nombre_plan', direction: 'asc' };
   const sortableHeadersPlanes = document.querySelectorAll('#planesTable th.is-sortable');
@@ -1178,6 +1186,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     planGastosFraccionamientoMontoInput.disabled = !planGastosFraccionamientoCheck.checked;
     planDescuentoDivisasPorcentajeInput.disabled = !planDescuentoDivisasCheck.checked;
     planDescuentoContadoPorcentajeInput.disabled = !planDescuentoContadoCheck.checked;
+    planMensualFraccionesSelect.disabled = !planMensualCheck.checked;
 
     if (item) {
       planModalTitle.textContent = readOnly ? 'Ver Plan' : 'Editar Plan';
@@ -1204,6 +1213,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       planSemestralCheck.checked = !!item.fraccionamiento_semestral;
       planTrimestralCheck.checked = !!item.fraccionamiento_trimestral;
       planMensualCheck.checked = !!item.fraccionamiento_mensual;
+      planMensualFraccionesSelect.value = String(item.fraccionamiento_mensual_fracciones || 12);
+      planMensualFraccionesSelect.disabled = !planMensualCheck.checked;
       planFinanciableCheck.checked = !!item.financiable;
 
       planDescuentoDivisasCheck.checked = !!item.descuento_divisas_activo;
@@ -1428,6 +1439,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       fraccionamiento_semestral: planSemestralCheck.checked,
       fraccionamiento_trimestral: planTrimestralCheck.checked,
       fraccionamiento_mensual: planMensualCheck.checked,
+      fraccionamiento_mensual_fracciones: planMensualCheck.checked ? Number(planMensualFraccionesSelect.value) : null,
       financiable: planFinanciableCheck.checked,
       descuento_divisas_activo: planDescuentoDivisasCheck.checked,
       descuento_divisas_porcentaje: planDescuentoDivisasCheck.checked ? Number(planDescuentoDivisasPorcentajeInput.value) : null,
@@ -1811,11 +1823,18 @@ document.addEventListener('DOMContentLoaded', async () => {
      mínima/máxima de Titular y de Familiares configuradas en el Plan
      seleccionado, replicando los mismos rangos para ambos grupos.
      --------------------------------------------------------------------- */
-  let tarifaRangeInputs = { titular: {}, familiares: {} };
+  const HIJOS_CANTIDAD_KEYS = [
+    { key: '1', label: '1 Hijo' },
+    { key: '2', label: '2 Hijos' },
+    { key: '3', label: '3 Hijos' },
+    { key: '4+', label: '+4 Hijos' },
+  ];
+
+  let tarifaRangeInputs = { titular: {}, familiares: {}, hijosCantidad: {} };
 
   function renderTarifaRangos(plan) {
     tarifaRangosContainer.innerHTML = '';
-    tarifaRangeInputs = { titular: {}, familiares: {} };
+    tarifaRangeInputs = { titular: {}, familiares: {}, hijosCantidad: {} };
 
     if (!plan) {
       tarifaRangosContainer.innerHTML = '<p class="age-range-empty">Selecciona un plan para ver los rangos etarios disponibles.</p>';
@@ -1856,27 +1875,58 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     buildGroup('Titular', titularRanges, 'titular');
     buildGroup('Familiares', familiaresRanges, 'familiares');
+
+    // Tarifa por Cantidad de Hijos: solo aplica cuando el plan tiene
+    // configurado modo_tarifa_hijos = "Por cantidad de hijos". Se ubica
+    // justo después de la sección Familiares.
+    if (plan.modo_tarifa_hijos === 'Por cantidad de hijos') {
+      const groupTitle = document.createElement('div');
+      groupTitle.className = 'age-range-group__title';
+      groupTitle.textContent = 'Tarifa por Cantidad de Hijos';
+      tarifaRangosContainer.appendChild(groupTitle);
+
+      const grid = document.createElement('div');
+      grid.className = 'age-range-grid';
+      HIJOS_CANTIDAD_KEYS.forEach(({ key, label }) => {
+        const item = document.createElement('div');
+        item.className = 'age-range-item';
+        item.innerHTML = `
+          <label>${label}</label>
+          <div class="input-currency"><span class="input-currency__prefix">$</span><input type="number" min="0" step="0.01" data-hijos-cantidad="${key}"></div>
+        `;
+        grid.appendChild(item);
+        tarifaRangeInputs.hijosCantidad[key] = item.querySelector('input');
+      });
+      tarifaRangosContainer.appendChild(grid);
+    }
   }
 
-  function setTarifaRangosData(titularData = {}, familiaresData = {}) {
+  function setTarifaRangosData(titularData = {}, familiaresData = {}, hijosCantidadData = {}) {
     Object.entries(tarifaRangeInputs.titular).forEach(([key, input]) => {
       if (titularData && titularData[key] != null) input.value = titularData[key];
     });
     Object.entries(tarifaRangeInputs.familiares).forEach(([key, input]) => {
       if (familiaresData && familiaresData[key] != null) input.value = familiaresData[key];
     });
+    Object.entries(tarifaRangeInputs.hijosCantidad).forEach(([key, input]) => {
+      if (hijosCantidadData && hijosCantidadData[key] != null) input.value = hijosCantidadData[key];
+    });
   }
 
   function getTarifaRangosData() {
     const titular = {};
     const familiares = {};
+    const hijosCantidad = {};
     Object.entries(tarifaRangeInputs.titular).forEach(([key, input]) => {
       if (input.value !== '') titular[key] = Number(input.value);
     });
     Object.entries(tarifaRangeInputs.familiares).forEach(([key, input]) => {
       if (input.value !== '') familiares[key] = Number(input.value);
     });
-    return { titular, familiares };
+    Object.entries(tarifaRangeInputs.hijosCantidad).forEach(([key, input]) => {
+      if (input.value !== '') hijosCantidad[key] = Number(input.value);
+    });
+    return { titular, familiares, hijosCantidad };
   }
 
   function resetTarifaCoverageControls() {
@@ -1910,7 +1960,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       tarifaModalTitle.textContent = readOnly ? 'Ver Tarifa' : 'Editar Tarifa';
       submitTarifaBtn.textContent = 'Guardar Cambios';
       tarifaIdInput.value = item.id;
-      setTarifaRangosData(item.tarifas_titular || {}, item.tarifas_familiares || {});
+      setTarifaRangosData(item.tarifas_titular || {}, item.tarifas_familiares || {}, item.tarifas_hijos_cantidad || {});
 
       const cob = item.coberturas || {};
       COVERAGE_LIST.forEach((def) => tarifaCoverageControls[def.key].setData(cob[def.key]));
@@ -1999,7 +2049,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const coberturas = {};
     COVERAGE_LIST.forEach((def) => { coberturas[def.key] = tarifaCoverageControls[def.key].getData(); });
     const maternidad = tarifaMaternidadControl.getData();
-    const { titular, familiares } = getTarifaRangosData();
+    const { titular, familiares, hijosCantidad } = getTarifaRangosData();
 
     const payload = {
       plan_id: tarifaPlanIdInput.value,
@@ -2007,6 +2057,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       maternidad,
       tarifas_titular: titular,
       tarifas_familiares: familiares,
+      tarifas_hijos_cantidad: hijosCantidad,
     };
 
     if (isEditModeTarifa) {

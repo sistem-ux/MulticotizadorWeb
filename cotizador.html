@@ -554,6 +554,23 @@
             <span class="form-hint"></span>
           </section>
 
+          <!-- Elaborado por (según el perfil de la sesión) -->
+          <section class="form-section">
+            <label for="elaboradoPorInput" class="form-label">Elaborado por</label>
+            <input
+              type="text"
+              id="elaboradoPorInput"
+              name="elaboradoPor"
+              class="text-input"
+              placeholder="Nombre de quien elabora la cotización"
+              autocomplete="off"
+            >
+            <select id="elaboradoPorSelect" class="text-input" style="display:none;">
+              <option value="">Selecciona un usuario</option>
+            </select>
+            <span class="form-hint" id="elaboradoPorHint"></span>
+          </section>
+
           <!-- Tabla / tarjetas del grupo familiar -->
           <section class="form-section">
             <h2 class="section-title">Integrantes del grupo familiar</h2>
