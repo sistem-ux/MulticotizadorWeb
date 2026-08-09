@@ -235,7 +235,7 @@
 
     .card {
       width: 100%;
-      max-width: 900px;
+      max-width: 1200px;
       background: var(--color-white);
       border-radius: var(--radius-lg);
       box-shadow: var(--shadow-card);
@@ -318,6 +318,97 @@
         margin-left: 0 !important;
       }
     }
+
+    /* =========================================================
+       KPI CARDS + GRÁFICOS
+       ========================================================= */
+    .kpi-loading, .kpi-error {
+      margin-top: 1.5rem;
+      padding: 1rem 1.25rem;
+      border-radius: var(--radius-md);
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+    .kpi-loading {
+      color: #5B6472;
+      background: var(--color-gray-light);
+      border: 1px solid var(--color-gray-border);
+    }
+    .kpi-error {
+      color: var(--color-danger);
+      background: rgba(192, 57, 43, 0.08);
+      border: 1px solid rgba(192, 57, 43, 0.25);
+    }
+
+    .kpi-grid {
+      display: none;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 1.25rem;
+      margin-top: 1.5rem;
+    }
+
+    .kpi-number-card {
+      grid-column: span 4;
+      background: var(--color-gray-light);
+      border: 1px solid var(--color-gray-border);
+      border-radius: var(--radius-md);
+      padding: 1.25rem;
+    }
+
+    .kpi-number-card__title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #5B6472;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .kpi-number-card__value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--color-navy);
+      margin-top: 0.5rem;
+      font-family: var(--font-display);
+    }
+
+    .kpi-chart-card {
+      grid-column: span 6;
+      background: var(--color-white);
+      border: 1px solid var(--color-gray-border);
+      border-radius: var(--radius-md);
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .kpi-chart-card--full {
+      grid-column: span 12;
+    }
+
+    .kpi-chart-card__title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--color-navy);
+      margin-bottom: 1rem;
+    }
+
+    .chart-canvas-wrap {
+      position: relative;
+      height: 280px;
+    }
+
+    .chart-empty {
+      display: none;
+      color: #5B6472;
+      font-size: 0.85rem;
+      padding: 2rem 0;
+      text-align: center;
+    }
+
+    @media (max-width: 900px) {
+      .kpi-number-card { grid-column: span 12; }
+      .kpi-chart-card { grid-column: span 12; }
+    }
   </style>
 </head>
 <body>
@@ -356,20 +447,48 @@
         </header>
 
         <section class="form-section">
-          <h3 class="section-title">Resumen General</h3>
-          <div class="dashboard-grid">
-            <div class="stat-card">
-              <div class="stat-card__title">Módulo Activo</div>
-              <div class="stat-card__value">Inicio</div>
+          <h3 class="section-title">Indicadores de Cotizaciones</h3>
+
+          <div id="kpiLoading" class="kpi-loading">Cargando indicadores…</div>
+          <div id="kpiError" class="kpi-error" style="display:none;"></div>
+
+          <div id="kpiSection" class="kpi-grid">
+
+            <!-- Tarjetas de cantidad -->
+            <div class="kpi-number-card">
+              <div class="kpi-number-card__title">Total de Cotizaciones</div>
+              <div id="kpiTotalCotizaciones" class="kpi-number-card__value">0</div>
             </div>
-            <div class="stat-card__title" style="background: var(--color-gray-light); border: 1px solid var(--color-gray-border); border-radius: var(--radius-md); padding: 1.25rem;">
-              <span class="stat-card__title" style="display:block;">Acceso Directo</span>
-              <a href="cotizador.html" style="display: inline-block; margin-top: 0.75rem; color: var(--color-green); font-weight: 600; text-decoration: none;">Ir al Cotizador →</a>
+            <div id="kpiUsuariosCard" class="kpi-number-card" style="display:none;">
+              <div class="kpi-number-card__title">Usuarios Registrados</div>
+              <div id="kpiUsuariosRegistrados" class="kpi-number-card__value">0</div>
             </div>
-            <div class="stat-card" style="background: var(--color-gray-light); border: 1px solid var(--color-gray-border); border-radius: var(--radius-md); padding: 1.25rem;">
-              <span class="stat-card__title" style="display:block;">Gestión</span>
-              <a href="usuarios.html" style="display: inline-block; margin-top: 0.75rem; color: var(--color-navy); font-weight: 600; text-decoration: none;">Ver Usuarios →</a>
+            <div id="kpiVisitantesCard" class="kpi-number-card" style="display:none;">
+              <div class="kpi-number-card__title">Cotizaciones de Visitantes</div>
+              <div id="kpiCotizacionesVisitantes" class="kpi-number-card__value">0</div>
             </div>
+
+            <!-- Gráfico: cotizaciones por sucursal (solo Administrador Nacional) -->
+            <div id="chartSucursalCard" class="kpi-chart-card kpi-chart-card--full" style="display:none;">
+              <div class="kpi-chart-card__title">Cotizaciones por Sucursal</div>
+              <div class="chart-canvas-wrap"><canvas id="chartSucursal"></canvas></div>
+              <div class="chart-empty">Aún no hay cotizaciones para mostrar.</div>
+            </div>
+
+            <!-- Gráfico: cotizaciones por asesor / elaborador -->
+            <div id="chartAsesorCard" class="kpi-chart-card">
+              <div class="kpi-chart-card__title">Cotizaciones por Asesor</div>
+              <div class="chart-canvas-wrap"><canvas id="chartAsesor"></canvas></div>
+              <div class="chart-empty">Aún no hay cotizaciones para mostrar.</div>
+            </div>
+
+            <!-- Gráfico: cotizaciones por compañía / aseguradora -->
+            <div id="chartCompaniaCard" class="kpi-chart-card">
+              <div class="kpi-chart-card__title">Planes Cotizados por Compañía</div>
+              <div class="chart-canvas-wrap"><canvas id="chartCompania"></canvas></div>
+              <div class="chart-empty">Aún no hay cotizaciones para mostrar.</div>
+            </div>
+
           </div>
         </section>
 
@@ -378,6 +497,9 @@
 
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script src="dashboard.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       // 'dashboard.html' debe coincidir con la clave en PAGE_PERMISSIONS

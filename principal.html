@@ -142,6 +142,7 @@
         if (selectedRole === 'Visitante') {
           localStorage.removeItem('userId');
           localStorage.removeItem('userFullName');
+          localStorage.removeItem('userSucursalId');
           localStorage.setItem('userRole', 'Visitante');
           localStorage.setItem('userEmail', '');
           window.location.href = 'cotizador.html';
@@ -168,7 +169,7 @@
           // Buscamos al usuario por correo en la tabla `usuarios`
           const { data, error } = await supabase
             .from(TABLE_NAME)
-            .select('id, full_name, email, perfil, password')
+            .select('id, full_name, email, perfil, password, sucursal_id')
             .eq('email', userEmail)
             .maybeSingle();
 
@@ -189,6 +190,14 @@
           localStorage.setItem('userFullName', data.full_name);
           localStorage.setItem('userEmail', data.email);
           localStorage.setItem('userRole', data.perfil);
+          // Necesario para el filtrado por sucursal en cotizaciones.js/dashboard.js
+          // (perfil "Administrador Sucursal"). Si el usuario no tiene sucursal
+          // asignada, se limpia la clave en vez de guardar la cadena "null".
+          if (data.sucursal_id) {
+            localStorage.setItem('userSucursalId', data.sucursal_id);
+          } else {
+            localStorage.removeItem('userSucursalId');
+          }
 
           window.location.href = 'dashboard.html';
         } catch (err) {

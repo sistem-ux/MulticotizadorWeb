@@ -342,27 +342,37 @@ document.addEventListener('DOMContentLoaded', async () => {
                          como ejecutivo (usuarios.ejecutivo_id = su id)
        asesor         -> solo las propias
      ========================================================= */
+  // PostgREST convierte `.eq(columna, null)` en `columna=eq.null`, y Postgres
+  // intenta castear el texto "null" a uuid -> error 22P02. Para comparar
+  // contra NULL hay que usar `.is()`. Este helper elige el método correcto
+  // según si el valor a comparar viene o no.
+  function eqOrIsNull(query, column, value) {
+    return (value === null || value === undefined)
+      ? query.is(column, null)
+      : query.eq(column, value);
+  }
+
   function buildCotizacionesQuery() {
     const session = typeof getSession === 'function' ? getSession() : {};
     const scope = typeof getRoleScope === 'function' ? getRoleScope(session.role) : 'asesor';
 
     if (scope === 'admin_sucursal') {
-      return supabaseClient
+      const query = supabaseClient
         .from(TABLE_COTIZACIONES)
-        .select('*, usuarios:usuario_creador_id!inner(sucursal_id)')
-        .eq('usuarios.sucursal_id', session.sucursalId);
+        .select('*, usuarios:usuario_creador_id!inner(sucursal_id)');
+      return eqOrIsNull(query, 'usuarios.sucursal_id', session.sucursalId);
     }
     if (scope === 'colaborador') {
-      return supabaseClient
+      const query = supabaseClient
         .from(TABLE_COTIZACIONES)
-        .select('*, usuarios:usuario_creador_id!inner(ejecutivo_id)')
-        .eq('usuarios.ejecutivo_id', session.id);
+        .select('*, usuarios:usuario_creador_id!inner(ejecutivo_id)');
+      return eqOrIsNull(query, 'usuarios.ejecutivo_id', session.id);
     }
     if (scope === 'asesor') {
-      return supabaseClient
+      const query = supabaseClient
         .from(TABLE_COTIZACIONES)
-        .select('*')
-        .eq('usuario_creador_id', session.id);
+        .select('*');
+      return eqOrIsNull(query, 'usuario_creador_id', session.id);
     }
     // admin_nacional (o alcance no reconocido): sin filtro, ve todo
     return supabaseClient.from(TABLE_COTIZACIONES).select('*');
@@ -376,6 +386,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!supabaseClient) {
       cotizacionesLoading.style.display = 'none';
       cotizacionesEmpty.textContent = 'Supabase no está inicializado.';
+      cotizacionesEmpty.style.display = 'block';
+      return;
+    }
+
+    // Aviso temprano: un "Administrador Sucursal" sin sucursal_id en su
+    // sesión no puede filtrar por sucursal (ver saveSession en auth-guard.js
+    // y el login en principal.html, que debe enviar ese dato).
+    const sessionCheck = typeof getSession === 'function' ? getSession() : {};
+    const scopeCheck = typeof getRoleScope === 'function' ? getRoleScope(sessionCheck.role) : null;
+    if (scopeCheck === 'admin_sucursal' && !sessionCheck.sucursalId) {
+      cotizacionesLoading.style.display = 'none';
+      cotizacionesEmpty.textContent = 'Tu usuario no tiene una sucursal asignada en la sesión; no se pueden mostrar cotizaciones. Contacta al administrador.';
       cotizacionesEmpty.style.display = 'block';
       return;
     }
