@@ -273,6 +273,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const sucursalSelect = document.getElementById('sucursalSelect');
   const fullNameInput = document.getElementById('fullName');
   const emailInput = document.getElementById('email');
+  const telefonoInput = document.getElementById('telefono');
   const perfilInput = document.getElementById('perfil');
   const passwordInput = document.getElementById('password');
   const togglePasswordBtn = document.getElementById('togglePasswordBtn');
@@ -282,6 +283,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const fieldSucursal = document.getElementById('fieldSucursal');
   const fieldFullName = document.getElementById('fieldFullName');
   const fieldEmail = document.getElementById('fieldEmail');
+  const fieldTelefono = document.getElementById('fieldTelefono');
   const fieldPerfil = document.getElementById('fieldPerfil');
   const fieldPassword = document.getElementById('fieldPassword');
 
@@ -316,6 +318,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (sucursalSelect.value) fieldSucursal.classList.remove('has-error');
   });
 
+  /* Teléfono: solo dígitos, espacios, +, -, paréntesis */
+  telefonoInput.addEventListener('input', (e) => {
+    const input = e.target;
+    const cursorPos = input.selectionStart;
+    const cleaned = input.value.replace(/[^0-9+\-\s()]/g, '');
+    if (cleaned !== input.value) {
+      input.value = cleaned;
+      input.setSelectionRange(cursorPos - 1, cursorPos - 1);
+    }
+    if (TELEFONO_REGEX.test(input.value.trim()) || input.value.trim() === '') {
+      fieldTelefono.classList.remove('has-error');
+    }
+  });
+
   perfilInput.addEventListener('change', () => {
     if (perfilInput.value) fieldPerfil.classList.remove('has-error');
   });
@@ -329,6 +345,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   const EMAIL_REGEX = /^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$/;
+  const TELEFONO_REGEX = /^[0-9+\-\s()]{7,20}$/;
   const PASSWORD_REGEX = /^[A-Za-z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]{8,}$/;
 
   function validateForm() {
@@ -345,6 +362,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const emailOk = EMAIL_REGEX.test(emailInput.value.trim());
     setFieldError(fieldEmail, !emailOk);
     if (!emailOk) valid = false;
+
+    // Teléfono es opcional: solo se valida el formato si el usuario escribió algo.
+    const telefonoValue = telefonoInput.value.trim();
+    const telefonoOk = telefonoValue === '' || TELEFONO_REGEX.test(telefonoValue);
+    setFieldError(fieldTelefono, !telefonoOk);
+    if (!telefonoOk) valid = false;
 
     const perfilOk = perfilInput.value.trim().length > 0;
     setFieldError(fieldPerfil, !perfilOk);
@@ -394,7 +417,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     isReadOnlyUser = viewOnly;
     userForm.reset();
     clearFeedback('formFeedback');
-    [fieldSucursal, fieldFullName, fieldEmail, fieldPerfil, fieldPassword].forEach((f) => setFieldError(f, false));
+    [fieldSucursal, fieldFullName, fieldEmail, fieldTelefono, fieldPerfil, fieldPassword].forEach((f) => setFieldError(f, false));
 
     populateSucursalSelect();
     populatePerfilSelect();
@@ -406,6 +429,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       sucursalSelect.value = user.sucursal_id || '';
       fullNameInput.value = user.full_name;
       emailInput.value = user.email;
+      telefonoInput.value = user.telefono || '';
       perfilInput.value = user.perfil_id || '';
       passwordInput.value = user.password;
 
@@ -423,7 +447,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       perfilInput.value = '';
     }
 
-    const fields = [sucursalSelect, fullNameInput, emailInput, perfilInput, passwordInput];
+    const fields = [sucursalSelect, fullNameInput, emailInput, telefonoInput, perfilInput, passwordInput];
     fields.forEach((field) => { field.disabled = viewOnly; });
 
     userViewDetail.style.display = viewOnly ? 'flex' : 'none';
@@ -436,7 +460,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function closeModal() {
     userModalOverlay.classList.remove('is-open');
     userForm.reset();
-    [sucursalSelect, fullNameInput, emailInput, perfilInput, passwordInput].forEach((field) => { field.disabled = false; });
+    [sucursalSelect, fullNameInput, emailInput, telefonoInput, perfilInput, passwordInput].forEach((field) => { field.disabled = false; });
     submitBtn.style.display = 'inline-flex';
     userViewDetail.style.display = 'none';
   }
@@ -473,6 +497,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       tr.innerHTML = `
         <td data-label="Nombres y Apellidos">${escapeHtml(user.full_name)}</td>
         <td data-label="Correo">${escapeHtml(user.email)}</td>
+        <td data-label="Teléfono">${escapeHtml(user.telefono || '—')}</td>
         <td data-label="Sucursal">${escapeHtml(sucursalNombre)}</td>
         <td data-label="Perfil">${escapeHtml(perfilNombre)}</td>
         <td data-label="Status"><span class="status-pill ${statusClass}">${escapeHtml(user.status || 'Activo')}</span></td>
@@ -522,6 +547,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       result = result.filter((user) =>
         user.full_name.toLowerCase().includes(term) ||
         user.email.toLowerCase().includes(term) ||
+        (user.telefono || '').toLowerCase().includes(term) ||
         (user.perfiles?.perfil || user.perfil || '').toLowerCase().includes(term) ||
         (user.sucursales?.sucursal || '').toLowerCase().includes(term)
       );
@@ -607,6 +633,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       sucursal_id: sucursalSelect.value,
       full_name: fullNameInput.value.trim(),
       email: emailInput.value.trim(),
+      telefono: telefonoInput.value.trim() || null,
       perfil_id: perfilInput.value,
       // Se mantiene el nombre en texto por retrocompatibilidad con
       // auth-guard.js / el login, que leen "perfil" como texto plano.

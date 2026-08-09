@@ -15,6 +15,14 @@
       --color-gray-light: #F2F3F5;
       --color-gray-border: #D8DAE0;
       --transition: 0.25s ease;
+
+      /* Paleta específica del documento de cotización (PDF) */
+      --print-navy: #073763;
+      --print-blue: #1c4587;
+      --print-green: #38761d;
+      --print-gray-row: #f3f3f3;
+      --print-muted: #666666;
+      --print-border: #cccccc;
     }
 
     body {
@@ -438,38 +446,221 @@
 
     /* Modal de comparación (más ancho que el de adicionales) */
     .modal-content--wide {
-      max-width: 900px;
+      max-width: 960px;
     }
     .comparison-table-wrapper {
       max-height: 60vh;
       overflow: auto;
     }
+
+    /* =========================================================
+       ENCABEZADO DEL DOCUMENTO IMPRESO / EXPORTADO A PDF
+       (replica el formato de PDF_Cotización_Salud.docx)
+       ========================================================= */
+    .print-header {
+      display: block;
+      padding-bottom: 8px;
+      margin-bottom: 14px;
+      border-bottom: 2px solid var(--print-navy);
+      font-family: 'Inter', sans-serif;
+    }
+    .print-header__top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 8px;
+    }
+    .print-header__brand img {
+      max-width: 180px;
+      height: auto;
+      display: block;
+    }
+    .print-header__main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      text-align: right;
+      gap: 4px;
+    }
+    .print-header__title {
+      font-family: 'Poppins', sans-serif;
+      font-size: 19px;
+      font-weight: 800;
+      color: var(--print-blue);
+      margin: 0;
+    }
+    .print-header__asesor-contacto {
+      font-size: 11px;
+      color: var(--print-muted);
+      line-height: 1.4;
+    }
+    .print-header__fecha {
+      font-size: 11px;
+      color: var(--print-muted);
+      margin-top: 2px;
+    }
+
+    .print-info-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      font-size: 12.5px;
+      color: #333;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--print-border);
+    }
+    .print-info-row strong { color: var(--print-navy); }
+
+    .print-tarifa-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--print-border);
+    }
+    .print-tarifa-badge {
+      display: inline-block;
+      background: var(--print-green);
+      color: #FFFFFF;
+      font-weight: 700;
+      font-size: 11.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      padding: 5px 12px;
+      border-radius: 3px;
+    }
+    .print-vencimiento {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--print-blue);
+    }
+    .print-grupo-familiar {
+      font-size: 12.5px;
+      color: #333;
+      padding: 8px 0 4px;
+    }
+    .print-grupo-familiar strong { color: var(--print-navy); }
+
+    /* =========================================================
+       TABLA COMPARATIVA
+       ========================================================= */
     .comparison-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 13px;
+      font-size: 12.5px;
+      font-family: 'Inter', sans-serif;
     }
     .comparison-table th,
     .comparison-table td {
-      border: 1px solid var(--color-gray-border);
-      padding: 8px 10px;
+      border: 1px solid var(--print-border);
+      padding: 7px 10px;
       text-align: left;
       vertical-align: top;
     }
     .comparison-table thead th {
-      background: var(--color-gray-light);
-      color: var(--color-navy);
+      background: #FFFFFF;
+      color: var(--print-navy);
       font-weight: 700;
+      text-align: center;
+      vertical-align: bottom;
+    }
+    .comparison-table thead th:first-child {
+      text-align: left;
+      font-size: 14px;
+      vertical-align: middle;
+    }
+    .comparison-insurer-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    .comparison-insurer-header img {
+      max-width: 90px;
+      max-height: 42px;
+      object-fit: contain;
+    }
+    .comparison-insurer-header span {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #333;
     }
     .comparison-row-label {
-      font-weight: 700;
-      color: var(--color-navy);
-      background: #f8fafc;
+      font-weight: 600;
+      color: #333;
+      background: #FFFFFF;
       white-space: nowrap;
+    }
+    .comparison-table tr.row-shaded td {
+      background: var(--print-gray-row);
+    }
+    .comparison-table tr.row-shaded td.comparison-row-label {
+      background: var(--print-gray-row);
+    }
+    .comparison-section-row td {
+      border: none;
+      border-bottom: 2px solid var(--print-navy);
+      background: #FFFFFF !important;
+      color: var(--print-navy);
+      font-family: 'Poppins', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      padding-top: 16px;
+      padding-bottom: 6px;
+    }
+    .comparison-suma-asegurada {
+      color: var(--print-blue);
+      font-weight: 700;
+    }
+    .comparison-detalle-adicionales {
+      font-size: 11px;
+      color: var(--print-muted);
+      white-space: normal;
+    }
+    .comparison-total-anual-row td {
+      color: var(--print-blue);
+      font-weight: 800;
+      font-size: 13.5px;
+      background: #FFFFFF;
+    }
+
+    /* Pie legal del documento */
+    .print-footer {
+      margin-top: 18px;
+      padding-top: 10px;
+      border-top: 1px solid var(--print-border);
+    }
+    .print-footer__legal {
+      font-size: 11px;
+      color: var(--print-muted);
+      text-align: center;
+      margin: 0 0 8px;
+      line-height: 1.5;
+    }
+    .print-footer__registro {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #333;
+      text-align: center;
+      margin: 10px 0 4px;
+    }
+    .print-footer__firma {
+      font-size: 11px;
+      font-style: italic;
+      color: #999999;
+      text-align: right;
+      margin: 4px 0 0;
     }
 
     /* Impresión / exportación a PDF del resumen comparativo */
     @media print {
+      @page {
+        size: A4;
+        margin: 14mm 12mm;
+      }
       body.printing-comparison > *:not(#comparisonModal) {
         display: none !important;
       }
@@ -483,10 +674,26 @@
         max-width: 100%;
         width: 100%;
         margin: 0;
+        padding: 0;
       }
+      body.printing-comparison .modal-header,
       body.printing-comparison .modal-close-btn,
-      body.printing-comparison #exportComparisonBtn {
+      body.printing-comparison #exportComparisonBtn,
+      body.printing-comparison .modal-footer {
         display: none !important;
+      }
+      body.printing-comparison .comparison-table-wrapper {
+        max-height: none !important;
+        overflow: visible !important;
+      }
+      body.printing-comparison .comparison-table {
+        font-size: 11px;
+      }
+      body.printing-comparison .comparison-table thead {
+        display: table-header-group; /* repite encabezado en cada página */
+      }
+      body.printing-comparison .comparison-section-row {
+        break-inside: avoid;
       }
     }
 
@@ -571,6 +778,16 @@
             <span class="form-hint" id="elaboradoPorHint"></span>
           </section>
 
+          <!-- Tipo de tarifa (Emisión o Continuidad) -->
+          <section class="form-section">
+            <label for="tarifaTipoSelect" class="form-label">Tarifa</label>
+            <select id="tarifaTipoSelect" name="tarifaTipo" class="text-input">
+              <option value="Emisión">Emisión</option>
+              <option value="Continuidad">Continuidad</option>
+            </select>
+            <span class="form-hint">Indica si la cotización corresponde a una emisión nueva o a la continuidad de una póliza vigente.</span>
+          </section>
+
           <!-- Tabla / tarjetas del grupo familiar -->
           <section class="form-section">
             <h2 class="section-title">Integrantes del grupo familiar</h2>
@@ -645,8 +862,29 @@
         <h3 class="modal-title">Resumen comparativo de planes</h3>
         <button type="button" id="closeComparisonModalBtn" class="modal-close-btn">&times;</button>
       </div>
-      <div id="comparisonTableWrapper" class="comparison-table-wrapper">
-        <!-- La tabla comparativa se genera dinámicamente -->
+      <div id="comparisonPrintArea" class="comparison-print-area">
+
+        <!-- Encabezado del documento (logo, título, datos de solicitante/asesor) -->
+        <div id="comparisonPrintHeader" class="print-header">
+          <!-- Se genera dinámicamente en renderComparisonPrintHeader() -->
+        </div>
+
+        <div id="comparisonTableWrapper" class="comparison-table-wrapper">
+          <!-- La tabla comparativa se genera dinámicamente -->
+        </div>
+
+        <!-- Pie legal fijo, igual en todas las cotizaciones -->
+        <div class="print-footer">
+          <p class="print-footer__legal">
+            Los montos mostrados en esta cotización son <strong>referenciales</strong> y no obligan a La Aseguradora ni a Bareca Sociedad de Corretaje CA a la emisión de la póliza bajo estas condiciones.
+          </p>
+          <p class="print-footer__legal">
+            Los montos de prima definitivos serán los mostrados en el cuadro póliza emitido por La Aseguradora conforme a sus políticas de suscripción.
+          </p>
+          <p class="print-footer__registro">Inscrita en la Superintendencia de la Actividad Aseguradora bajo el nro. SCSMP-000043</p>
+          <p class="print-footer__firma">Cotizador desarrollado por Arturo Carpintero</p>
+        </div>
+
       </div>
       <div class="modal-footer">
         <button type="button" id="exportComparisonBtn" class="btn btn--primary" style="padding: 8px 16px; font-size: 14px;">Exportar a PDF</button>

@@ -368,7 +368,7 @@
                 type="text"
                 id="searchInput"
                 class="search-bar__input"
-                placeholder="Buscar por nombre, correo, perfil o sucursal..."
+                placeholder="Buscar por nombre, correo, teléfono, perfil o sucursal..."
                 autocomplete="off"
               >
               <button type="button" id="clearSearchBtn" class="search-bar__clear" aria-label="Limpiar búsqueda">✕</button>
@@ -388,6 +388,7 @@
                 <tr>
                   <th scope="col" class="is-sortable" data-sort-key="full_name">Nombres y Apellidos <span class="sort-indicator"></span></th>
                   <th scope="col" class="is-sortable" data-sort-key="email">Correo <span class="sort-indicator"></span></th>
+                  <th scope="col">Teléfono</th>
                   <th scope="col">Sucursal</th>
                   <th scope="col">Perfil</th>
                   <th scope="col">Status</th>
@@ -514,6 +515,19 @@
             required
           >
           <span class="field-error">Solo minúsculas, números y caracteres especiales (@ . _ -, etc.).</span>
+        </div>
+
+        <!-- Teléfono -->
+        <div class="modal__field" id="fieldTelefono">
+          <label for="telefono" class="form-label">Teléfono</label>
+          <input
+            type="text"
+            id="telefono"
+            class="text-input"
+            placeholder="Ej: 0414-1234567"
+            autocomplete="off"
+          >
+          <span class="field-error">Ingresa un teléfono válido (mínimo 7 dígitos).</span>
         </div>
 
         <!-- Contraseña -->

@@ -9,6 +9,12 @@ const TABLE_PLANES = 'planes';
 const TABLE_TARIFAS = 'tarifas';
 const TABLE_USUARIOS = 'usuarios';
 
+/* Logo de Bareca Sociedad de Corretaje usado en el encabezado del PDF de
+   cotización. Coloca el archivo entregado (bareca-logo.png) en esta ruta
+   relativa al proyecto, o cámbiala por la URL pública del logo si prefieres
+   subirlo al bucket de Storage (mismo patrón que los logos de aseguradoras). */
+const BARECA_LOGO_URL = 'assets/bareca-logo.png';
+
 /* Debe coincidir con las 9 coberturas fijas definidas en aseguradoras.js
    (COVERAGE_LIST), ya que las tarifas se guardan en la BD con estas mismas
    claves dentro de la columna jsonb "coberturas". */
@@ -68,6 +74,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const elaboradoPorInput = document.getElementById('elaboradoPorInput');
   const elaboradoPorSelect = document.getElementById('elaboradoPorSelect');
   const elaboradoPorHint = document.getElementById('elaboradoPorHint');
+  const tarifaTipoSelect = document.getElementById('tarifaTipoSelect');
   const tableBody = document.getElementById('familyTableBody');
   const rowTemplate = document.getElementById('rowTemplate');
   const addChildBtn = document.getElementById('addChildBtn');
@@ -89,6 +96,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const comparisonModal = document.getElementById('comparisonModal');
   const closeComparisonModalBtn = document.getElementById('closeComparisonModalBtn');
   const comparisonTableWrapper = document.getElementById('comparisonTableWrapper');
+  const comparisonPrintHeader = document.getElementById('comparisonPrintHeader');
   const exportComparisonBtn = document.getElementById('exportComparisonBtn');
 
   const MAX_PLANES_COMPARACION = 5;
@@ -99,6 +107,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   let planesDisponiblesActuales = []; // Últimos planes traídos de Supabase (sin filtrar por aseguradora)
   let integrantesActuales = []; // Últimos integrantes usados para calcular la cotización
   let elaboradoPorActual = ''; // Nombre final de "Elaborado por" usado en la última cotización
+  let tarifaTipoActual = 'Emisión'; // "Emisión" o "Continuidad", usado en la última cotización
+  let usuariosContactoPorNombre = {}; // { [full_name]: { email, telefono } } — para el encabezado del PDF
   let activeInsurerFilters = new Set(); // Nombres de aseguradoras activas en el filtro
   const coberturasSeleccionadasPorPlan = {}; // { [planId]: string[] } — persiste al re-renderizar tarjetas (filtro, etc.)
   let isFamilyLocked = false;
@@ -175,48 +185,76 @@ document.addEventListener('DOMContentLoaded', async () => {
     return elaboradoPorInput.value.trim();
   }
 
-  async function populateElaboradoPorSelect(session) {
-    elaboradoPorSelect.innerHTML = '<option value="">Selecciona un usuario</option>';
-    if (!supabaseClient) return;
+  // Carga una sola vez el correo y teléfono de los usuarios activos, para
+  // poder mostrarlos junto al nombre del asesor en el encabezado del PDF
+  // (independiente del rol de la sesión: Visitante, Asesor, Colaborador o
+  // Administrador). Requiere la columna "telefono" en la tabla usuarios
+  // (ver script SQL 17_add_telefono_usuarios.sql).
+  async function loadUsuariosContacto() {
+    if (!supabaseClient) return [];
 
     try {
       const { data, error } = await supabaseClient
         .from(TABLE_USUARIOS)
-        .select('id, full_name, status')
+        .select('id, full_name, email, telefono, status')
         .eq('status', 'Activo')
         .order('full_name', { ascending: true });
 
       if (error) {
-        console.error('No se pudo cargar la lista de usuarios:', getErrorMessage(error));
-        return;
+        console.error('No se pudo cargar el contacto de usuarios:', getErrorMessage(error));
+        return [];
       }
 
-      const nombres = (data || []).map((u) => u.full_name).filter(Boolean);
-
-      // Si el usuario de la sesión no aparece entre los usuarios activos
-      // (caso borde), se agrega igual como opción para no perder el valor
-      // por defecto.
-      const currentName = session.fullName;
-      if (currentName && !nombres.includes(currentName)) nombres.unshift(currentName);
-
-      nombres.forEach((nombre) => {
-        const opt = document.createElement('option');
-        opt.value = nombre;
-        opt.textContent = nombre;
-        elaboradoPorSelect.appendChild(opt);
+      usuariosContactoPorNombre = {};
+      (data || []).forEach((u) => {
+        if (!u.full_name) return;
+        usuariosContactoPorNombre[u.full_name] = { email: u.email || '', telefono: u.telefono || '' };
       });
 
-      if (currentName && nombres.includes(currentName)) {
-        elaboradoPorSelect.value = currentName;
-      }
+      return data || [];
     } catch (err) {
       console.error('No se pudo conectar con Supabase (usuarios):', getErrorMessage(err));
+      return [];
+    }
+  }
+
+  // Devuelve { email, telefono } para el nombre de asesor indicado, con
+  // fallback al correo de la sesión actual si no se encuentra registrado
+  // (por ejemplo, cuando un Visitante escribe un nombre libre).
+  function resolveAsesorContacto(nombreAsesor) {
+    const registrado = usuariosContactoPorNombre[nombreAsesor];
+    if (registrado) return registrado;
+    const session = getSession();
+    return { email: session.email || '', telefono: '' };
+  }
+
+  async function populateElaboradoPorSelect(session, usuarios) {
+    elaboradoPorSelect.innerHTML = '<option value="">Selecciona un usuario</option>';
+
+    const nombres = (usuarios || []).map((u) => u.full_name).filter(Boolean);
+
+    // Si el usuario de la sesión no aparece entre los usuarios activos
+    // (caso borde), se agrega igual como opción para no perder el valor
+    // por defecto.
+    const currentName = session.fullName;
+    if (currentName && !nombres.includes(currentName)) nombres.unshift(currentName);
+
+    nombres.forEach((nombre) => {
+      const opt = document.createElement('option');
+      opt.value = nombre;
+      opt.textContent = nombre;
+      elaboradoPorSelect.appendChild(opt);
+    });
+
+    if (currentName && nombres.includes(currentName)) {
+      elaboradoPorSelect.value = currentName;
     }
   }
 
   async function setupElaboradoPor() {
     const session = getSession();
     const role = session.role;
+    const usuarios = await loadUsuariosContacto();
 
     if (role === 'Visitante') {
       elaboradoPorInput.style.display = '';
@@ -236,7 +274,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       elaboradoPorSelect.style.display = '';
       elaboradoPorSelect.disabled = false;
       elaboradoPorHint.textContent = 'Por defecto se usa tu nombre; puedes seleccionar otro usuario registrado.';
-      await populateElaboradoPorSelect(session);
+      await populateElaboradoPorSelect(session, usuarios);
     }
   }
 
@@ -727,7 +765,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const [planesRes, tarifasRes] = await Promise.all([
-      supabaseClient.from(TABLE_PLANES).select('*, aseguradoras(nombre), productos(nombre)').eq('status', 'Activo'),
+      // NOTA: tras la migración de esquema (script 11), las tablas son
+      // "aseguradora" y "producto" (singular); se ajustan aquí los alias de
+      // relación y se agrega logo_url para el encabezado del PDF. Revisa
+      // esta consulta cuando termines de conectar el motor de cotización
+      // completo al esquema actual (tarifas, planes, etc.).
+      supabaseClient.from(TABLE_PLANES).select('*, aseguradora(nombre, logo_url), producto(nombre)').eq('status', 'Activo'),
       supabaseClient.from(TABLE_TARIFAS).select('*').eq('status', 'Actualizada'),
     ]);
 
@@ -744,8 +787,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           ...plan,
           _tarifa: tarifa,
           coberturasAdicionales: buildCoberturasAdicionales(tarifa),
-          aseguradora_nombre: plan.aseguradoras?.nombre || 'Sin aseguradora',
-          producto_nombre: plan.productos?.nombre || 'Sin producto',
+          aseguradora_nombre: plan.aseguradora?.nombre || 'Sin aseguradora',
+          aseguradora_logo: plan.aseguradora?.logo_url || null,
+          producto_nombre: plan.producto?.nombre || 'Sin producto',
         };
       });
 
@@ -1117,6 +1161,91 @@ document.addEventListener('DOMContentLoaded', async () => {
      5.4 RESUMEN COMPARATIVO Y EXPORTACIÓN A PDF
      ========================================================= */
 
+  // Formatea una fecha al estilo "DD/MM/AAAA" usado en el encabezado del PDF.
+  function formatDateEs(date) {
+    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const y = date.getFullYear();
+    return `${d}/${m}/${y}`;
+  }
+
+  // La vigencia de la cotización es siempre de 7 días a partir de hoy.
+  function computeVencimiento() {
+    const hoy = new Date();
+    const venc = new Date(hoy);
+    venc.setDate(venc.getDate() + 7);
+    return formatDateEs(venc);
+  }
+
+  // Arma el texto "Titular (38 años), Cónyuge (29 años), Hijo 1 (12 años)"
+  // a partir de los integrantes incluidos, en el mismo orden en que
+  // aparecen en la tabla del formulario (Titular, Cónyuge/Madre/Padre,
+  // luego Hijos en orden).
+  function buildGrupoFamiliarText(integrantes) {
+    if (!integrantes || integrantes.length === 0) return '—';
+    return integrantes
+      .map((m) => {
+        const edad = getNumericAge(m.fechaNacimiento);
+        const edadTexto = edad >= 0 ? `${edad} años` : 'edad no indicada';
+        return `${m.parentesco} (${edadTexto})`;
+      })
+      .join(', ');
+  }
+
+  // Puebla el encabezado del PDF (logo, título, datos de solicitante/asesor,
+  // tipo de tarifa, vencimiento y grupo familiar) replicando el formato del
+  // documento de referencia (PDF_Cotización_Salud.docx). Se llama justo
+  // antes de mostrar/exportar el modal de comparación.
+  function renderComparisonPrintHeader() {
+    const session = getSession();
+    const nombreAsesor = elaboradoPorActual || getElaboradoPorValue() || session.fullName || session.email || '—';
+    const contacto = resolveAsesorContacto(nombreAsesor);
+    const nombreSolicitante = applicantNameInput.value.trim() || '—';
+    const fechaHoy = formatDateEs(new Date());
+    const vencimiento = computeVencimiento();
+    const grupoFamiliarTexto = buildGrupoFamiliarText(integrantesActuales);
+
+    const contactoPartes = [contacto.email, contacto.telefono].filter(Boolean).join(' · ');
+
+    comparisonPrintHeader.innerHTML = `
+      <div class="print-header__top">
+        <div class="print-header__brand">
+          <img src="${BARECA_LOGO_URL}" alt="Bareca Sociedad de Corretaje">
+        </div>
+        <div class="print-header__main">
+          <p class="print-header__title">Cotización Salud Individual</p>
+          ${contactoPartes ? `<p class="print-header__asesor-contacto">${escapeHtmlLocal(contactoPartes)}</p>` : ''}
+          <p class="print-header__fecha">Fecha de la cotización: ${fechaHoy}</p>
+        </div>
+      </div>
+      <div class="print-header__rows">
+        <div class="print-info-row">
+          <span><strong>Solicitante:</strong> ${escapeHtmlLocal(nombreSolicitante)}</span>
+          <span><strong>Asesor:</strong> ${escapeHtmlLocal(nombreAsesor)}</span>
+        </div>
+        <div class="print-tarifa-row">
+          <span class="print-tarifa-badge">Tarifa: ${escapeHtmlLocal(tarifaTipoActual || 'Emisión')}</span>
+          <span class="print-vencimiento">Vencimiento: ${vencimiento}</span>
+        </div>
+        <div class="print-grupo-familiar">
+          <strong>Grupo familiar:</strong> ${escapeHtmlLocal(grupoFamiliarTexto)}
+        </div>
+      </div>
+    `;
+  }
+
+  // Devuelve el bloque de encabezado de columna para una aseguradora: su
+  // logo (si tiene uno cargado en el catálogo) y su nombre debajo, igual
+  // que en el documento de referencia. Si no hay logo, muestra solo el
+  // nombre en su lugar.
+  function buildInsurerHeaderCell(plan) {
+    const nombre = escapeHtmlLocal(plan.aseguradora_nombre || 'Sin aseguradora');
+    const logoImg = plan.aseguradora_logo
+      ? `<img src="${escapeHtmlLocal(plan.aseguradora_logo)}" alt="${nombre}" onerror="this.style.display='none'">`
+      : '';
+    return `<div class="comparison-insurer-header">${logoImg}<span>${nombre}</span></div>`;
+  }
+
   function renderComparisonModal() {
     const planesSeleccionados = planSelectionOrder
       .map(id => planesDisponiblesActuales.find(p => p.id === id))
@@ -1131,25 +1260,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Se calcula una sola vez por plan y se reutiliza en todas las filas de dinero.
     const cotizaciones = new Map(planesSeleccionados.map((p) => [p.id, calcularCotizacionPlan(p)]));
+    const numCols = planesSeleccionados.length + 1;
 
+    // Cada fila puede llevar una clase de fila (zebra, sección, total) y una
+    // clase de celda para resaltar valores puntuales (suma asegurada, total
+    // anual), igual al estilo del documento de referencia.
     const filasDefinicion = [
-      { label: 'Aseguradora', get: (p) => p.aseguradora_nombre || 'Sin aseguradora' },
-      { label: 'Plan', get: (p) => p.nombre_plan },
-      { label: 'Producto', get: (p) => p.producto_nombre || '—' },
-      { label: 'Suma Asegurada', get: (p) => `$${formatCurrencyThousands(p.suma_asegurada)}` },
+      { label: 'Plan', get: (p) => p.nombre_plan || '—' },
+      { label: 'Producto', get: (p) => p.producto_nombre || '—', rowClass: 'row-shaded' },
+      { label: 'Suma Asegurada', get: (p) => `$${formatCurrencyThousands(p.suma_asegurada)}`, cellClass: 'comparison-suma-asegurada' },
+      { section: 'Total Estimado a Pagar Anual' },
+      { label: 'Total Cobertura Básica', get: (p) => `$${formatMoney(cotizaciones.get(p.id).basica)}` },
+      { label: 'Total Cob. Adicionales', get: (p) => `$${formatMoney(cotizaciones.get(p.id).adicionales)}`, rowClass: 'row-shaded' },
       {
-        label: 'Detalle Adicionales', get: (p) => {
+        label: 'Detalle Adicionales', rowClass: 'row-shaded', cellClass: 'comparison-detalle-adicionales', get: (p) => {
           const seleccionados = coberturasSeleccionadasPorPlan[p.id] || [];
           return seleccionados.length > 0
             ? seleccionados.map((s) => `${s.nombre} ($${formatCurrencyThousands(s.sumaAsegurada)})`).join(', ')
             : 'Ninguno';
         },
       },
-      { label: 'Total Cobertura Básica', get: (p) => `$${formatMoney(cotizaciones.get(p.id).basica)}` },
-      { label: 'Total Cob. Adicionales', get: (p) => `$${formatMoney(cotizaciones.get(p.id).adicionales)}` },
       { label: 'Maternidad', get: (p) => `$${formatMoney(cotizaciones.get(p.id).maternidad)}` },
-      { label: 'Tot. Básica + Adicionales', get: (p) => `$${formatMoney(cotizaciones.get(p.id).totalBasicaMasAdicionales)}` },
-      { label: 'Total Estimado a Pagar Anual', get: (p) => `$${formatMoney(cotizaciones.get(p.id).totalAnual)}` },
+      {
+        label: 'Total Anual', rowClass: 'comparison-total-anual-row', get: (p) => `$${formatMoney(cotizaciones.get(p.id).totalAnual)}`,
+      },
+      { section: 'Fraccionamiento' },
       {
         label: 'Gasto Admin. por Fraccionamiento', get: (p) => {
           const g = cotizaciones.get(p.id).fraccionamiento.gastoAdmin;
@@ -1157,7 +1292,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         },
       },
       {
-        label: 'Semestral', get: (p) => {
+        label: 'Semestral', rowClass: 'row-shaded', get: (p) => {
           const v = cotizaciones.get(p.id).fraccionamiento.semestral;
           return v != null ? `$${formatMoney(v)}` : '—';
         },
@@ -1169,21 +1304,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         },
       },
       {
-        label: 'Mensual', get: (p) => {
+        label: 'Mensual', rowClass: 'row-shaded', get: (p) => {
           const f = cotizaciones.get(p.id).fraccionamiento;
           return f.mensual != null ? `$${formatMoney(f.mensual)} (${f.mensualFracciones} cuotas)` : '—';
         },
       },
     ];
 
-    const encabezado = '<thead><tr><th>Plan</th>' +
-      planesSeleccionados.map((_, i) => `<th>Opción ${i + 1}</th>`).join('') + '</tr></thead>';
+    const encabezado = '<thead><tr><th>Aseguradoras</th>' +
+      planesSeleccionados.map((p) => `<th>${buildInsurerHeaderCell(p)}</th>`).join('') + '</tr></thead>';
 
-    const cuerpo = '<tbody>' + filasDefinicion.map(def => (
-      `<tr><td class="comparison-row-label">${escapeHtmlLocal(def.label)}</td>` +
-      planesSeleccionados.map(p => `<td>${escapeHtmlLocal(def.get(p))}</td>`).join('') +
-      '</tr>'
-    )).join('') + '</tbody>';
+    const cuerpo = '<tbody>' + filasDefinicion.map(def => {
+      if (def.section) {
+        return `<tr class="comparison-section-row"><td colspan="${numCols}">${escapeHtmlLocal(def.section)}</td></tr>`;
+      }
+      const rowClass = def.rowClass ? ` class="${def.rowClass}"` : '';
+      const cellClass = def.cellClass ? ` class="${def.cellClass}"` : '';
+      return `<tr${rowClass}><td class="comparison-row-label">${escapeHtmlLocal(def.label)}</td>` +
+        planesSeleccionados.map(p => `<td${cellClass}>${escapeHtmlLocal(def.get(p))}</td>`).join('') +
+        '</tr>';
+    }).join('') + '</tbody>';
 
     const table = document.createElement('table');
     table.className = 'comparison-table';
@@ -1192,6 +1332,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   viewComparisonBtn.addEventListener('click', () => {
+    renderComparisonPrintHeader();
     renderComparisonModal();
     comparisonModal.classList.add('active');
   });
@@ -1232,6 +1373,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     elaboradoPorActual = getElaboradoPorValue();
+    tarifaTipoActual = tarifaTipoSelect.value || 'Emisión';
 
     setFamilyFormLocked(true);
     showPlansBtn.disabled = true;
