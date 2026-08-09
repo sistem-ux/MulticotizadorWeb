@@ -1352,6 +1352,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       },
     ];
 
+    // Anchos fijos vía <colgroup>: la columna de etiquetas queda a 150px y el
+    // resto del ancho se reparte en partes EXACTAMENTE iguales entre las
+    // columnas de planes. Esto es necesario porque con table-layout:fixed,
+    // si no se define el ancho de columna explícitamente, el navegador lo
+    // calcula a partir del contenido de la fila de encabezado (logo/nombre
+    // de cada aseguradora), provocando columnas de distinto ancho.
+    const anchoColumnaPlan = `calc((100% - 150px) / ${planesSeleccionados.length})`;
+    const colgroup = '<colgroup><col style="width:150px;">' +
+      planesSeleccionados.map(() => `<col style="width:${anchoColumnaPlan};">`).join('') + '</colgroup>';
+
     const encabezado = '<thead><tr><th>Aseguradoras</th>' +
       planesSeleccionados.map((p) => `<th>${buildInsurerHeaderCell(p)}</th>`).join('') + '</tr></thead>';
 
@@ -1368,7 +1378,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const table = document.createElement('table');
     table.className = 'comparison-table';
-    table.innerHTML = encabezado + cuerpo;
+    table.innerHTML = colgroup + encabezado + cuerpo;
     comparisonTableWrapper.appendChild(table);
   }
 

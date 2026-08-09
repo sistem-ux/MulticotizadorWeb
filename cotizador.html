@@ -554,6 +554,7 @@
        ========================================================= */
     .comparison-table {
       width: 100%;
+      table-layout: fixed;
       border-collapse: collapse;
       font-size: 12.5px;
       font-family: 'Inter', sans-serif;
@@ -564,6 +565,8 @@
       padding: 7px 10px;
       text-align: left;
       vertical-align: top;
+      overflow-wrap: break-word;
+      word-break: break-word;
     }
     .comparison-table thead th {
       background: #FFFFFF;
@@ -597,7 +600,7 @@
       font-weight: 600;
       color: #333;
       background: #FFFFFF;
-      white-space: nowrap;
+      white-space: normal;
     }
     .comparison-table tr.row-shaded td {
       background: var(--print-gray-row);
