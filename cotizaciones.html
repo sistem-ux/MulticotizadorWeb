@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cotizaciones | Panel de Administración</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="stylesusers.css">
+  <style>
+    /* Estilos estructurales para el diseño con barra lateral y superior
+       (idénticos a los usados en usuarios.html / aseguradoras.html / cotizador.html,
+       para que esta pantalla se vea exactamente igual al resto del sistema). */
+    :root {
+      --color-navy: #001F5B;
+      --color-gray-light: #F2F3F5;
+      --color-gray-border: #D8DAE0;
+      --transition: 0.25s ease;
+    }
+
+    body {
+      display: flex;
+      overflow-x: hidden;
+      margin: 0;
+      background: linear-gradient(180deg, #EEF1F6 0%, #E4E8F0 100%);
+      min-height: 100vh;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .sidebar {
+      width: 260px;
+      background: var(--color-navy);
+      color: #FFFFFF;
+      display: flex;
+      flex-direction: column;
+      transition: transform var(--transition), width var(--transition);
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 100;
+      box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
+    }
+
+    .sidebar.is-hidden { transform: translateX(-100%); }
+
+    .sidebar__header {
+      padding: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .sidebar__logo {
+      width: 40px;
+      height: 40px;
+      background-color: #FFFFFF;
+      color: var(--color-navy);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Poppins', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .sidebar__title { font-size: 1.1rem; font-weight: 700; letter-spacing: 0.02em; }
+
+    .sidebar__nav {
+      padding: 1.5rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .menu-group__title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: #A6A9B0;
+      margin-bottom: 0.5rem;
+      padding-left: 0.75rem;
+      cursor: pointer;
+      user-select: none;
+      transition: color var(--transition);
+    }
+
+    .menu-group__title:hover { color: #FFFFFF; }
+
+    .menu-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .menu-list.is-hidden { display: none; }
+
+    .menu-link {
+      display: flex;
+      align-items: center;
+      padding: 0.75rem 0.85rem;
+      color: #D8DAE0;
+      text-decoration: none;
+      font-size: 0.92rem;
+      font-weight: 500;
+      border-radius: 6px;
+      transition: background var(--transition), color var(--transition);
+    }
+
+    .menu-link:hover { background: rgba(255, 255, 255, 0.08); color: #FFFFFF; }
+
+    .main-wrapper {
+      flex: 1;
+      margin-left: 260px;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      transition: margin-left var(--transition);
+    }
+
+    .main-wrapper.is-expanded { margin-left: 0; }
+
+    .topbar {
+      height: 70px;
+      background: #FFFFFF;
+      border-bottom: 1px solid var(--color-gray-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1.5rem;
+      position: sticky;
+      top: 0;
+      z-index: 90;
+    }
+
+    .btn-toggle {
+      background: var(--color-gray-light);
+      border: 1px solid var(--color-gray-border);
+      color: var(--color-navy);
+      padding: 0.5rem 0.9rem;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 1.1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background var(--transition);
+    }
+
+    .btn-toggle:hover { background: var(--color-gray-border); }
+
+    .page--users {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      padding: 1.5rem;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .icon-btn {
+      background: transparent;
+      border: none;
+      font-size: 1.2rem;
+      cursor: pointer;
+      margin: 0 0.25rem;
+      padding: 0.2rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s ease, filter 0.2s ease;
+    }
+
+    .icon-btn:hover { transform: scale(1.15); filter: brightness(1.2); }
+
+    .status-pill {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+    .status-pill--emision { background: #dff6e8; color: #235F2F; }
+    .status-pill--continuidad { background: #E4EAF7; color: var(--color-navy); }
+
+    /* Los botones de Acciones (ver / eliminar) siempre en línea, uno al lado
+       del otro, sin importar cómo stylesusers.css maneje la celda por
+       defecto (incluida la vista de tarjeta en móvil). */
+    .users-table th.col-actions,
+    .users-table td.col-actions {
+      width: 1%;
+      white-space: nowrap;
+      padding-right: 1.25rem;
+    }
+    .users-table td.col-actions {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0.5rem;
+    }
+    .users-table td.col-actions .action-btn {
+      flex-shrink: 0;
+      margin: 0;
+    }
+
+    /* ---------------------------------------------------------------
+       Filtro por tipo de tarifa (select adicional a la barra de búsqueda)
+       --------------------------------------------------------------- */
+    .users-toolbar { flex-wrap: wrap; gap: 0.75rem; }
+    .filter-tarifa-select {
+      max-width: 200px;
+    }
+
+    /* ---------------------------------------------------------------
+       MODAL DE DETALLE (solo lectura): resumen de la cotización guardada
+       --------------------------------------------------------------- */
+    .modal--wide { max-width: 760px; width: 94%; }
+
+    .detail-section {
+      border-top: 1px solid var(--color-gray-border);
+      margin-top: 1.25rem;
+      padding-top: 1rem;
+    }
+    .detail-section:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+
+    .detail-section__title {
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--color-navy);
+      margin: 0 0 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem 1.5rem;
+    }
+    @media (max-width: 640px) {
+      .detail-grid { grid-template-columns: 1fr; }
+    }
+
+    .detail-item__label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #5B6472;
+      margin-bottom: 0.15rem;
+    }
+    .detail-item__value {
+      font-size: 0.92rem;
+      color: #1C2230;
+      font-weight: 500;
+    }
+
+    .detail-grupo-familiar {
+      font-size: 0.9rem;
+      color: #1C2230;
+    }
+
+    .detail-planes-wrapper {
+      overflow-x: auto;
+    }
+    .detail-planes-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    .detail-planes-table th,
+    .detail-planes-table td {
+      border: 1px solid var(--color-gray-border);
+      padding: 0.5rem 0.65rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    .detail-planes-table th {
+      background: var(--color-gray-light);
+      color: var(--color-navy);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .detail-planes-table tr:nth-child(even) td {
+      background: #FBFBFC;
+    }
+    .detail-planes-empty {
+      font-size: 0.85rem;
+      color: #9BA0AB;
+      font-style: italic;
+    }
+
+    @media (max-width: 768px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.is-mobile-visible { transform: translateX(0); }
+      .main-wrapper { margin-left: 0 !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Verificación temprana de sesión y perfil (Administrador, Colaborador o Asesor) -->
+  <script src="auth-guard.js"></script>
+  <script>requireAccess('cotizaciones.html');</script>
+
+  <!-- BARRA LATERAL DINÁMICA -->
+  <aside id="sidebar" class="sidebar"></aside>
+
+  <!-- CONTENEDOR GENERAL DE LA DERECHA -->
+  <div id="mainContent" class="main-wrapper">
+
+    <!-- BARRA SUPERIOR -->
+    <header class="topbar">
+      <div class="topbar__actions">
+        <button id="sidebarToggle" class="btn-toggle" title="Ocultar / Mostrar Menú">☰</button>
+      </div>
+      <div id="loggedUserDisplay" style="font-weight: 600; font-size: 0.9rem; color: var(--color-navy);">
+        Cargando...
+      </div>
+    </header>
+
+    <!-- CONTENIDO DE LA PÁGINA -->
+    <main class="page page--users">
+      <div class="card">
+
+        <header class="page-header">
+          <span class="page-header__eyebrow">Administración</span>
+          <h1 class="page-header__title">📄 Cotizaciones</h1>
+          <p class="page-header__subtitle">Consulta las cotizaciones finalizadas desde el cotizador, con el detalle del grupo familiar y los planes comparados.</p>
+        </header>
+
+        <section id="panelCotizaciones" class="tab-panel is-active">
+
+          <div class="users-toolbar">
+            <div class="search-bar">
+              <span class="search-bar__icon" aria-hidden="true">🔎</span>
+              <input type="text" id="searchCotizaciones" class="search-bar__input" placeholder="Buscar por solicitante o elaborado por..." autocomplete="off">
+              <button type="button" id="clearSearchCotizaciones" class="search-bar__clear" aria-label="Limpiar búsqueda">✕</button>
+            </div>
+            <select id="filterTarifaCotizaciones" class="text-input filter-tarifa-select">
+              <option value="">Todas las tarifas</option>
+              <option value="Emisión">Emisión</option>
+              <option value="Continuidad">Continuidad</option>
+            </select>
+            <a href="cotizador.html" class="btn btn--register" style="text-decoration:none; display:inline-flex; align-items:center;">
+              <span aria-hidden="true">＋</span> Nueva Cotización
+            </a>
+          </div>
+
+          <div id="cotizacionesNotification" class="page-notification" aria-live="polite" style="display:none;"></div>
+
+          <div class="users-table-wrapper">
+            <table class="users-table" id="cotizacionesTable">
+              <thead>
+                <tr>
+                  <th scope="col" class="is-sortable" data-sort-key="fecha_creacion">Fecha <span class="sort-indicator"></span></th>
+                  <th scope="col" class="is-sortable" data-sort-key="nombre_solicitante">Solicitante <span class="sort-indicator"></span></th>
+                  <th scope="col">Elaborado por</th>
+                  <th scope="col">Tarifa</th>
+                  <th scope="col">Vencimiento</th>
+                  <th scope="col">Planes comparados</th>
+                  <th scope="col">Creado por</th>
+                  <th scope="col" class="col-actions">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="cotizacionesTableBody"></tbody>
+            </table>
+            <div id="cotizacionesLoading" class="users-loading">Cargando cotizaciones...</div>
+            <div id="cotizacionesEmpty" class="users-empty" style="display:none;">No se encontraron cotizaciones.</div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+  </div>
+
+  <!-- MODAL DE DETALLE (solo lectura) -->
+  <div class="modal-overlay" id="cotizacionModalOverlay">
+    <div class="modal modal--wide" role="dialog" aria-modal="true" aria-labelledby="cotizacionModalTitle">
+      <div class="modal__header">
+        <h2 class="modal__title" id="cotizacionModalTitle">Detalle de Cotización</h2>
+        <button type="button" class="modal__close" id="cotizacionModalCloseBtn" aria-label="Cerrar">✕</button>
+      </div>
+
+      <div class="detail-section">
+        <h3 class="detail-section__title">📋 Datos Generales</h3>
+        <div class="detail-grid" id="cotizacionDetalleGenerales"></div>
+      </div>
+
+      <div class="detail-section">
+        <h3 class="detail-section__title">👨‍👩‍👧‍👦 Grupo Familiar</h3>
+        <p class="detail-grupo-familiar" id="cotizacionDetalleGrupoFamiliar"></p>
+      </div>
+
+      <div class="detail-section">
+        <h3 class="detail-section__title">🛡️ Planes Comparados</h3>
+        <div class="detail-planes-wrapper">
+          <table class="detail-planes-table" id="cotizacionDetallePlanesTable">
+            <thead>
+              <tr>
+                <th>Aseguradora</th>
+                <th>Producto</th>
+                <th>Suma Asegurada</th>
+                <th>Coberturas Opcionales</th>
+                <th>Total Anual</th>
+              </tr>
+            </thead>
+            <tbody id="cotizacionDetallePlanesBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <h3 class="detail-section__title">🕒 Control</h3>
+        <div class="detail-grid" id="cotizacionDetalleControl"></div>
+      </div>
+
+      <div class="modal__footer">
+        <button type="button" class="btn btn--cancel" id="closeCotizacionModalBtn">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIRMACIÓN COMPARTIDA (eliminar cotización) -->
+  <div id="confirmOverlay" class="confirm-overlay" style="display:none;">
+    <div class="confirm-modal">
+      <h3 id="confirmTitle">Confirmación</h3>
+      <p id="confirmMessage">¿Deseas continuar?</p>
+      <div class="confirm-actions">
+        <button type="button" id="confirmCancelBtn" class="btn btn--cancel">Cancelar</button>
+        <button type="button" id="confirmAcceptBtn" class="btn btn--danger">Eliminar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="cotizaciones.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Administrador, Colaborador y Asesor tienen acceso (ver PAGE_PERMISSIONS en auth-guard.js).
+      initAppShell({ pageName: 'cotizaciones.html' });
+    });
+  </script>
+</body>
+</html>

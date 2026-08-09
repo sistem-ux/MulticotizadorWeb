@@ -35,6 +35,7 @@ const PAGE_PERMISSIONS = {
   'planes.html': [ROLES.ADMIN],
   'perfiles.html': [ROLES.ADMIN],
   'cotizador.html': [ROLES.ADMIN, ROLES.COLABORADOR, ROLES.ASESOR, ROLES.VISITANTE],
+  'cotizaciones.html': [ROLES.ADMIN, ROLES.COLABORADOR, ROLES.ASESOR],
 };
 
 /* -----------------------------------------------------------------------
