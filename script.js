@@ -1312,7 +1312,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         label: 'Detalle Adicionales', rowClass: 'row-shaded', cellClass: 'comparison-detalle-adicionales', get: (p) => {
           const seleccionados = coberturasSeleccionadasPorPlan[p.id] || [];
           return seleccionados.length > 0
-            ? seleccionados.map((s) => s.porServicio ? s.nombre : `${s.nombre} ($${formatCurrencyThousands(s.sumaAsegurada)})`).join(', ')
+            ? seleccionados.map((s) => s.porServicio ? s.nombre : `${s.nombre} `).join(', ')
             : 'Ninguno';
         },
       },
