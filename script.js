@@ -99,7 +99,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const comparisonPrintHeader = document.getElementById('comparisonPrintHeader');
   const exportComparisonBtn = document.getElementById('exportComparisonBtn');
 
-  const MAX_PLANES_COMPARACION = 4;
+  const MAX_PLANES_COMPARACION = 5;
 
   let childCount = 0;
   let currentSelectedPlanId = null; // Para saber a qué plan le estamos agregando adicionales
@@ -651,6 +651,24 @@ document.addEventListener('DOMContentLoaded', async () => {
       const sel = row.querySelector('.modal-cov-sum');
 
       if (chk && chk.checked) {
+        const index = Number(chk.dataset.index);
+        const adicional = plan?.coberturasAdicionales?.[index];
+        if (!adicional) continue;
+
+        if (adicional.porServicio) {
+          // Cobertura "por Servicio": no requiere seleccionar suma, la prima
+          // ya viene fija desde la configuración de la tarifa.
+          seleccionados.push({
+            key: adicional.key,
+            nombre: adicional.nombre,
+            sumaAsegurada: null,
+            prima: Number(adicional.prima) || 0,
+            porServicio: true,
+            isMaternidad: !!adicional.isMaternidad,
+          });
+          continue;
+        }
+
         // VALIDACIÓN: Si el checkbox está marcado, el select NO puede estar vacío
         if (!sel || !sel.value) {
           const nombreCobertura = row.querySelector('span')?.textContent.trim() || 'la cobertura';
@@ -659,9 +677,6 @@ document.addEventListener('DOMContentLoaded', async () => {
           break; // Detenemos el bucle
         }
 
-        const index = Number(chk.dataset.index);
-        const adicional = plan?.coberturasAdicionales?.[index];
-        if (!adicional) continue;
         const sumaValue = Number(sel.value);
         const sumaObj = adicional.sumas.find((s) => Number(s.suma_asegurada) === sumaValue);
 
@@ -670,6 +685,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           nombre: adicional.nombre,
           sumaAsegurada: sumaValue,
           prima: sumaObj ? Number(sumaObj.prima) : 0,
+          porServicio: false,
           isMaternidad: !!adicional.isMaternidad,
         });
       }
@@ -698,7 +714,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const seleccionados = coberturasSeleccionadasPorPlan[planId] || [];
     if (seleccionados.length > 0) {
       targetDiv.style.display = 'block';
-      targetDiv.textContent = `Adicionales: ${seleccionados.map((s) => `${s.nombre} ($${formatCurrencyThousands(s.sumaAsegurada)})`).join(', ')}`;
+      targetDiv.textContent = `Adicionales: ${seleccionados.map((s) => s.porServicio ? s.nombre : `${s.nombre} ($${formatCurrencyThousands(s.sumaAsegurada)})`).join(', ')}`;
     } else {
       targetDiv.style.display = 'none';
       targetDiv.textContent = '';
@@ -735,9 +751,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     COVERAGE_LIST.forEach((def) => {
       const cov = tarifa.coberturas ? tarifa.coberturas[def.key] : null;
       if (!cov || cov.estado !== 'Opcional') return;
+
+      if (cov.servicios) {
+        // Modo "Servicios": no se maneja Suma Asegurada, solo una Prima fija.
+        // Se selecciona con un simple checkbox, sin desplegable de suma.
+        const row = (cov.sumas || []).find((s) => s.prima != null);
+        if (!row) return;
+        adicionales.push({ key: def.key, nombre: def.label, porServicio: true, prima: Number(row.prima), isMaternidad: false });
+        return;
+      }
+
       const sumas = (cov.sumas || []).filter((s) => s.suma_asegurada != null && s.prima != null);
       if (!sumas.length) return;
-      adicionales.push({ key: def.key, nombre: def.label, sumas, isMaternidad: false });
+      adicionales.push({ key: def.key, nombre: def.label, sumas, porServicio: false, isMaternidad: false });
     });
 
     // La Maternidad se mantiene disponible en el mismo modal de "+ Adicionales"
@@ -939,12 +965,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       card.innerHTML = `
         <div class="plan-header-row">
-          <h3 class="plan-title" title="${escapeHtmlLocal(plan.aseguradora_nombre || 'Sin aseguradora')}">${escapeHtmlLocal(plan.aseguradora_nombre || 'Sin aseguradora')}</h3>
-          <h3 class="plan-details">Suma Asegurada: $${formatCurrencyThousands(plan.suma_asegurada)}</h3>
-          <p class="plan-details">Prod.: ${escapeHtmlLocal(plan.producto_nombre || 'Sin producto')}</p>
-          <p class="plan-details">Ded. Vzla: $${formatCurrencyThousands(plan.deducible_venezuela)}</p>
-          <p class="plan-details">Ded. Ext: $${formatCurrencyThousands(plan.deducible_exterior)}</p>
-          </div>
+          <h3 class="plan-title" title="${escapeHtmlLocal(plan.aseguradora_nombre || 'Sin aseguradora')} | ${escapeHtmlLocal(plan.producto_nombre || 'Sin producto')}">${escapeHtmlLocal(plan.aseguradora_nombre || 'Sin aseguradora')} | ${escapeHtmlLocal(plan.producto_nombre || 'Sin producto')}</h3>
+          <p class="plan-details">Suma Asegurada: $${formatCurrencyThousands(plan.suma_asegurada)}</p>
+          <p class="plan-details">Ded. Vzla: $${formatCurrencyThousands(plan.deducible_venezuela)} | Ded. Exterior: $${formatCurrencyThousands(plan.deducible_exterior)}</p>
+        </div>
 
         <div class="plan-actions-row">
           <button type="button" class="btn btn--secondary open-modal-btn" style="padding: 6px 12px; font-size: 13px;">+ Adicionales</button>
@@ -1008,16 +1032,27 @@ document.addEventListener('DOMContentLoaded', async () => {
           const itemRow = document.createElement('div');
           itemRow.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px;';
 
-          itemRow.innerHTML = `
-            <div ${tachado} style="display:flex; align-items:center; gap:8px; cursor:pointer; flex: 1;">
-              <input type="checkbox" class="modal-cov-checkbox" data-key="${adicional.key}" data-index="${index}" ${disabled} ${isChecked}>
-              <span style="font-size: 14px;">${adicional.nombre} ${disabled ? '(No aplica)' : ''}</span>
-            </div>
-            <select class="text-input modal-cov-sum" data-index="${index}" style="width: 130px; padding: 4px 8px; font-size: 13px;" ${!isChecked || disabled ? 'disabled' : ''}>
-              <option value="">Suma...</option>
-              ${adicional.sumas.map(s => `<option value="${s.suma_asegurada}" ${seleccionPrevia && Number(seleccionPrevia.sumaAsegurada) === Number(s.suma_asegurada) ? 'selected' : ''}>$${formatCurrencyThousands(s.suma_asegurada)}</option>`).join('')}
-            </select>
-          `;
+          if (adicional.porServicio) {
+            // Cobertura "por Servicio": no hay Suma Asegurada que elegir,
+            // solo se selecciona o no (la Prima ya está fija en el plan).
+            itemRow.innerHTML = `
+              <div ${tachado} style="display:flex; align-items:center; gap:8px; cursor:pointer; flex: 1;">
+                <input type="checkbox" class="modal-cov-checkbox" data-key="${adicional.key}" data-index="${index}" ${disabled} ${isChecked}>
+                <span style="font-size: 14px;">${adicional.nombre} ${disabled ? '(No aplica)' : ''}</span>
+              </div>
+            `;
+          } else {
+            itemRow.innerHTML = `
+              <div ${tachado} style="display:flex; align-items:center; gap:8px; cursor:pointer; flex: 1;">
+                <input type="checkbox" class="modal-cov-checkbox" data-key="${adicional.key}" data-index="${index}" ${disabled} ${isChecked}>
+                <span style="font-size: 14px;">${adicional.nombre} ${disabled ? '(No aplica)' : ''}</span>
+              </div>
+              <select class="text-input modal-cov-sum" data-index="${index}" style="width: 130px; padding: 4px 8px; font-size: 13px;" ${!isChecked || disabled ? 'disabled' : ''}>
+                <option value="">Suma...</option>
+                ${adicional.sumas.map(s => `<option value="${s.suma_asegurada}" ${seleccionPrevia && Number(seleccionPrevia.sumaAsegurada) === Number(s.suma_asegurada) ? 'selected' : ''}>$${formatCurrencyThousands(s.suma_asegurada)}</option>`).join('')}
+              </select>
+            `;
+          }
 
           modalCoveragesBody.appendChild(itemRow);
 
@@ -1025,14 +1060,16 @@ document.addEventListener('DOMContentLoaded', async () => {
           const chk = itemRow.querySelector('.modal-cov-checkbox');
           const sel = itemRow.querySelector('.modal-cov-sum');
 
-          chk.addEventListener('change', () => {
-            if (chk.checked) {
-              sel.disabled = false;
-            } else {
-              sel.disabled = true;
-              sel.value = '';
-            }
-          });
+          if (sel) {
+            chk.addEventListener('change', () => {
+              if (chk.checked) {
+                sel.disabled = false;
+              } else {
+                sel.disabled = true;
+                sel.value = '';
+              }
+            });
+          }
         });
 
         coveragesModal.classList.add('active');
@@ -1216,13 +1253,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>
         <div class="print-header__main">
           <p class="print-header__title">Cotización Salud Individual</p>
+          ${contactoPartes ? `<p class="print-header__asesor-contacto">${escapeHtmlLocal(contactoPartes)}</p>` : ''}
           <p class="print-header__fecha">Fecha de la cotización: ${fechaHoy}</p>
         </div>
       </div>
       <div class="print-header__rows">
         <div class="print-info-row">
           <span><strong>Solicitante:</strong> ${escapeHtmlLocal(nombreSolicitante)}</span>
-          <span><strong>Asesor:</strong> ${escapeHtmlLocal(nombreAsesor)} · ${escapeHtmlLocal(contactoPartes)}</span>
+          <span><strong>Asesor:</strong> ${escapeHtmlLocal(nombreAsesor)}</span>
         </div>
         <div class="print-tarifa-row">
           <span class="print-tarifa-badge">Tarifa: ${escapeHtmlLocal(tarifaTipoActual || 'Emisión')}</span>
@@ -1267,20 +1305,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     // clase de celda para resaltar valores puntuales (suma asegurada, total
     // anual), igual al estilo del documento de referencia.
     const filasDefinicion = [
+      { label: 'Plan', get: (p) => p.nombre_plan || '—' },
       { label: 'Producto', get: (p) => p.producto_nombre || '—', rowClass: 'row-shaded' },
       { label: 'Suma Asegurada', get: (p) => `$${formatCurrencyThousands(p.suma_asegurada)}`, cellClass: 'comparison-suma-asegurada' },
+      { section: 'Total Estimado a Pagar Anual' },
+      { label: 'Total Cobertura Básica', get: (p) => `$${formatMoney(cotizaciones.get(p.id).basica)}` },
+      { label: 'Total Cob. Adicionales', get: (p) => `$${formatMoney(cotizaciones.get(p.id).adicionales)}`, rowClass: 'row-shaded' },
       {
         label: 'Detalle Adicionales', rowClass: 'row-shaded', cellClass: 'comparison-detalle-adicionales', get: (p) => {
           const seleccionados = coberturasSeleccionadasPorPlan[p.id] || [];
           return seleccionados.length > 0
-            ? seleccionados.map((s) => `${s.nombre} ($${formatCurrencyThousands(s.sumaAsegurada)})`).join(', ')
+            ? seleccionados.map((s) => s.porServicio ? s.nombre : `${s.nombre} ($${formatCurrencyThousands(s.sumaAsegurada)})`).join(', ')
             : 'Ninguno';
         },
       },
-      { section: 'Total Estimado a Pagar Anual' },
-      { label: 'Total Cobertura Básica', get: (p) => `$${formatMoney(cotizaciones.get(p.id).basica)}` },
-      { label: 'Total Cob. Adicionales', get: (p) => `$${formatMoney(cotizaciones.get(p.id).adicionales)}`, rowClass: 'row-shaded' },
-
       { label: 'Maternidad', get: (p) => `$${formatMoney(cotizaciones.get(p.id).maternidad)}` },
       {
         label: 'Total Anual', rowClass: 'comparison-total-anual-row', get: (p) => `$${formatMoney(cotizaciones.get(p.id).totalAnual)}`,

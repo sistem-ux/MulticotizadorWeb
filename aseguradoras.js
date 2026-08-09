@@ -1691,8 +1691,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       serviciosCheck.disabled = false;
       const isOpcional = estado === 'Opcional';
-      addBtn.style.display = isOpcional ? 'inline-block' : 'none';
-      if (!isOpcional) {
+      // El botón "+ Agregar suma asegurada" solo aplica cuando el cálculo es
+      // por Suma Asegurada. Si "Servicios" está marcado, la cobertura se
+      // resuelve solo con Prima, así que no tiene sentido agregar más sumas.
+      addBtn.style.display = (isOpcional && !serviciosCheck.checked) ? 'inline-block' : 'none';
+      if (!isOpcional || serviciosCheck.checked) {
         Array.from(sumsContainer.children).forEach((row, idx) => { if (idx > 0) row.remove(); });
       }
       Array.from(sumsContainer.children).forEach((row) => {
