@@ -252,11 +252,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       tr.innerHTML = `
         <td data-label="Fecha">${formatDateEs(item.fecha_creacion)}</td>
         <td data-label="Solicitante">${escapeHtml(item.nombre_solicitante)}</td>
-        <td data-label="Elaborado por">${escapeHtml(item.elaborado_por || '—')}</td>
+        <td data-label="Asesor">${escapeHtml(item.elaborado_por || '—')}</td>
         <td data-label="Tarifa"><span class="status-pill ${tarifaClass}">${escapeHtml(item.tipo_tarifa)}</span></td>
         <td data-label="Vencimiento">${formatDateEs(item.vencimiento)}</td>
-        <td data-label="Planes comparados">${cantidadPlanes} ${cantidadPlanes === 1 ? 'plan' : 'planes'}</td>
-        <td data-label="Creado por">${escapeHtml(item.usuario_creador_nombre || '—')}</td>
         <td data-label="Acciones" class="col-actions">
           <button type="button" class="action-btn action-btn--view" data-id="${item.id}" aria-label="Ver cotización">👁️</button>
           <button type="button" class="action-btn action-btn--delete" data-id="${item.id}" aria-label="Eliminar cotización">🗑️</button>

@@ -271,6 +271,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const userForm = document.getElementById('userForm');
   const userIdInput = document.getElementById('userId');
   const sucursalSelect = document.getElementById('sucursalSelect');
+  const ejecutivoSelect = document.getElementById('ejecutivoSelect');
+  const ejecutivoHint = document.getElementById('ejecutivoHint');
   const fullNameInput = document.getElementById('fullName');
   const emailInput = document.getElementById('email');
   const telefonoInput = document.getElementById('telefono');
@@ -281,6 +283,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const formFeedback = document.getElementById('formFeedback');
 
   const fieldSucursal = document.getElementById('fieldSucursal');
+  const fieldEjecutivo = document.getElementById('fieldEjecutivo');
   const fieldFullName = document.getElementById('fieldFullName');
   const fieldEmail = document.getElementById('fieldEmail');
   const fieldTelefono = document.getElementById('fieldTelefono');
@@ -303,6 +306,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   attachTitleCaseFormatter(fullNameInput);
 
+  // Cuando el perfil es Administrador o Colaborador, el "Ejecutivo" mostrado
+  // es el propio nombre del usuario: si lo edita en vivo, se refleja también
+  // en la opción (aunque el campo permanezca no editable).
+  fullNameInput.addEventListener('input', () => {
+    const perfilSeleccionado = allPerfiles.find((p) => p.id === perfilInput.value);
+    const perfilNombre = perfilSeleccionado ? perfilSeleccionado.perfil : '';
+    if (perfilNombre === 'Administrador' || perfilNombre === 'Colaborador') {
+      refreshEjecutivoField();
+    }
+  });
+
   /* Correo: solo minúsculas */
   emailInput.addEventListener('input', (e) => {
     const input = e.target;
@@ -316,6 +330,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   sucursalSelect.addEventListener('change', () => {
     if (sucursalSelect.value) fieldSucursal.classList.remove('has-error');
+    refreshEjecutivoField();
   });
 
   /* Teléfono: solo dígitos, espacios, +, -, paréntesis */
@@ -334,6 +349,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   perfilInput.addEventListener('change', () => {
     if (perfilInput.value) fieldPerfil.classList.remove('has-error');
+    refreshEjecutivoField();
   });
 
   /* Contraseña: mostrar / ocultar */
@@ -373,6 +389,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     setFieldError(fieldPerfil, !perfilOk);
     if (!perfilOk) valid = false;
 
+    // "Ejecutivo" solo es obligatorio a elegir cuando el perfil es Asesor;
+    // para Administrador/Colaborador se autocompleta (propio nombre) y no
+    // se valida como selección del usuario.
+    const perfilSeleccionadoValidacion = allPerfiles.find((p) => p.id === perfilInput.value);
+    const perfilNombreValidacion = perfilSeleccionadoValidacion ? perfilSeleccionadoValidacion.perfil : '';
+    if (perfilNombreValidacion === 'Asesor') {
+      const ejecutivoOk = ejecutivoSelect.value.trim().length > 0;
+      setFieldError(fieldEjecutivo, !ejecutivoOk);
+      if (!ejecutivoOk) valid = false;
+    } else {
+      setFieldError(fieldEjecutivo, false);
+    }
+
     const passwordOk = PASSWORD_REGEX.test(passwordInput.value);
     setFieldError(fieldPassword, !passwordOk);
     if (!passwordOk) valid = false;
@@ -410,6 +439,77 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   /* =========================================================
+     LISTA "EJECUTIVO" (después de Sucursal)
+     Depende del perfil seleccionado:
+       - Administrador / Colaborador: campo no editable, se autocompleta
+         con el propio nombre del usuario (es su propio ejecutivo).
+       - Asesor: lista de Colaboradores Activos de la MISMA sucursal
+         elegida en el campo Sucursal.
+       - Cualquier otro perfil (o ninguno aún): no aplica, campo deshabilitado.
+     ========================================================= */
+  function refreshEjecutivoField(selectedId) {
+    const previous = selectedId ?? ejecutivoSelect.dataset.pendingValue ?? ejecutivoSelect.value;
+    const perfilSeleccionado = allPerfiles.find((p) => p.id === perfilInput.value);
+    const perfilNombre = perfilSeleccionado ? perfilSeleccionado.perfil : '';
+
+    ejecutivoSelect.innerHTML = '';
+    setFieldError(fieldEjecutivo, false);
+
+    if (perfilNombre === 'Administrador' || perfilNombre === 'Colaborador') {
+      const opt = document.createElement('option');
+      opt.value = 'self';
+      opt.textContent = fullNameInput.value.trim() || '(Nombre del propio usuario)';
+      ejecutivoSelect.appendChild(opt);
+      ejecutivoSelect.value = 'self';
+      ejecutivoSelect.disabled = true;
+      ejecutivoHint.textContent = 'Este perfil es su propio ejecutivo; el campo no es editable.';
+      return;
+    }
+
+    if (perfilNombre === 'Asesor') {
+      ejecutivoSelect.disabled = false;
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Selecciona un ejecutivo';
+      ejecutivoSelect.appendChild(placeholder);
+
+      const sucursalId = sucursalSelect.value;
+      if (!sucursalId) {
+        ejecutivoSelect.disabled = true;
+        ejecutivoHint.textContent = 'Primero selecciona la sucursal del usuario.';
+        return;
+      }
+
+      const colaboradores = allUsers.filter((u) => {
+        const perfilU = u.perfiles?.perfil || u.perfil || '';
+        return perfilU === 'Colaborador' && u.sucursal_id === sucursalId && (u.status || 'Activo') === 'Activo';
+      });
+
+      colaboradores.forEach((u) => {
+        const opt = document.createElement('option');
+        opt.value = u.id;
+        opt.textContent = u.full_name;
+        ejecutivoSelect.appendChild(opt);
+      });
+
+      ejecutivoHint.textContent = colaboradores.length > 0
+        ? 'Solo se listan los colaboradores Activos de la sucursal seleccionada.'
+        : 'No hay colaboradores Activos registrados en esa sucursal.';
+
+      if (previous) ejecutivoSelect.value = previous;
+      return;
+    }
+
+    // Ningún perfil seleccionado, o un perfil distinto (p. ej. Visitante): no aplica.
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = 'No aplica para este perfil';
+    ejecutivoSelect.appendChild(opt);
+    ejecutivoSelect.disabled = true;
+    ejecutivoHint.textContent = 'El ejecutivo se determina automáticamente según el perfil seleccionado.';
+  }
+
+  /* =========================================================
      MODAL: abrir / cerrar
      ========================================================= */
   function openModal({ edit = false, user = null, viewOnly = false } = {}) {
@@ -417,7 +517,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     isReadOnlyUser = viewOnly;
     userForm.reset();
     clearFeedback('formFeedback');
-    [fieldSucursal, fieldFullName, fieldEmail, fieldTelefono, fieldPerfil, fieldPassword].forEach((f) => setFieldError(f, false));
+    [fieldSucursal, fieldFullName, fieldEmail, fieldTelefono, fieldPerfil, fieldPassword, fieldEjecutivo].forEach((f) => setFieldError(f, false));
 
     populateSucursalSelect();
     populatePerfilSelect();
@@ -447,8 +547,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       perfilInput.value = '';
     }
 
+    // El campo "Ejecutivo" depende del perfil (y de la sucursal, si es
+    // Asesor), así que se calcula siempre después de fijar esos valores.
+    // Para Administrador/Colaborador no importa lo que traiga la BD: el
+    // propio refreshEjecutivoField() lo autocompleta con el nombre propio.
+    refreshEjecutivoField(user ? user.ejecutivo_id : '');
+
     const fields = [sucursalSelect, fullNameInput, emailInput, telefonoInput, perfilInput, passwordInput];
     fields.forEach((field) => { field.disabled = viewOnly; });
+    if (viewOnly) ejecutivoSelect.disabled = true;
 
     userViewDetail.style.display = viewOnly ? 'flex' : 'none';
     submitBtn.style.display = viewOnly ? 'none' : 'inline-flex';
@@ -628,6 +735,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const currentUser = getCurrentUserLabel();
     const perfilSeleccionado = allPerfiles.find((p) => p.id === perfilInput.value);
+    const perfilNombreSeleccionado = perfilSeleccionado ? perfilSeleccionado.perfil : '';
+
+    // "Ejecutivo": Administrador/Colaborador son su propio ejecutivo
+    // (se autorreferencia); Asesor usa el colaborador elegido en el select;
+    // cualquier otro perfil no aplica y queda en null.
+    const esAutoEjecutivo = perfilNombreSeleccionado === 'Administrador' || perfilNombreSeleccionado === 'Colaborador';
+    let ejecutivoIdPayload = null;
+    if (esAutoEjecutivo) {
+      // En edición ya conocemos el id propio; en registro se completa
+      // después del insert (ver más abajo), porque el id aún no existe.
+      ejecutivoIdPayload = isEditMode ? userIdInput.value : null;
+    } else if (perfilNombreSeleccionado === 'Asesor') {
+      ejecutivoIdPayload = ejecutivoSelect.value || null;
+    }
 
     const payload = {
       sucursal_id: sucursalSelect.value,
@@ -638,6 +759,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Se mantiene el nombre en texto por retrocompatibilidad con
       // auth-guard.js / el login, que leen "perfil" como texto plano.
       perfil: perfilSeleccionado ? perfilSeleccionado.perfil : null,
+      ejecutivo_id: ejecutivoIdPayload,
       password: passwordInput.value,
     };
 
@@ -658,6 +780,23 @@ document.addEventListener('DOMContentLoaded', async () => {
           .from(TABLE_USUARIOS)
           .update(payload)
           .eq('id', id));
+      } else if (esAutoEjecutivo) {
+        // Administrador/Colaborador: el id todavía no existe al momento del
+        // insert, así que se crea primero y luego se autorreferencia
+        // (ejecutivo_id = su propio id recién generado).
+        const insertResult = await supabaseClient
+          .from(TABLE_USUARIOS)
+          .insert([payload])
+          .select('id')
+          .single();
+        error = insertResult.error;
+
+        if (!error && insertResult.data) {
+          ({ error } = await supabaseClient
+            .from(TABLE_USUARIOS)
+            .update({ ejecutivo_id: insertResult.data.id })
+            .eq('id', insertResult.data.id));
+        }
       } else {
         ({ error } = await supabaseClient
           .from(TABLE_USUARIOS)

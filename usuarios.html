@@ -312,6 +312,12 @@
       text-align: right;
       word-break: break-word;
     }
+    .field-hint {
+      display: block;
+      font-size: 0.78rem;
+      color: #5B6472;
+      margin-top: 0.3rem;
+    }
   </style>
 </head>
 <body>
@@ -563,6 +569,18 @@
             <option value="">Selecciona una sucursal</option>
           </select>
           <span class="field-error">Selecciona una sucursal válida.</span>
+        </div>
+
+        <!-- Ejecutivo: se completa según el perfil elegido. Administrador/Colaborador
+             quedan como su propio ejecutivo (campo no editable); Asesor debe elegir
+             al Colaborador de su misma sucursal al que queda adscrito. -->
+        <div class="modal__field" id="fieldEjecutivo">
+          <label for="ejecutivoSelect" class="form-label">Ejecutivo</label>
+          <select id="ejecutivoSelect" class="text-input" disabled>
+            <option value="">Selecciona primero un perfil</option>
+          </select>
+          <span class="field-hint" id="ejecutivoHint">El ejecutivo se determina automáticamente según el perfil seleccionado.</span>
+          <span class="field-error">Selecciona el colaborador al que estará adscrito este asesor.</span>
         </div>
 
         <!-- Detalle de solo lectura (visible únicamente en modo "Ver") -->
