@@ -1283,7 +1283,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const logoImg = plan.aseguradora_logo
       ? `<img src="${escapeHtmlLocal(plan.aseguradora_logo)}" onerror="this.style.display='none'">`
       : '';
-    return `<div class="comparison-insurer-header">${logoImg}<span>${nombre}</span></div>`;
+    return `<div class="comparison-insurer-header">${logoImg}</div>`;
   }
 
   function renderComparisonModal() {
