@@ -48,6 +48,11 @@ function formatMoney(value) {
   return num.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function formatCurrencyThousands(value) {
+  if (value === null || value === undefined || value === '') return '—';
+  return Number(value).toLocaleString('es-VE');
+}
+
 // Recibe una fecha en formato ISO ("AAAA-MM-DD" o timestamptz) y la muestra
 // como "DD/MM/AAAA", igual que en el resto del sistema (cotizador.js).
 function formatDateEs(isoValue) {
@@ -171,6 +176,167 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cotizacionDetalleGrupoFamiliar = document.getElementById('cotizacionDetalleGrupoFamiliar');
   const cotizacionDetallePlanesBody = document.getElementById('cotizacionDetallePlanesBody');
   const cotizacionDetalleControl = document.getElementById('cotizacionDetalleControl');
+  const editarPlanesBtn = document.getElementById('editarPlanesBtn');
+  const exportarPdfBtn = document.getElementById('exportarPdfBtn');
+  const cotizacionExportFeedback = document.getElementById('cotizacionExportFeedback');
+  const exportPrintTemplate = document.getElementById('exportPrintTemplate');
+  const exportPrintHeader = document.getElementById('exportPrintHeader');
+  const exportComparisonTableWrapper = document.getElementById('exportComparisonTableWrapper');
+
+  let currentOpenItem = null; // Cotización actualmente abierta en el modal de detalle
+  let usuariosContactoPorNombre = {}; // { [full_name]: { email, telefono } } — para el encabezado del PDF reexportado
+
+  // Carga (una sola vez) el contacto de los usuarios activos, igual que en
+  // el cotizador, para mostrar email/teléfono del asesor en el PDF.
+  async function loadUsuariosContacto() {
+    if (!supabaseClient) return;
+    try {
+      const { data, error } = await supabaseClient
+        .from('usuarios')
+        .select('full_name, email, telefono')
+        .eq('status', 'Activo');
+      if (error) { console.error('No se pudo cargar contacto de usuarios:', getErrorMessage(error)); return; }
+      usuariosContactoPorNombre = {};
+      (data || []).forEach((u) => {
+        if (!u.full_name) return;
+        usuariosContactoPorNombre[u.full_name] = { email: u.email || '', telefono: u.telefono || '' };
+      });
+    } catch (err) {
+      console.error('No se pudo conectar con Supabase (usuarios):', getErrorMessage(err));
+    }
+  }
+
+  function resolveAsesorContacto(nombre) {
+    return usuariosContactoPorNombre[nombre] || { email: '', telefono: '' };
+  }
+
+  // Encabezado de columna por aseguradora en la tabla reexportada. No se
+  // muestra el logo porque la cotización guardada no conserva esa imagen
+  // (solo el nombre de la aseguradora en el momento en que se cotizó).
+  function buildInsurerHeaderCellExport(plan) {
+    return `<div class="comparison-insurer-header"><span>${escapeHtml(plan.aseguradora || 'Sin aseguradora')}</span></div>`;
+  }
+
+  // Llena #exportPrintHeader con los datos ya guardados en la cotización
+  // (equivalente a renderComparisonPrintHeader() en script.js, pero a
+  // partir de un registro histórico en lugar del formulario en vivo).
+  function renderExportPrintHeader(item) {
+    const contacto = resolveAsesorContacto(item.elaborado_por);
+    const contactoPartes = [contacto.email, contacto.telefono].filter(Boolean).join(' · ');
+    const fechaCotizacion = formatDateEs(item.fecha_creacion);
+    const grupoFamiliarTexto = buildGrupoFamiliarText(item.grupo_familiar);
+
+    exportPrintHeader.innerHTML = `
+      <div class="print-header__top">
+        <div class="print-header__brand">
+          <img src="assets/bareca-logo.png" alt="Bareca Sociedad de Corretaje">
+        </div>
+        <div class="print-header__main">
+          <p class="print-header__title">Cotización Salud Individual</p>
+          <p class="print-header__fecha">Fecha de la cotización: ${fechaCotizacion}</p>
+        </div>
+      </div>
+      <div class="print-header__rows">
+        <div class="print-info-row">
+          <span><strong>Solicitante:</strong> ${escapeHtml(item.nombre_solicitante || '—')}</span>
+          <span><strong>Asesor:</strong> ${escapeHtml(item.elaborado_por || '—')} · ${escapeHtml(contactoPartes)}</span>
+        </div>
+        <div class="print-tarifa-row">
+          <span class="print-tarifa-badge">Tarifa: ${escapeHtml(item.tipo_tarifa || 'Emisión')}</span>
+          <span class="print-vencimiento">Vencimiento: ${formatDateEs(item.vencimiento)}</span>
+        </div>
+        <div class="print-grupo-familiar">
+          <strong>Grupo familiar:</strong> ${escapeHtml(grupoFamiliarTexto)}
+        </div>
+      </div>
+    `;
+  }
+
+  // Llena #exportComparisonTableWrapper con la misma estructura de tabla
+  // usada en el cotizador (renderComparisonModal()), pero leyendo los
+  // montos ya calculados y guardados en cotizaciones.planes (no se
+  // recalculan, para reflejar exactamente lo que se le presentó al cliente).
+  function renderExportComparisonTable(item) {
+    const planes = Array.isArray(item.planes) ? item.planes : [];
+    exportComparisonTableWrapper.innerHTML = '';
+
+    if (planes.length === 0) {
+      exportComparisonTableWrapper.innerHTML = '<p style="text-align:center;">No hay planes registrados en esta cotización.</p>';
+      return;
+    }
+
+    const numCols = planes.length + 1;
+    const filasDefinicion = [
+      { label: 'Producto', get: (p) => p.producto || '—', rowClass: 'row-shaded' },
+      { label: 'Suma Asegurada', get: (p) => `$${formatCurrencyThousands(p.suma_asegurada)}`, cellClass: 'comparison-suma-asegurada' },
+      {
+        label: 'Coberturas Opcionales', rowClass: 'row-shaded', cellClass: 'comparison-detalle-adicionales', get: (p) => {
+          const seleccionados = Array.isArray(p.coberturas_opcionales) ? p.coberturas_opcionales : [];
+          return seleccionados.length > 0 ? seleccionados.map((s) => s.nombre || s.key || '').join(', ') : 'Ninguno';
+        },
+      },
+      { section: 'Total Estimado a Pagar Anual · No incluye IGTF' },
+      { label: 'Total Cobertura Básica', get: (p) => `$${formatMoney(p.total_cobertura_basica)}` },
+      { label: 'Total Cob. Adicionales', get: (p) => `$${formatMoney(p.total_cobertura_adicionales)}`, rowClass: 'row-shaded' },
+      { label: 'Maternidad', get: (p) => `$${formatMoney(p.total_maternidad)}` },
+      { label: 'Total Anual', rowClass: 'comparison-total-anual-row', get: (p) => `$${formatMoney(p.total_anual)}` },
+      { section: 'Fraccionamiento · No incluye IGTF' },
+      { label: 'Gasto Admin. por Fraccionamiento', get: (p) => { const g = p.fraccionamiento?.gastoAdmin; return g ? `$${formatMoney(g)}` : '—'; } },
+      { label: 'Semestral', rowClass: 'row-shaded', get: (p) => { const v = p.fraccionamiento?.semestral; return v != null ? `$${formatMoney(v)}` : '—'; } },
+      { label: 'Trimestral', get: (p) => { const v = p.fraccionamiento?.trimestral; return v != null ? `$${formatMoney(v)}` : '—'; } },
+      { label: 'Mensual', rowClass: 'row-shaded', get: (p) => { const f = p.fraccionamiento; return f && f.mensual != null ? `$${formatMoney(f.mensual)}` : '—'; } },
+    ];
+
+    const anchoColumnaPlan = `calc((100% - 150px) / ${planes.length})`;
+    const colgroup = '<colgroup><col style="width:150px;">' + planes.map(() => `<col style="width:${anchoColumnaPlan};">`).join('') + '</colgroup>';
+    const encabezado = '<thead><tr><th>Aseguradoras</th>' + planes.map((p) => `<th>${buildInsurerHeaderCellExport(p)}</th>`).join('') + '</tr></thead>';
+    const cuerpo = '<tbody>' + filasDefinicion.map((def) => {
+      if (def.section) return `<tr class="comparison-section-row"><td colspan="${numCols}">${escapeHtml(def.section)}</td></tr>`;
+      const rowClass = def.rowClass ? ` class="${def.rowClass}"` : '';
+      const cellClass = def.cellClass ? ` class="${def.cellClass}"` : '';
+      return `<tr${rowClass}><td class="comparison-row-label">${escapeHtml(def.label)}</td>` +
+        planes.map((p) => `<td${cellClass}>${escapeHtml(def.get(p))}</td>`).join('') + '</tr>';
+    }).join('') + '</tbody>';
+
+    const table = document.createElement('table');
+    table.className = 'comparison-table';
+    table.innerHTML = colgroup + encabezado + cuerpo;
+    exportComparisonTableWrapper.appendChild(table);
+  }
+
+  editarPlanesBtn.addEventListener('click', () => {
+    if (!currentOpenItem) return;
+    window.location.href = `cotizador.html?editar=${encodeURIComponent(currentOpenItem.id)}`;
+  });
+
+  exportarPdfBtn.addEventListener('click', async () => {
+    if (!currentOpenItem) return;
+    exportarPdfBtn.disabled = true;
+    cotizacionExportFeedback.style.color = '';
+    cotizacionExportFeedback.textContent = '';
+
+    try {
+      if (Object.keys(usuariosContactoPorNombre).length === 0) await loadUsuariosContacto();
+      renderExportPrintHeader(currentOpenItem);
+      renderExportComparisonTable(currentOpenItem);
+
+      await window.CotizacionPDF.exportarCotizacionPDF({
+        sourceEl: exportPrintTemplate,
+        supabaseClient,
+        cotizacionId: currentOpenItem.id,
+        nombreArchivo: `Cotizacion_${currentOpenItem.nombre_solicitante || 'salud'}`,
+        onStatus: (msg) => { cotizacionExportFeedback.textContent = msg; },
+      });
+
+      cotizacionExportFeedback.style.color = '#2E7D32';
+      cotizacionExportFeedback.textContent = 'PDF generado y guardado correctamente.';
+    } catch (err) {
+      cotizacionExportFeedback.style.color = '#C0392B';
+      cotizacionExportFeedback.textContent = `No se pudo exportar el PDF: ${getErrorMessage(err)}`;
+    } finally {
+      exportarPdfBtn.disabled = false;
+    }
+  });
 
   let currentSortCotizaciones = { key: 'fecha_creacion', direction: 'desc' };
   const sortableHeadersCotizaciones = document.querySelectorAll('#cotizacionesTable th.is-sortable');
@@ -185,6 +351,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function openCotizacionModal(item) {
+    currentOpenItem = item;
+    cotizacionExportFeedback.textContent = '';
+    cotizacionExportFeedback.style.color = '';
     const tarifaClass = item.tipo_tarifa === 'Continuidad' ? 'status-pill--continuidad' : 'status-pill--emision';
 
     cotizacionDetalleGenerales.innerHTML = [
@@ -221,6 +390,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       detailItem('Fecha de creación', formatDateTimeEs(item.fecha_creacion)),
       detailItem('Modificado por', escapeHtml(item.usuario_modificador_nombre || '—')),
       detailItem('Última modificación', formatDateTimeEs(item.fecha_modificacion)),
+      detailItem('PDF guardado', item.pdf_url
+        ? `<a href="${escapeHtml(item.pdf_url)}" target="_blank" rel="noopener">Ver documento</a>`
+        : 'Aún no se ha exportado'),
     ].join('');
 
     cotizacionModalOverlay.classList.add('is-open');

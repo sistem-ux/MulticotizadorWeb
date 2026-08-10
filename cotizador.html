@@ -753,6 +753,8 @@
           <p class="page-header__subtitle">Completa la información del solicitante y de cada integrante que deseas incluir.</p>
         </header>
 
+        <div id="editModeBanner" style="display:none; background:#E4EAF7; color: var(--color-navy, #001F5B); border:1px solid #C9D3EA; border-radius:8px; padding:0.75rem 1rem; margin-bottom:1rem; font-size:0.9rem;"></div>
+
         <form id="familyForm" novalidate>
 
           <!-- Nombre del solicitante -->
@@ -942,6 +944,11 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <!-- Exportación de PDF sin usar el diálogo de impresión del navegador
+       (evita el corte de encabezados en iPhone/Safari) -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+  <script src="cotizacion-pdf.js"></script>
   <script src="script.js"></script>
 
   <script>

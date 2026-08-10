@@ -1113,8 +1113,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const planDeducibleExteriorInput = document.getElementById('planDeducibleExterior');
   const planNombrePreview = document.getElementById('planNombrePreview');
 
-  const planEdadMinMaternidadInput = document.getElementById('planEdadMinMaternidad');
-  const planEdadMaxMaternidadInput = document.getElementById('planEdadMaxMaternidad');
   const planEdadMinTitularInput = document.getElementById('planEdadMinTitular');
   const planEdadMaxTitularInput = document.getElementById('planEdadMaxTitular');
   const planEdadMinFamiliaresInput = document.getElementById('planEdadMinFamiliares');
@@ -1140,8 +1138,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const fieldPlanSumaAsegurada = document.getElementById('fieldPlanSumaAsegurada');
   const fieldPlanDeducibleVzla = document.getElementById('fieldPlanDeducibleVzla');
   const fieldPlanDeducibleExterior = document.getElementById('fieldPlanDeducibleExterior');
-  const fieldPlanEdadMinMaternidad = document.getElementById('fieldPlanEdadMinMaternidad');
-  const fieldPlanEdadMaxMaternidad = document.getElementById('fieldPlanEdadMaxMaternidad');
   const fieldPlanEdadMinTitular = document.getElementById('fieldPlanEdadMinTitular');
   const fieldPlanEdadMaxTitular = document.getElementById('fieldPlanEdadMaxTitular');
   const fieldPlanEdadMinFamiliares = document.getElementById('fieldPlanEdadMinFamiliares');
@@ -1230,7 +1226,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     planForm.reset();
     clearFeedback('planFormFeedback');
     [fieldPlanAseguradora, fieldPlanProducto, fieldPlanTipoTarifa, fieldPlanSumaAsegurada, fieldPlanDeducibleVzla,
-      fieldPlanDeducibleExterior, fieldPlanEdadMinMaternidad, fieldPlanEdadMaxMaternidad, fieldPlanEdadMinTitular,
+      fieldPlanDeducibleExterior, fieldPlanEdadMinTitular,
       fieldPlanEdadMaxTitular, fieldPlanEdadMinFamiliares, fieldPlanEdadMaxFamiliares, fieldPlanModoTarifaHijos]
       .forEach((f) => setFieldError(f, false));
 
@@ -1253,8 +1249,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       setThousandsValue(planDeducibleVzlaInput, item.deducible_venezuela);
       setThousandsValue(planDeducibleExteriorInput, item.deducible_exterior);
 
-      planEdadMinMaternidadInput.value = item.edad_min_maternidad ?? '';
-      planEdadMaxMaternidadInput.value = item.edad_max_maternidad ?? '';
       planEdadMinTitularInput.value = item.edad_min_titular ?? '';
       planEdadMaxTitularInput.value = item.edad_max_titular ?? '';
       planEdadMinFamiliaresInput.value = item.edad_min_familiares ?? '';
@@ -1316,11 +1310,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     check(fieldPlanDeducibleVzla, getThousandsValue(planDeducibleVzlaInput) !== null);
     check(fieldPlanDeducibleExterior, getThousandsValue(planDeducibleExteriorInput) !== null);
     check(fieldPlanModoTarifaHijos, planModoTarifaHijosSelect.value.trim().length > 0);
-
-    const minMat = Number(planEdadMinMaternidadInput.value);
-    const maxMat = Number(planEdadMaxMaternidadInput.value);
-    check(fieldPlanEdadMinMaternidad, planEdadMinMaternidadInput.value !== '' && minMat >= 0 && minMat <= 60);
-    check(fieldPlanEdadMaxMaternidad, planEdadMaxMaternidadInput.value !== '' && maxMat >= 0 && maxMat <= 60 && maxMat >= minMat);
 
     const minTit = Number(planEdadMinTitularInput.value);
     const maxTit = Number(planEdadMaxTitularInput.value);
@@ -1481,8 +1470,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       deducible_venezuela: getThousandsValue(planDeducibleVzlaInput),
       deducible_exterior: getThousandsValue(planDeducibleExteriorInput),
       nombre_plan: nombrePlan,
-      edad_min_maternidad: Number(planEdadMinMaternidadInput.value),
-      edad_max_maternidad: Number(planEdadMaxMaternidadInput.value),
       edad_min_titular: Number(planEdadMinTitularInput.value),
       edad_max_titular: Number(planEdadMaxTitularInput.value),
       edad_min_familiares: Number(planEdadMinFamiliaresInput.value),

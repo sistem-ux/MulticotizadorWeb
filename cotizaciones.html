@@ -306,6 +306,54 @@
       .sidebar.is-mobile-visible { transform: translateX(0); }
       .main-wrapper { margin-left: 0 !important; }
     }
+
+    /* ---------------------------------------------------------------
+       PLANTILLA DE EXPORTACIÓN A PDF (documento oculto)
+       Mismas clases/estilos que cotizador.html para que el PDF
+       reexportado desde el historial se vea igual que el original.
+       Este contenedor nunca se muestra en pantalla: cotizacion-pdf.js
+       lo clona fuera de pantalla y lo rasteriza con html2canvas.
+       --------------------------------------------------------------- */
+    :root {
+      --print-navy: #073763;
+      --print-blue: #1c4587;
+      --print-green: #38761d;
+      --print-gray-row: #f3f3f3;
+      --print-muted: #666666;
+      --print-border: #cccccc;
+    }
+    #exportPrintTemplate { display: none; }
+    .print-header { display: block; padding-bottom: 8px; margin-bottom: 14px; border-bottom: 2px solid var(--print-navy); font-family: 'Inter', sans-serif; }
+    .print-header__top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 8px; }
+    .print-header__brand img { max-width: 180px; height: auto; display: block; }
+    .print-header__main { flex: 1; display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 4px; }
+    .print-header__title { font-family: 'Poppins', sans-serif; font-size: 19px; font-weight: 800; color: var(--print-blue); margin: 0; }
+    .print-header__asesor-contacto { font-size: 11px; color: var(--print-muted); line-height: 1.4; }
+    .print-header__fecha { font-size: 11px; color: var(--print-muted); margin-top: 2px; }
+    .print-info-row { display: flex; justify-content: space-between; gap: 16px; font-size: 12.5px; color: #333; padding: 6px 0; border-bottom: 1px solid var(--print-border); }
+    .print-info-row strong { color: var(--print-navy); }
+    .print-tarifa-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--print-border); }
+    .print-tarifa-badge { display: inline-block; background: var(--print-green); color: #FFFFFF; font-weight: 700; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.02em; padding: 5px 12px; border-radius: 3px; }
+    .print-vencimiento { font-size: 12.5px; font-weight: 700; color: var(--print-blue); }
+    .print-grupo-familiar { font-size: 12.5px; color: #333; padding: 8px 0 4px; }
+    .print-grupo-familiar strong { color: var(--print-navy); }
+    .comparison-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 12.5px; font-family: 'Inter', sans-serif; }
+    .comparison-table th, .comparison-table td { border: 1px solid var(--print-border); padding: 7px 10px; text-align: left; vertical-align: top; overflow-wrap: break-word; word-break: break-word; }
+    .comparison-table thead th { background: #FFFFFF; color: var(--print-navy); font-weight: 700; text-align: center; vertical-align: bottom; }
+    .comparison-table thead th:first-child { text-align: left; font-size: 14px; vertical-align: middle; }
+    .comparison-insurer-header { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .comparison-insurer-header span { font-size: 11.5px; font-weight: 600; color: #333; }
+    .comparison-row-label { font-weight: 600; color: #333; background: #FFFFFF; white-space: normal; }
+    .comparison-table tr.row-shaded td { background: var(--print-gray-row); }
+    .comparison-table tr.row-shaded td.comparison-row-label { background: var(--print-gray-row); }
+    .comparison-section-row td { border: none; border-bottom: 2px solid var(--print-navy); background: #FFFFFF !important; color: var(--print-navy); font-family: 'Poppins', sans-serif; font-size: 14px; font-weight: 700; padding-top: 16px; padding-bottom: 6px; }
+    .comparison-suma-asegurada { color: var(--print-blue); font-weight: 700; }
+    .comparison-detalle-adicionales { font-size: 11px; color: var(--print-muted); white-space: normal; }
+    .comparison-total-anual-row td { color: var(--print-blue); font-weight: 800; font-size: 13.5px; background: #FFFFFF; }
+    .print-footer { margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--print-border); }
+    .print-footer__legal { font-size: 11px; color: var(--print-muted); text-align: center; margin: 0 0 8px; line-height: 1.5; }
+    .print-footer__registro { font-size: 11.5px; font-weight: 700; color: #333; text-align: center; margin: 10px 0 4px; }
+    .print-footer__firma { font-size: 11px; font-style: italic; color: #999999; text-align: right; margin: 4px 0 0; }
   </style>
 </head>
 <body>
@@ -426,8 +474,24 @@
       </div>
 
       <div class="modal__footer">
+        <span id="cotizacionExportFeedback" style="margin-right:auto; align-self:center; font-size: 13px;"></span>
         <button type="button" class="btn btn--cancel" id="closeCotizacionModalBtn">Cerrar</button>
+        <button type="button" class="btn btn--secondary" id="editarPlanesBtn">✏️ Editar planes</button>
+        <button type="button" class="btn btn--register" id="exportarPdfBtn">📄 Exportar PDF</button>
       </div>
+    </div>
+  </div>
+
+  <!-- PLANTILLA OCULTA PARA REEXPORTAR EL PDF DE UNA COTIZACIÓN GUARDADA
+       (se llena dinámicamente en cotizaciones.js con los datos del registro
+       y se rasteriza con html2canvas; nunca se muestra en pantalla). -->
+  <div id="exportPrintTemplate">
+    <div class="print-header" id="exportPrintHeader"></div>
+    <div id="exportComparisonTableWrapper"></div>
+    <div class="print-footer">
+      <p class="print-footer__legal">*Estos montos son <strong>referenciales</strong></p>
+      <p class="print-footer__registro">Inscrita en la Superintendencia de la Actividad Aseguradora bajo el nro. SCSMP-000043</p>
+      <p class="print-footer__firma">Cotizador desarrollado por Arturo Carpintero</p>
     </div>
   </div>
 
@@ -444,6 +508,9 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+  <script src="cotizacion-pdf.js"></script>
   <script src="cotizaciones.js"></script>
 
   <script>

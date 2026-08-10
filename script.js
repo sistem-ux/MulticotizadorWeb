@@ -117,6 +117,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let isFamilyLocked = false;
   let cotizacionGuardadaId = null; // ID de la cotización ya guardada en Supabase para esta comparación (habilita "Exportar a PDF")
   let familyFormHasRelativeAgeError = false; // true si Madre/Padre/Hijos incumplen el rango mínimo de 10 años vs. el Titular
+  let origenEdicionId = null; // ID de la cotización original cuando se llega vía "Editar planes" (?editar=ID) desde cotizaciones.html
 
   // Se inicializa temprano para que esté listo cuando el usuario presione "Mostrar planes"
   await initSupabase();
@@ -1580,6 +1581,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       usuario_creador_nombre: nombreUsuario,
       usuario_modificador_id: session.id || null,
       usuario_modificador_nombre: nombreUsuario,
+      cotizacion_origen_id: origenEdicionId || null,
     };
   }
 
@@ -1640,16 +1642,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     comparisonModal.classList.remove('active');
   });
 
-  // Exporta el resumen comparativo a PDF usando el diálogo de impresión del
-  // navegador (Guardar como PDF), aislando solo el modal de comparación.
-  // Solo queda disponible después de "Finalizar" (cotización ya guardada).
-  exportComparisonBtn.addEventListener('click', () => {
-    document.body.classList.add('printing-comparison');
-    window.print();
-  });
+  // Exporta el resumen comparativo a PDF generándolo con html2canvas + jsPDF
+  // (ver cotizacion-pdf.js) y lo sube a Supabase Storage. Solo queda
+  // disponible después de "Finalizar" (cotización ya guardada).
+  exportComparisonBtn.addEventListener('click', async () => {
+    if (!cotizacionGuardadaId) return;
+    const textoOriginal = exportComparisonBtn.textContent;
+    exportComparisonBtn.disabled = true;
+    comparisonSaveFeedback.style.color = '';
 
-  window.addEventListener('afterprint', () => {
-    document.body.classList.remove('printing-comparison');
+    try {
+      await window.CotizacionPDF.exportarCotizacionPDF({
+        sourceEl: comparisonPrintArea,
+        supabaseClient,
+        cotizacionId: cotizacionGuardadaId,
+        nombreArchivo: `Cotizacion_${applicantNameInput.value.trim() || 'salud'}`,
+        onStatus: (msg) => { exportComparisonBtn.textContent = msg; },
+      });
+      comparisonSaveFeedback.style.color = '#2E7D32';
+      comparisonSaveFeedback.textContent = 'PDF generado y guardado correctamente.';
+    } catch (err) {
+      comparisonSaveFeedback.style.color = '#C0392B';
+      comparisonSaveFeedback.textContent = `No se pudo exportar el PDF: ${getErrorMessage(err)}`;
+    } finally {
+      exportComparisonBtn.disabled = false;
+      exportComparisonBtn.textContent = textoOriginal;
+    }
   });
 
   showPlansBtn.addEventListener('click', async () => {
@@ -1746,5 +1764,120 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderInsurerFilterBar(planesDisponiblesActuales);
     renderPlanCards(planesDisponiblesActuales);
   });
+
+  /* =========================================================
+     MODO EDICIÓN DE PLANES (llegada vía cotizador.html?editar=ID
+     desde el botón "✏️ Editar planes" en cotizaciones.html).
+     Solo permite volver a elegir planes: el solicitante, "Elaborado
+     por", tarifa y grupo familiar quedan bloqueados con los datos de
+     la cotización original. Al finalizar se crea una cotización NUEVA
+     (cotizacion_origen_id apunta a la original, que se conserva intacta).
+     ========================================================= */
+
+  // Reconstruye las filas del grupo familiar a partir del arreglo guardado
+  // en cotizaciones.grupo_familiar, disparando los mismos eventos que usa
+  // el usuario al llenar el formulario (para que edad/validaciones queden
+  // correctas sin duplicar esa lógica).
+  function prefillFamilyFromGrupo(grupoFamiliar) {
+    const porParentesco = {};
+    (grupoFamiliar || []).forEach((m) => { if (m && m.parentesco) porParentesco[m.parentesco] = m; });
+
+    const hijosGuardados = (grupoFamiliar || []).filter((m) => m.parentesco && m.parentesco.startsWith('Hijo '));
+    while (getChildRows().length < hijosGuardados.length) {
+      tableBody.appendChild(createRow(`Hijo ${getChildRows().length + 1}`, { checked: true }));
+      updateChildRows();
+    }
+
+    Array.from(tableBody.querySelectorAll('.family-row')).forEach((row) => {
+      const relation = row.dataset.relation;
+      const miembro = porParentesco[relation];
+      const checkbox = row.querySelector('.row-checkbox');
+      const dateInput = row.querySelector('.date-input');
+      const genderSelect = row.querySelector('.gender-select');
+
+      if (miembro && miembro.incluido && miembro.fechaNacimiento) {
+        if (!checkbox.disabled && !checkbox.checked) {
+          checkbox.checked = true;
+          checkbox.dispatchEvent(new Event('change'));
+        }
+        dateInput.value = miembro.fechaNacimiento;
+        dateInput.dispatchEvent(new Event('input'));
+        dateInput.dispatchEvent(new Event('blur'));
+        if (genderSelect && !genderSelect.disabled && miembro.genero) {
+          genderSelect.value = miembro.genero;
+          genderSelect.dispatchEvent(new Event('change'));
+        }
+      } else if (relation !== 'Titular' && checkbox.checked) {
+        checkbox.checked = false;
+        checkbox.dispatchEvent(new Event('change'));
+      }
+    });
+
+    updateGenderControls();
+  }
+
+  async function initEditMode() {
+    const params = new URLSearchParams(window.location.search);
+    const editarId = params.get('editar');
+    if (!editarId) return;
+
+    if (!supabaseClient) {
+      window.alert('No se pudo conectar con Supabase para cargar la cotización a editar.');
+      return;
+    }
+
+    const { data: original, error } = await supabaseClient
+      .from(TABLE_COTIZACIONES)
+      .select('*')
+      .eq('id', editarId)
+      .single();
+
+    if (error || !original) {
+      window.alert(`No se pudo cargar la cotización a editar: ${error ? getErrorMessage(error) : 'no encontrada'}`);
+      return;
+    }
+
+    origenEdicionId = original.id;
+
+    // Solicitante y tarifa: se muestran fijos, no editables.
+    applicantNameInput.value = original.nombre_solicitante || '';
+    applicantNameInput.disabled = true;
+    tarifaTipoSelect.value = original.tipo_tarifa || 'Emisión';
+    tarifaTipoSelect.disabled = true;
+
+    // "Elaborado por": se fija al valor original, sin importar el modo
+    // (texto libre o select) que le corresponda al perfil de la sesión actual.
+    if (elaboradoPorSelect.style.display !== 'none') {
+      if (original.elaborado_por && !Array.from(elaboradoPorSelect.options).some(o => o.value === original.elaborado_por)) {
+        const opt = document.createElement('option');
+        opt.value = original.elaborado_por;
+        opt.textContent = original.elaborado_por;
+        elaboradoPorSelect.appendChild(opt);
+      }
+      elaboradoPorSelect.value = original.elaborado_por || '';
+      elaboradoPorSelect.disabled = true;
+    } else {
+      elaboradoPorInput.value = original.elaborado_por || '';
+      elaboradoPorInput.disabled = true;
+    }
+
+    prefillFamilyFromGrupo(original.grupo_familiar);
+
+    addChildBtn.disabled = true;
+
+    const banner = document.getElementById('editModeBanner');
+    if (banner) {
+      banner.style.display = 'block';
+      banner.innerHTML = `✏️ Editando planes de la cotización de <strong>${escapeHtmlLocal(original.nombre_solicitante || '')}</strong>. El solicitante, "Elaborado por", la tarifa y el grupo familiar no se pueden modificar aquí. Al finalizar se creará una <strong>cotización nueva</strong>; la original se conserva.`;
+    }
+
+    // Dispara el mismo flujo de "Mostrar planes" ya validado.
+    showPlansBtn.click();
+    // "Modificar datos" desbloquearía el grupo familiar; en modo edición
+    // de planes debe permanecer bloqueado.
+    modifyDataBtn.disabled = true;
+  }
+
+  await initEditMode();
 
 });
