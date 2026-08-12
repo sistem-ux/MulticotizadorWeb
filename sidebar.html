@@ -1,6 +1,9 @@
 <div class="sidebar__header">
   <img src="assets/logo.png" alt="Logo" class="sidebar__logo">
-  <span class="sidebar__title">MulticotizadorWeb</span>
+  <div class="sidebar__titles">
+    <span class="sidebar__title">MulticotizadorWeb</span>
+    <span class="sidebar__subtitle">Bareca Sociedad de Corretaje CA</span>
+  </div>
   <button type="button" id="sidebarCloseBtn" class="sidebar__close" aria-label="Cerrar menú" title="Cerrar menú">✕</button>
 </div>
 <nav class="sidebar__nav">
@@ -80,20 +83,39 @@
 
   .sidebar__header {
     position: relative;
-    padding-right: 3rem;
+    padding: 1.1rem 2rem 1.1rem 1rem;
+    gap: 0.6rem;
+    align-items: center;
+  }
+
+  .sidebar__titles {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+  }
+
+  .sidebar__subtitle {
+    font-size: 0.5rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    color: rgba(255, 255, 255, 0.85);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .sidebar__close {
     position: absolute;
-    top: 0.75rem;
-    right: 0.75rem;
+    top: 0.35rem;
+    right: 0.5rem;
     background: transparent;
     border: none;
     color: #FFFFFF;
-    font-size: 1.05rem;
+    font-size: 0.9rem;
     line-height: 1;
     cursor: pointer;
-    padding: 0.35rem 0.55rem;
+    padding: 0.3rem 0.5rem;
     border-radius: 6px;
     transition: background 0.2s ease;
     z-index: 1;
