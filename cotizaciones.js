@@ -605,9 +605,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     if (!confirmed) return;
 
-    const { error } = await supabaseClient.from(TABLE_COTIZACIONES).delete().eq('id', id);
+    // .select() para poder confirmar que realmente se borró una fila. Sin
+    // esto, Supabase no reporta error cuando RLS bloquea el delete: la
+    // llamada "tiene éxito" pero deja 0 filas afectadas.
+    const { data, error } = await supabaseClient.from(TABLE_COTIZACIONES).delete().eq('id', id).select('id');
     if (error) {
       showNotification('cotizacionesNotification', `No se pudo eliminar: ${getErrorMessage(error)}`, 'error');
+      return;
+    }
+    if (!data || data.length === 0) {
+      showNotification('cotizacionesNotification', 'No se pudo eliminar: permisos insuficientes en Supabase (revisa la política RLS de DELETE en "cotizaciones").', 'error');
       return;
     }
 
