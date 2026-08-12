@@ -423,10 +423,11 @@
       transform: translateX(-50%);
       background: var(--color-navy);
       color: #FFFFFF;
-      padding: 14px 22px;
+      padding: 8px 18px;
       border-radius: 10px;
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 16px;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
       z-index: 500;
@@ -436,12 +437,14 @@
       bottom: 24px;
     }
     .comparison-bar span {
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
+      line-height: 1;
     }
     .comparison-bar .btn {
-      padding: 8px 16px;
-      font-size: 14px;
+      padding: 6px 14px;
+      font-size: 13px;
+      line-height: 1;
     }
 
     /* Modal de comparación (más ancho que el de adicionales) */
@@ -905,7 +908,7 @@
   <!-- BARRA FLOTANTE: aparece cuando hay al menos un plan en comparación -->
   <div id="comparisonBar" class="comparison-bar">
     <span id="comparisonCountText">0 de 5 planes seleccionados</span>
-    <button type="button" id="viewComparisonBtn" class="btn btn--secondary" style="background:#FFFFFF;">Ver comparación</button>
+    <button type="button" id="viewComparisonBtn" class="btn btn--secondary" style="background:#FFFFFF;">Ver comparativo</button>
   </div>
 
   <!-- Plantilla de fila reutilizable para JS -->

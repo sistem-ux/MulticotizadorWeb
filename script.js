@@ -1066,9 +1066,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       btn.className = 'insurer-filter-btn' + (activeInsurerFilters.has(nombre) ? ' is-active' : '');
       btn.textContent = nombre;
       btn.addEventListener('click', () => {
+        // Selección única: si ya estaba activa, se libera (vuelve a "Todas");
+        // si no, se reemplaza cualquier selección previa por esta.
         if (activeInsurerFilters.has(nombre)) {
-          activeInsurerFilters.delete(nombre);
+          activeInsurerFilters.clear();
         } else {
+          activeInsurerFilters.clear();
           activeInsurerFilters.add(nombre);
         }
         applyInsurerFilterAndRender();
@@ -1093,6 +1096,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   function renderPlanCards(planes) {
     plansContainer.innerHTML = '';
     plansContainer.className = 'plans-grid';
+
+    // Orden: aseguradora alfabética (A-Z) y, dentro de cada aseguradora,
+    // suma asegurada de menor a mayor.
+    planes = [...planes].sort((a, b) => {
+      const nombreA = a.aseguradora_nombre || 'Sin aseguradora';
+      const nombreB = b.aseguradora_nombre || 'Sin aseguradora';
+      const cmpNombre = nombreA.localeCompare(nombreB, 'es');
+      if (cmpNombre !== 0) return cmpNombre;
+      return (Number(a.suma_asegurada) || 0) - (Number(b.suma_asegurada) || 0);
+    });
 
     if (planes.length === 0) {
       plansContainer.innerHTML = '<p style="text-align:center; color:#A6A9B0; margin-top:20px; grid-column: 1 / -1;">No hay planes que coincidan con el filtro seleccionado.</p>';
