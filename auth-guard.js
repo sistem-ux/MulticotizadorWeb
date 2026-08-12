@@ -210,6 +210,49 @@ function setupSidebarAccordion(sidebarElement, initiallyOpenGroup) {
 }
 
 /* -----------------------------------------------------------------------
+   4c. OVERLAY DE FONDO PARA EL SIDEBAR EN MÓVIL
+   Se inyecta una única vez (estilos + elemento) y se reutiliza en cada
+   llamada a initAppShell. Vive fuera del <aside id="sidebar"> porque el
+   sidebar tiene `transform` en su CSS, y un elemento position:fixed dentro
+   de un ancestro con transform queda posicionado relativo a ese ancestro
+   en vez de a la ventana completa.
+   ----------------------------------------------------------------------- */
+function ensureSidebarOverlay() {
+  let overlay = document.getElementById('sidebarOverlay');
+  if (overlay) return overlay;
+
+  if (!document.getElementById('sidebarOverlayStyles')) {
+    const style = document.createElement('style');
+    style.id = 'sidebarOverlayStyles';
+    style.textContent = `
+      .sidebar-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: 95;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s ease;
+      }
+      .sidebar-overlay.is-visible {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      @media (min-width: 769px) {
+        .sidebar-overlay { display: none; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  overlay = document.createElement('div');
+  overlay.id = 'sidebarOverlay';
+  overlay.className = 'sidebar-overlay';
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+/* -----------------------------------------------------------------------
    5. INICIALIZACIÓN COMÚN DE LAS PÁGINAS PROTEGIDAS
    Carga el sidebar, aplica el filtro por rol, conecta el botón de
    mostrar/ocultar menú, y pinta el nombre de usuario + botón de cerrar sesión.
@@ -238,13 +281,51 @@ async function initAppShell({ pageName }) {
   const mainContent = document.getElementById('mainContent');
   const sidebarToggle = document.getElementById('sidebarToggle');
 
-  if (sidebarToggle && sidebarElement && mainContent) {
-    sidebarToggle.addEventListener('click', () => {
+  if (sidebarElement) {
+    const sidebarOverlay = ensureSidebarOverlay();
+    const sidebarCloseBtn = sidebarElement.querySelector('#sidebarCloseBtn');
+
+    // Cierra el sidebar sin importar si estamos en el layout de escritorio
+    // (donde "cerrado" = colapsado con is-hidden) o en el overlay móvil
+    // (donde "cerrado" = quitar is-mobile-visible + apagar el overlay).
+    const closeSidebar = () => {
       if (window.innerWidth <= 768) {
-        sidebarElement.classList.toggle('is-mobile-visible');
+        sidebarElement.classList.remove('is-mobile-visible');
+        sidebarOverlay.classList.remove('is-visible');
       } else {
-        sidebarElement.classList.toggle('is-hidden');
-        mainContent.classList.toggle('is-expanded');
+        sidebarElement.classList.add('is-hidden');
+        if (mainContent) mainContent.classList.add('is-expanded');
+      }
+    };
+
+    if (sidebarToggle && mainContent) {
+      sidebarToggle.addEventListener('click', () => {
+        if (window.innerWidth <= 768) {
+          const isNowVisible = sidebarElement.classList.toggle('is-mobile-visible');
+          sidebarOverlay.classList.toggle('is-visible', isNowVisible);
+        } else {
+          sidebarElement.classList.toggle('is-hidden');
+          mainContent.classList.toggle('is-expanded');
+        }
+      });
+    }
+
+    if (sidebarCloseBtn) {
+      sidebarCloseBtn.addEventListener('click', closeSidebar);
+    }
+
+    sidebarOverlay.addEventListener('click', closeSidebar);
+
+    // Clic fuera del sidebar: solo aplica en el modo overlay móvil. En
+    // escritorio el sidebar es parte fija del layout, así que un clic en el
+    // contenido no debe cerrarlo (sería molesto mientras se trabaja).
+    document.addEventListener('click', (event) => {
+      const isMobileOpen = sidebarElement.classList.contains('is-mobile-visible');
+      if (!isMobileOpen) return;
+      const clickedInsideSidebar = sidebarElement.contains(event.target);
+      const clickedToggleBtn = sidebarToggle && sidebarToggle.contains(event.target);
+      if (!clickedInsideSidebar && !clickedToggleBtn) {
+        closeSidebar();
       }
     });
   }

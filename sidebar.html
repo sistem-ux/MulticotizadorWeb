@@ -1,6 +1,7 @@
 <div class="sidebar__header">
-<div class="sidebar__logo">MW</div>
+  <img src="assets/logo.png" alt="Logo" class="sidebar__logo">
   <span class="sidebar__title">MulticotizadorWeb</span>
+  <button type="button" id="sidebarCloseBtn" class="sidebar__close" aria-label="Cerrar menú" title="Cerrar menú">✕</button>
 </div>
 <nav class="sidebar__nav">
 
@@ -71,6 +72,33 @@
 </nav>
 
 <style>
+  img.sidebar__logo {
+    background-color: #FFFFFF;
+    object-fit: contain;
+    padding: 4px;
+  }
+
+  .sidebar__header {
+    justify-content: space-between;
+  }
+
+  .sidebar__close {
+    background: transparent;
+    border: none;
+    color: #FFFFFF;
+    font-size: 1.05rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0.35rem 0.55rem;
+    border-radius: 6px;
+    transition: background 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .sidebar__close:hover {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
   .menu-group {
     margin-bottom: 0.5rem;
   }
