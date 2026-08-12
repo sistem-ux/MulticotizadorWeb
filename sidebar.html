@@ -79,10 +79,14 @@
   }
 
   .sidebar__header {
-    justify-content: space-between;
+    position: relative;
+    padding-right: 3rem;
   }
 
   .sidebar__close {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
     background: transparent;
     border: none;
     color: #FFFFFF;
@@ -92,7 +96,7 @@
     padding: 0.35rem 0.55rem;
     border-radius: 6px;
     transition: background 0.2s ease;
-    flex-shrink: 0;
+    z-index: 1;
   }
 
   .sidebar__close:hover {
