@@ -1304,12 +1304,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Ubica, dentro de un objeto de tarifas por rango etario (jsonb con
   // claves tipo "20-24"), el valor que corresponde a una edad puntual.
+  // Devuelve { valor, definido }: "definido" es false cuando la banda de
+  // edad no tiene un valor configurado en la tarifa del plan (banda vacía),
+  // para distinguirlo de una tarifa que genuinamente vale $0.
   function tarifaPorEdad(tarifasPorRango, edad) {
-    if (!tarifasPorRango || edad == null || edad < 0) return 0;
+    if (!tarifasPorRango || edad == null || edad < 0) return { valor: 0, definido: false };
     const rango = AGE_RANGES.find((r) => edad >= r.min && edad <= r.max);
-    if (!rango) return 0;
+    if (!rango) return { valor: 0, definido: false };
     const valor = tarifasPorRango[rango.key];
-    return valor != null ? Number(valor) : 0;
+    return { valor: valor != null ? Number(valor) : 0, definido: valor != null };
   }
 
   // Cobertura Básica: suma de la tarifa por edad de cada integrante
@@ -1319,11 +1322,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   //    igual que el resto de familiares.
   //  - "Por cantidad de hijos": se usa un monto fijo según el total de
   //    hijos incluidos (tarifas_hijos_cantidad: claves "1","2","3","4+").
+  // Devuelve { total, sinCobertura }: "sinCobertura" lista los integrantes
+  // cuya edad cayó en una banda sin tarifa configurada en este plan (no se
+  // les cobra nada, pero tampoco están realmente cubiertos: hay que
+  // avisarlo en vez de cotizarlos en $0 en silencio).
   function calcularCoberturaBasica(plan, integrantes) {
     const tarifa = plan._tarifa;
-    if (!tarifa) return 0;
+    if (!tarifa) return { total: 0, sinCobertura: [] };
 
     let total = 0;
+    const sinCobertura = [];
     const hijosIncluidos = [];
 
     integrantes.forEach((miembro) => {
@@ -1331,22 +1339,30 @@ document.addEventListener('DOMContentLoaded', async () => {
       const esHijo = (miembro.parentesco || '').startsWith('Hijo ');
 
       if (miembro.parentesco === 'Titular') {
-        total += tarifaPorEdad(tarifa.tarifas_titular, edad);
+        const { valor, definido } = tarifaPorEdad(tarifa.tarifas_titular, edad);
+        total += valor;
+        if (!definido) sinCobertura.push({ parentesco: miembro.parentesco, edad });
       } else if (esHijo && plan.modo_tarifa_hijos === 'Por cantidad de hijos') {
         hijosIncluidos.push(miembro);
       } else {
         // Cónyuge, Madre, Padre, o Hijos en modo "Por hijo"
-        total += tarifaPorEdad(tarifa.tarifas_familiares, edad);
+        const { valor, definido } = tarifaPorEdad(tarifa.tarifas_familiares, edad);
+        total += valor;
+        if (!definido) sinCobertura.push({ parentesco: miembro.parentesco, edad });
       }
     });
 
     if (plan.modo_tarifa_hijos === 'Por cantidad de hijos' && hijosIncluidos.length > 0) {
       const clave = hijosIncluidos.length >= 4 ? '4+' : String(hijosIncluidos.length);
       const tabla = tarifa.tarifas_hijos_cantidad || {};
-      total += Number(tabla[clave] || 0);
+      const valorHijos = tabla[clave];
+      total += Number(valorHijos || 0);
+      if (valorHijos == null) {
+        hijosIncluidos.forEach((h) => sinCobertura.push({ parentesco: h.parentesco, edad: getNumericAge(h.fechaNacimiento) }));
+      }
     }
 
-    return total;
+    return { total, sinCobertura };
   }
 
   // Suma de todas las coberturas adicionales seleccionadas por el usuario
@@ -1383,7 +1399,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const integrantes = integrantesActuales;
     const totalIntegrantes = integrantes.length;
 
-    const basica = calcularCoberturaBasica(plan, integrantes);
+    const { total: basica, sinCobertura } = calcularCoberturaBasica(plan, integrantes);
     const adicionales = calcularCoberturasAdicionales(plan.id, totalIntegrantes);
     const maternidad = calcularMaternidad(plan, plan.id);
     const totalAnual = basica + adicionales + maternidad;
@@ -1403,6 +1419,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       totalBasicaMasAdicionales: basica + adicionales,
       totalAnual,
       fraccionamiento,
+      sinCobertura, // Integrantes cuya edad no tiene tarifa definida en este plan
     };
   }
 
@@ -1510,9 +1527,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     const cotizaciones = new Map(planesSeleccionados.map((p) => [p.id, calcularCotizacionPlan(p)]));
     const numCols = planesSeleccionados.length + 1;
 
+    // La fila de advertencia solo se agrega a la tabla si al menos un plan
+    // seleccionado tiene algún integrante sin tarifa definida para su edad
+    // (no se muestra "—" en todas las columnas cuando no aplica a ninguna).
+    const hayAdvertenciasCobertura = planesSeleccionados.some(
+      (p) => (cotizaciones.get(p.id).sinCobertura || []).length > 0
+    );
+
     // Cada fila puede llevar una clase de fila (zebra, sección, total) y una
     // clase de celda para resaltar valores puntuales (suma asegurada, total
-    // anual), igual al estilo del documento de referencia.
+    // anual), igual al estilo del documento de referencia. "warningCheck"
+    // marca en rojo la celda de un plan puntual cuando aplica.
     const filasDefinicion = [
       { label: 'Producto', get: (p) => p.producto_nombre || '—', rowClass: 'row-shaded' },
       { label: 'Suma Asegurada', get: (p) => `$${formatCurrencyThousands(p.suma_asegurada)}`, cellClass: 'comparison-suma-asegurada' },
@@ -1525,6 +1550,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         },
       },
       { section: 'Total Estimado a Pagar Anual · No incluye IGTF' },
+      ...(hayAdvertenciasCobertura ? [{
+        label: '⚠ Aviso de Cobertura',
+        warningCheck: (p) => (cotizaciones.get(p.id).sinCobertura || []).length > 0,
+        get: (p) => {
+          const advertencias = cotizaciones.get(p.id).sinCobertura || [];
+          return advertencias.length > 0
+            ? advertencias.map((a) => `${a.parentesco} (${a.edad} años) sin tarifa definida`).join(' · ')
+            : 'Sin novedades';
+        },
+      }] : []),
       { label: 'Total Cobertura Básica', get: (p) => `$${formatMoney(cotizaciones.get(p.id).basica)}` },
       { label: 'Total Cob. Adicionales', get: (p) => `$${formatMoney(cotizaciones.get(p.id).adicionales)}`, rowClass: 'row-shaded' },
 
@@ -1577,9 +1612,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         return `<tr class="comparison-section-row"><td colspan="${numCols}">${escapeHtmlLocal(def.section)}</td></tr>`;
       }
       const rowClass = def.rowClass ? ` class="${def.rowClass}"` : '';
-      const cellClass = def.cellClass ? ` class="${def.cellClass}"` : '';
       return `<tr${rowClass}><td class="comparison-row-label">${escapeHtmlLocal(def.label)}</td>` +
-        planesSeleccionados.map(p => `<td${cellClass}>${escapeHtmlLocal(def.get(p))}</td>`).join('') +
+        planesSeleccionados.map(p => {
+          const esAdvertencia = typeof def.warningCheck === 'function' && def.warningCheck(p);
+          const cellClass = def.cellClass ? ` class="${def.cellClass}"` : '';
+          const cellStyle = esAdvertencia ? ' style="color:#C0392B; font-weight:600; font-size:12px;"' : '';
+          return `<td${cellClass}${cellStyle}>${escapeHtmlLocal(def.get(p))}</td>`;
+        }).join('') +
         '</tr>';
     }).join('') + '</tbody>';
 

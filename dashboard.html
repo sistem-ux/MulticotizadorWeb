@@ -340,6 +340,71 @@
       border: 1px solid rgba(192, 57, 43, 0.25);
     }
 
+    .kpi-section-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .kpi-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+
+    .kpi-filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .kpi-filter-group label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: #5B6472;
+    }
+
+    .kpi-filter-select {
+      appearance: none;
+      background-color: var(--color-white);
+      border: 1px solid var(--color-gray-border);
+      color: var(--color-navy);
+      font-family: var(--font-body);
+      font-size: 0.88rem;
+      font-weight: 600;
+      padding: 0.5rem 2rem 0.5rem 0.85rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      min-width: 140px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23001F5B' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.85rem center;
+      transition: border-color var(--transition);
+    }
+
+    .kpi-filter-select:hover,
+    .kpi-filter-select:focus {
+      border-color: var(--color-navy-soft);
+      outline: none;
+    }
+
+    @media (max-width: 560px) {
+      .kpi-filters {
+        width: 100%;
+      }
+      .kpi-filter-group {
+        flex: 1;
+      }
+      .kpi-filter-select {
+        width: 100%;
+        min-width: 0;
+      }
+    }
+
     .kpi-grid {
       display: none;
       grid-template-columns: repeat(12, 1fr);
@@ -447,7 +512,19 @@
         </header>
 
         <section class="form-section">
-          <h3 class="section-title">Indicadores de Cotizaciones</h3>
+          <div class="kpi-section-header">
+            <h3 class="section-title">Indicadores de Cotizaciones</h3>
+            <div class="kpi-filters">
+              <div class="kpi-filter-group">
+                <label for="kpiFilterYear">Año</label>
+                <select id="kpiFilterYear" class="kpi-filter-select"></select>
+              </div>
+              <div class="kpi-filter-group">
+                <label for="kpiFilterMonth">Mes</label>
+                <select id="kpiFilterMonth" class="kpi-filter-select"></select>
+              </div>
+            </div>
+          </div>
 
           <div id="kpiLoading" class="kpi-loading">Cargando indicadores…</div>
           <div id="kpiError" class="kpi-error" style="display:none;"></div>

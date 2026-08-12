@@ -7,6 +7,16 @@ const SUPABASE_ANON_KEY = 'sb_publishable_zlp4_HGpTeAQKW55c_pZQA_2HEXRpaC';
 const TABLE_COTIZACIONES = 'cotizaciones';
 const TABLE_USUARIOS = 'usuarios';
 
+/* Año a partir del cual existe el sistema. La lista del filtro de años se
+   genera dinámicamente entre este valor y el año actual, así que al llegar
+   un nuevo año (ej. 2027) aparecerá solo, sin tocar código. */
+const AÑO_BASE = 2026;
+
+const MESES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+];
+
 let supabaseClient = null;
 
 async function initSupabase() {
@@ -59,6 +69,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const chartAsesorCard = document.getElementById('chartAsesorCard');
   const chartCompaniaCard = document.getElementById('chartCompaniaCard');
 
+  const kpiFilterYearEl = document.getElementById('kpiFilterYear');
+  const kpiFilterMonthEl = document.getElementById('kpiFilterMonth');
+
   /* =========================================================
      ALCANCE DE VISIBILIDAD (mismo criterio que cotizaciones.js,
      ver getRoleScope() en auth-guard.js):
@@ -105,14 +118,69 @@ document.addEventListener('DOMContentLoaded', async () => {
       .select(`${baseSelect}, creador:usuario_creador_id(full_name, sucursal:sucursal_id(sucursal))`);
   }
 
-  async function fetchUsuariosRegistrados(session, scope) {
-    let query = supabaseClient.from(TABLE_USUARIOS).select('id', { count: 'exact', head: true });
+  /* Trae los usuarios visibles según el alcance del perfil (mismo criterio
+     de sucursal usado en buildCotizacionesQuery para admin_sucursal), junto
+     con su fecha_creacion, para poder filtrarlos por año/mes en memoria sin
+     volver a consultar Supabase cada vez que cambia el filtro.
+
+     NOTA: se asume que la tabla `usuarios` tiene una columna `fecha_creacion`
+     (mismo nombre usado en `cotizaciones`). Si en el esquema real la columna
+     se llama distinto (ej. `created_at`), ajustar el valor de
+     USUARIOS_FECHA_COLUMNA abajo. */
+  const USUARIOS_FECHA_COLUMNA = 'fecha_creacion';
+
+  async function fetchUsuariosData(session, scope) {
+    let query = supabaseClient.from(TABLE_USUARIOS).select(`id, ${USUARIOS_FECHA_COLUMNA}`);
     if (scope === 'admin_sucursal') {
       query = query.eq('sucursal_id', session.sucursalId);
     }
-    const { count, error } = await query;
+    const { data, error } = await query;
     if (error) throw error;
-    return count || 0;
+    return data || [];
+  }
+
+  /* =========================================================
+     FILTRO POR AÑO / MES
+     ========================================================= */
+  function populateYearFilter(selectEl) {
+    const currentYear = new Date().getFullYear();
+    const maxYear = Math.max(currentYear, AÑO_BASE);
+    selectEl.innerHTML = '';
+    for (let y = maxYear; y >= AÑO_BASE; y--) {
+      const opt = document.createElement('option');
+      opt.value = String(y);
+      opt.textContent = String(y);
+      selectEl.appendChild(opt);
+    }
+    selectEl.value = String(maxYear);
+  }
+
+  function populateMonthFilter(selectEl) {
+    selectEl.innerHTML = '';
+    const optTodos = document.createElement('option');
+    optTodos.value = 'todos';
+    optTodos.textContent = 'Todos';
+    selectEl.appendChild(optTodos);
+
+    MESES.forEach((mes, idx) => {
+      const opt = document.createElement('option');
+      opt.value = String(idx); // 0 = Enero ... 11 = Diciembre
+      opt.textContent = mes;
+      selectEl.appendChild(opt);
+    });
+
+    selectEl.value = 'todos';
+  }
+
+  function filtrarPorFecha(items, year, month, fechaKey = 'fecha_creacion') {
+    return items.filter((item) => {
+      const valorFecha = item[fechaKey];
+      if (!valorFecha) return false;
+      const fecha = new Date(valorFecha);
+      if (fecha.getFullYear() !== year) return false;
+      if (month !== 'todos' && fecha.getMonth() !== Number(month)) return false;
+      return true;
+    });
   }
 
   /* =========================================================
@@ -166,10 +234,17 @@ document.addEventListener('DOMContentLoaded', async () => {
      ========================================================= */
   const chartInstances = {};
 
+  function destroyChart(canvasId) {
+    if (chartInstances[canvasId]) {
+      chartInstances[canvasId].destroy();
+      delete chartInstances[canvasId];
+    }
+  }
+
   function renderBarChart(canvasId, entries, label) {
     const canvas = document.getElementById(canvasId);
     if (!canvas || typeof Chart === 'undefined') return;
-    if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+    destroyChart(canvasId);
 
     chartInstances[canvasId] = new Chart(canvas, {
       type: 'bar',
@@ -198,7 +273,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function renderDoughnutChart(canvasId, entries, label) {
     const canvas = document.getElementById(canvasId);
     if (!canvas || typeof Chart === 'undefined') return;
-    if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+    destroyChart(canvasId);
 
     chartInstances[canvasId] = new Chart(canvas, {
       type: 'doughnut',
@@ -229,12 +304,74 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   /* =========================================================
+     ESTADO EN MEMORIA + RENDER SEGÚN FILTROS
+     (las cotizaciones y usuarios se traen una sola vez desde Supabase;
+     año y mes se aplican en el cliente, sin volver a consultar)
+     ========================================================= */
+  let allCotizaciones = [];
+  let allUsuarios = [];
+  let currentScope = null;
+
+  function renderDashboardData(cotizaciones, usuarios, scope) {
+    renderKpiCard(kpiTotalCotizacionesEl, cotizaciones.length);
+
+    if (scope === 'admin_nacional' || scope === 'admin_sucursal') {
+      renderKpiCard(kpiUsuariosEl, usuarios.length);
+    }
+
+    if (scope === 'admin_nacional') {
+      const visitantes = cotizaciones.filter((c) => !c.usuario_creador_id).length;
+      renderKpiCard(kpiVisitantesEl, visitantes);
+
+      const porSucursal = mapToSortedEntries(agruparPorSucursal(cotizaciones));
+      renderEmptyState(chartSucursalCard, porSucursal.length > 0);
+      if (porSucursal.length) {
+        renderBarChart('chartSucursal', porSucursal, 'Cotizaciones');
+      } else {
+        destroyChart('chartSucursal');
+      }
+    }
+
+    if (scope !== 'asesor') {
+      const porAsesor = mapToSortedEntries(agruparPorAsesor(cotizaciones), 10);
+      renderEmptyState(chartAsesorCard, porAsesor.length > 0);
+      if (porAsesor.length) {
+        renderBarChart('chartAsesor', porAsesor, 'Cotizaciones');
+      } else {
+        destroyChart('chartAsesor');
+      }
+    }
+
+    const porCompania = mapToSortedEntries(agruparPorCompania(cotizaciones));
+    renderEmptyState(chartCompaniaCard, porCompania.length > 0);
+    if (porCompania.length) {
+      renderDoughnutChart('chartCompania', porCompania, 'Planes cotizados');
+    } else {
+      destroyChart('chartCompania');
+    }
+  }
+
+  function applyFilters() {
+    const year = Number(kpiFilterYearEl.value);
+    const month = kpiFilterMonthEl.value;
+    const cotizacionesFiltradas = filtrarPorFecha(allCotizaciones, year, month, 'fecha_creacion');
+    const usuariosFiltrados = filtrarPorFecha(allUsuarios, year, month, USUARIOS_FECHA_COLUMNA);
+    renderDashboardData(cotizacionesFiltradas, usuariosFiltrados, currentScope);
+  }
+
+  kpiFilterYearEl.addEventListener('change', applyFilters);
+  kpiFilterMonthEl.addEventListener('change', applyFilters);
+
+  /* =========================================================
      CARGA PRINCIPAL
      ========================================================= */
   async function loadDashboard() {
     kpiLoading.style.display = 'block';
     kpiError.style.display = 'none';
     kpiSection.style.display = 'none';
+
+    populateYearFilter(kpiFilterYearEl);
+    populateMonthFilter(kpiFilterMonthEl);
 
     if (!supabaseClient) {
       kpiLoading.style.display = 'none';
@@ -266,33 +403,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const { data, error } = await buildCotizacionesQuery(session, scope);
       if (error) throw error;
-      const cotizaciones = data || [];
 
-      renderKpiCard(kpiTotalCotizacionesEl, cotizaciones.length);
-
-      if (scope === 'admin_nacional') {
-        const visitantes = cotizaciones.filter((c) => !c.usuario_creador_id).length;
-        renderKpiCard(kpiVisitantesEl, visitantes);
-
-        const porSucursal = mapToSortedEntries(agruparPorSucursal(cotizaciones));
-        renderEmptyState(chartSucursalCard, porSucursal.length > 0);
-        if (porSucursal.length) renderBarChart('chartSucursal', porSucursal, 'Cotizaciones');
-      }
+      allCotizaciones = data || [];
+      currentScope = scope;
 
       if (scope === 'admin_nacional' || scope === 'admin_sucursal') {
-        const totalUsuarios = await fetchUsuariosRegistrados(session, scope);
-        renderKpiCard(kpiUsuariosEl, totalUsuarios);
+        allUsuarios = await fetchUsuariosData(session, scope);
+      } else {
+        allUsuarios = [];
       }
 
-      if (scope !== 'asesor') {
-        const porAsesor = mapToSortedEntries(agruparPorAsesor(cotizaciones), 10);
-        renderEmptyState(chartAsesorCard, porAsesor.length > 0);
-        if (porAsesor.length) renderBarChart('chartAsesor', porAsesor, 'Cotizaciones');
-      }
-
-      const porCompania = mapToSortedEntries(agruparPorCompania(cotizaciones));
-      renderEmptyState(chartCompaniaCard, porCompania.length > 0);
-      if (porCompania.length) renderDoughnutChart('chartCompania', porCompania, 'Planes cotizados');
+      applyFilters();
 
       kpiLoading.style.display = 'none';
       kpiSection.style.display = 'grid';
