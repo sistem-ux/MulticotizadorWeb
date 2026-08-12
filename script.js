@@ -96,6 +96,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const viewComparisonBtn = document.getElementById('viewComparisonBtn');
   const comparisonModal = document.getElementById('comparisonModal');
   const closeComparisonModalBtn = document.getElementById('closeComparisonModalBtn');
+  const backComparisonBtn = document.getElementById('backComparisonBtn');
+  const newQuoteBtn = document.getElementById('newQuoteBtn');
+  const closeQuoteBtn = document.getElementById('closeQuoteBtn');
   const comparisonTableWrapper = document.getElementById('comparisonTableWrapper');
   const comparisonPrintHeader = document.getElementById('comparisonPrintHeader');
   const exportComparisonBtn = document.getElementById('exportComparisonBtn');
@@ -1545,7 +1548,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     finalizeQuoteBtn.style.display = '';
     finalizeQuoteBtn.disabled = false;
     finalizeQuoteBtn.textContent = 'Finalizar';
+    backComparisonBtn.style.display = '';
     exportComparisonBtn.style.display = 'none';
+    newQuoteBtn.style.display = 'none';
+    closeQuoteBtn.style.display = 'none';
     comparisonSaveFeedback.textContent = '';
     comparisonSaveFeedback.style.color = '';
   }
@@ -1640,7 +1646,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     cotizacionGuardadaId = data.id;
     finalizeQuoteBtn.style.display = 'none';
+    backComparisonBtn.style.display = 'none';
     exportComparisonBtn.style.display = '';
+    newQuoteBtn.style.display = '';
+    closeQuoteBtn.style.display = (getSession().role === 'Visitante') ? 'none' : '';
     comparisonSaveFeedback.style.color = '#2E7D32';
     comparisonSaveFeedback.textContent = 'Cotización guardada correctamente.';
   });
@@ -1653,6 +1662,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   closeComparisonModalBtn.addEventListener('click', () => {
     comparisonModal.classList.remove('active');
+  });
+
+  // "Regresar": cierra el modal sin guardar ni modificar nada (equivalente a la "×").
+  backComparisonBtn.addEventListener('click', () => {
+    comparisonModal.classList.remove('active');
+  });
+
+  // "Nueva Cotización": cierra el modal y reinicia todo el proceso de cotización.
+  newQuoteBtn.addEventListener('click', () => {
+    window.location.href = 'cotizador.html';
+  });
+
+  // "Cerrar": cierra el modal y envía al usuario al listado de cotizaciones.
+  closeQuoteBtn.addEventListener('click', () => {
+    window.location.href = 'cotizaciones.html';
   });
 
   // Exporta el resumen comparativo a PDF generándolo con html2canvas + jsPDF
