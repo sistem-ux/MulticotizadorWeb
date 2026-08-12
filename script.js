@@ -79,6 +79,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const tableBody = document.getElementById('familyTableBody');
   const rowTemplate = document.getElementById('rowTemplate');
   const addChildBtn = document.getElementById('addChildBtn');
+  const minorTitularWarning = document.getElementById('minorTitularWarning');
   const showPlansBtn = document.getElementById('showPlansBtn');
   const modifyDataBtn = document.getElementById('modifyDataBtn');
   const plansContainer = document.getElementById('plansContainer'); 
@@ -675,13 +676,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       validateRowFull(row);
       // La fecha del Titular es la referencia para validar a Madre, Padre e
       // Hijos, así que si cambia, hay que re-evaluar esas filas también.
-      if (relation === 'Titular') revalidateRelativeAgeDependents();
+      if (relation === 'Titular') {
+        revalidateRelativeAgeDependents();
+        applyMinorTitularRestriction();
+      }
     });
 
     dateInput.addEventListener('blur', () => {
       dateInput.value = formatDateInputValue(dateInput.value);
       validateRowFull(row);
-      if (relation === 'Titular') revalidateRelativeAgeDependents();
+      if (relation === 'Titular') {
+        revalidateRelativeAgeDependents();
+        applyMinorTitularRestriction();
+      }
     });
   }
 
@@ -700,8 +707,49 @@ document.addEventListener('DOMContentLoaded', async () => {
   function updateAddChildButtonState() {
     const childRows = getChildRows();
     const lastCheckbox = childRows[childRows.length - 1]?.querySelector('.row-checkbox');
-    addChildBtn.disabled = isFamilyLocked || !lastCheckbox || !lastCheckbox.checked;
+    addChildBtn.disabled = isFamilyLocked || isTitularMenorDeEdad() || !lastCheckbox || !lastCheckbox.checked;
   }
+
+  // --- NUEVO: Blindaje de grupo familiar cuando el Titular es menor de edad ---
+  // Si el Titular tiene menos de 18 años, no se permite incluir ningún otro
+  // parentesco (Cónyuge, Madre, Padre, Hijos): se desmarcan y bloquean sus
+  // checkboxes, y se deshabilita "Agregar hijo".
+  function isTitularMenorDeEdad() {
+    const titularRow = tableBody.querySelector('.family-row[data-relation="Titular"]');
+    const dateInput = titularRow ? titularRow.querySelector('.date-input') : null;
+    if (!dateInput || !dateInput.value) return false;
+    const edad = getNumericAge(dateInput.value);
+    return edad >= 0 && edad < 18;
+  }
+
+  function applyMinorTitularRestriction() {
+    const titularEsMenor = isTitularMenorDeEdad();
+    const rows = Array.from(tableBody.querySelectorAll('.family-row'));
+
+    rows.forEach((row) => {
+      const relation = row.dataset.relation || '';
+      if (relation === 'Titular') return;
+      const checkbox = row.querySelector('.row-checkbox');
+      if (!checkbox) return;
+
+      if (titularEsMenor) {
+        row.dataset.baseCheckboxDisabled = 'true';
+        if (checkbox.checked) {
+          checkbox.checked = false;
+          checkbox.dispatchEvent(new Event('change'));
+        }
+      } else {
+        row.dataset.baseCheckboxDisabled = 'false';
+      }
+    });
+
+    if (minorTitularWarning) minorTitularWarning.style.display = titularEsMenor ? '' : 'none';
+
+    // Reaplica el bloqueo/desbloqueo respetando también el estado de
+    // "formulario bloqueado" (setFamilyFormLocked ya lee baseCheckboxDisabled).
+    setFamilyFormLocked(isFamilyLocked);
+  }
+  // -----------------------------------------------------------------------
 
   function createRow(relationName, { checked = true, disabledCheckbox = false } = {}) {
     const row = rowTemplate.content.cloneNode(true).querySelector('.family-row');
@@ -734,6 +782,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   initRows();
   setFamilyFormLocked(false);
+  applyMinorTitularRestriction();
 
   addChildBtn.addEventListener('click', () => {
     tableBody.appendChild(createRow(`Hijo ${getChildRows().length + 1}`, { checked: true }));
