@@ -36,7 +36,7 @@ const PAGE_PERMISSIONS = {
   'clientes.html': [ROLES.ADMIN1],
   'planes.html': [ROLES.ADMIN1],
   'perfiles.html': [ROLES.ADMIN1],
-  'Ramos.html': [ROLES.ADMIN1],
+  'ramos.html': [ROLES.ADMIN1],
   'cotizador.html': [ROLES.ADMIN1,ROLES.ADMIN2, ROLES.COLABORADOR, ROLES.ASESOR, ROLES.VISITANTE],
   'cotizaciones.html': [ROLES.ADMIN1,ROLES.ADMIN2, ROLES.COLABORADOR, ROLES.ASESOR],
 };
