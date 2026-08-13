@@ -380,6 +380,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td data-label="Nacionalidad">${escapeHtml(item.nacionalidad)}</td>
         <td data-label="Acciones" class="col-actions">
           <button type="button" class="action-btn action-btn--view" data-id="${item.id}" aria-label="Ver cliente">👁️</button>
+          <button type="button" class="action-btn action-btn--polizas" data-id="${item.id}" aria-label="Ver pólizas del cliente">🗂️</button>
           <button type="button" class="action-btn action-btn--delete" data-id="${item.id}" aria-label="Eliminar cliente">🗑️</button>
         </td>
       `;
@@ -387,6 +388,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       tr.querySelector('.action-btn--view').addEventListener('click', () => {
         openClienteModal({ edit: true, item, readOnly: true });
+      });
+      // Redirige al módulo de Pólizas con la pestaña "Pólizas" ya filtrada
+      // por este cliente (la pestaña Fracciones queda igual, sin filtrar,
+      // para permitir consultas puntuales).
+      tr.querySelector('.action-btn--polizas').addEventListener('click', () => {
+        window.location.href = `polizas.html?cliente_id=${encodeURIComponent(item.id)}`;
       });
       tr.querySelector('.action-btn--delete').addEventListener('click', () => handleDeleteCliente(item.id));
     });
