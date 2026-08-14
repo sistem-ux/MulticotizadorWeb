@@ -1041,7 +1041,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     fraccionesEmpty.style.display = 'none';
 
     items.forEach((item) => {
-      const statusClass = `status-pill--${(item.status || 'Pendiente').toLowerCase()}`;
+      const statusClass = `status-pill--${(item.status || 'Por Cobrar').toLowerCase()}`;
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td data-label="Cliente">${escapeHtml(item.cliente_nombre)}</td>
@@ -1057,7 +1057,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       `;
       fraccionesTableBody.appendChild(tr);
       const toggleBtn = tr.querySelector('.action-btn--toggle-on');
-      if (toggleBtn) toggleBtn.addEventListener('click', () => handleMarcarFraccionPagada(item));
+     if (toggleBtn) toggleBtn.addEventListener('click', () => handleMarcarFraccionPagada(item));
     });
   }
 
