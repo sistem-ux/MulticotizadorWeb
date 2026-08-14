@@ -194,10 +194,40 @@
       line-height: 1;
     }
 
-    .status-pill--vigente, .status-pill--pagada { background: #E1F3E4; color: #1F7A34; }
-    .status-pill--pendiente { background: #FFF3D6; color: #8A6100; }
+    .status-pill--vigente, .status-pill--pagada, .status-pill--cobrado { background: #E1F3E4; color: #1F7A34; }
+    .status-pill--pendiente, .status-pill--por-cobrar { background: #FFF3D6; color: #8A6100; }
     .status-pill--vencida { background: #FCE4E4; color: #B42318; }
-    .status-pill--anulada { background: #E9EAEE; color: #5B6472; }
+    .status-pill--anulada, .status-pill--anulado { background: #E9EAEE; color: #5B6472; }
+
+    /* Filtro Año / Mes (pestaña Fracciones) */
+    .periodo-filter { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .periodo-filter select.text-input { width: auto; min-width: 130px; }
+    .periodo-filter .btn--reset-filter {
+      background: var(--color-gray-light); border: 1px solid var(--color-gray-border);
+      color: var(--color-navy); border-radius: 6px; padding: 0.55rem 0.8rem;
+      font-weight: 600; font-size: 0.85rem; cursor: pointer; white-space: nowrap;
+    }
+    .periodo-filter .btn--reset-filter:hover { background: var(--color-gray-border); }
+
+    /* Detalle Prima Total / Devengada (solo lectura, visible en detalle) */
+    .prima-resumen-box {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
+      background: var(--color-gray-light); border: 1px dashed var(--color-gray-border);
+      border-radius: 8px; padding: 0.85rem; margin: 0.75rem 0 0.25rem;
+    }
+    @media (max-width: 640px) { .prima-resumen-box { grid-template-columns: 1fr; } }
+    .prima-resumen-box .form-label { margin-bottom: 0.25rem; display: block; }
+
+    /* Lista de fracciones dentro del modal de detalle */
+    .fraccion-list { display: flex; flex-direction: column; gap: 0.6rem; max-height: 360px; overflow-y: auto; }
+    .fraccion-list__item {
+      display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+      border: 1px solid var(--color-gray-border); border-radius: 8px; padding: 0.7rem 0.9rem;
+    }
+    .fraccion-list__info { font-size: 0.85rem; color: #3C4350; line-height: 1.5; }
+    .fraccion-list__info strong { color: var(--color-navy); }
+    .fraccion-list__actions { flex-shrink: 0; display: flex; align-items: center; gap: 0.5rem; }
+    .btn--sm { padding: 0.4rem 0.7rem; font-size: 0.8rem; }
 
     @media (max-width: 768px) {
       .sidebar { transform: translateX(-100%); }
@@ -293,6 +323,25 @@
               <span class="search-bar__icon" aria-hidden="true">🔎</span>
               <input type="text" id="searchFracciones" class="search-bar__input" placeholder="Buscar por cliente o nro. de póliza..." autocomplete="off">
               <button type="button" id="clearSearchFracciones" class="search-bar__clear" aria-label="Limpiar búsqueda">✕</button>
+            </div>
+            <div class="periodo-filter">
+              <select id="filtroFraccionAnio" class="text-input"></select>
+              <select id="filtroFraccionMes" class="text-input">
+                <option value="Todos">Todos</option>
+                <option value="1">Enero</option>
+                <option value="2">Febrero</option>
+                <option value="3">Marzo</option>
+                <option value="4">Abril</option>
+                <option value="5">Mayo</option>
+                <option value="6">Junio</option>
+                <option value="7">Julio</option>
+                <option value="8">Agosto</option>
+                <option value="9">Septiembre</option>
+                <option value="10">Octubre</option>
+                <option value="11">Noviembre</option>
+                <option value="12">Diciembre</option>
+              </select>
+              <button type="button" id="resetFiltroFraccion" class="btn--reset-filter">↺ Reiniciar filtros</button>
             </div>
           </div>
 
@@ -467,10 +516,24 @@
 
         <div class="field-hint-box" id="polizaFraccionesPreview">Selecciona inicio de vigencia, prima y frecuencia para previsualizar las fracciones a generar.</div>
 
+        <!-- Prima Total / Prima Devengada: solo visibles en el detalle (Ver Póliza), siempre deshabilitados -->
+        <div class="prima-resumen-box" id="polizaPrimaResumenBox" style="display:none;">
+          <div>
+            <label class="form-label">Prima Total</label>
+            <input type="text" id="polizaPrimaTotal" class="text-input" disabled>
+          </div>
+          <div>
+            <label class="form-label">Prima Devengada</label>
+            <input type="text" id="polizaPrimaDevengada" class="text-input" disabled>
+          </div>
+        </div>
+
         <div class="form-feedback" id="polizaFormFeedback"></div>
 
         <div class="modal__footer">
           <button type="button" class="btn btn--cancel" id="cancelPolizaModalBtn">Cerrar</button>
+          <button type="button" class="btn btn--secondary" id="verFraccionesPolizaBtn" style="display:none;">📋 Ver Fracciones</button>
+          <button type="button" class="btn btn--danger" id="anularPolizaBtn" style="display:none;">🚫 Anular</button>
           <button type="button" class="btn btn--secondary" id="editPolizaBtn" style="display:none;">✏️ Editar</button>
           <button type="submit" class="btn btn--primary" id="submitPolizaBtn">Registrar</button>
         </div>
@@ -527,6 +590,89 @@
         <div class="modal__footer">
           <button type="button" class="btn btn--cancel" id="cancelClienteModalBtn">Cancelar</button>
           <button type="submit" class="btn btn--primary" id="submitClienteBtn">Registrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL: ANULAR PÓLIZA
+       ========================================================= -->
+  <div class="modal-overlay" id="anularPolizaModalOverlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="anularPolizaModalTitle">
+      <div class="modal__header">
+        <h2 class="modal__title" id="anularPolizaModalTitle">Anular Póliza</h2>
+        <button type="button" class="modal__close" id="anularPolizaModalCloseBtn" aria-label="Cerrar">✕</button>
+      </div>
+      <form id="anularPolizaForm" novalidate>
+        <div class="modal__field" id="fieldCausaAnulacion">
+          <label for="causaAnulacion" class="form-label">Causa de la Anulación</label>
+          <textarea id="causaAnulacion" class="text-input" rows="4" placeholder="Escribe el motivo de la anulación..."></textarea>
+          <span class="field-error">Escribe la causa de la anulación.</span>
+        </div>
+        <div class="form-feedback" id="anularPolizaFormFeedback"></div>
+        <div class="modal__footer">
+          <button type="button" class="btn btn--cancel" id="cancelAnularPolizaBtn">Cancelar</button>
+          <button type="submit" class="btn btn--danger" id="submitAnularPolizaBtn">Anular Póliza</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL: VER FRACCIONES DE UNA PÓLIZA
+       ========================================================= -->
+  <div class="modal-overlay" id="verFraccionesModalOverlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="verFraccionesModalTitle">
+      <div class="modal__header">
+        <h2 class="modal__title" id="verFraccionesModalTitle">Fracciones de la Póliza</h2>
+        <button type="button" class="modal__close" id="verFraccionesModalCloseBtn" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="fraccion-list" id="verFraccionesList"></div>
+      <div class="modal__footer">
+        <button type="button" class="btn btn--cancel" id="closeVerFraccionesBtn">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL: COBRAR FRACCIÓN
+       ========================================================= -->
+  <div class="modal-overlay" id="cobrarModalOverlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cobrarModalTitle">
+      <div class="modal__header">
+        <h2 class="modal__title" id="cobrarModalTitle">Cobrar Fracción</h2>
+        <button type="button" class="modal__close" id="cobrarModalCloseBtn" aria-label="Cerrar">✕</button>
+      </div>
+      <form id="cobrarForm" novalidate>
+        <div class="modal__field" id="fieldCobrarFecha">
+          <label for="cobrarFecha" class="form-label">Fecha de cobro (Día del reporte a Corporativa)</label>
+          <input type="date" id="cobrarFecha" class="text-input" required>
+          <span class="field-error">Selecciona la fecha de cobro.</span>
+        </div>
+        <div class="modal__field" id="fieldCobrarMoneda">
+          <label for="cobrarMoneda" class="form-label">Moneda de pago</label>
+          <select id="cobrarMoneda" class="text-input" required>
+            <option value="">Selecciona la moneda</option>
+            <option value="Bolívares">Bolívares</option>
+            <option value="Dólares">Dólares</option>
+          </select>
+          <span class="field-error">Selecciona la moneda de pago.</span>
+        </div>
+        <div class="modal__field" id="fieldCobrarPrima">
+          <label for="cobrarPrima" class="form-label">Prima</label>
+          <div class="input-currency"><span class="input-currency__prefix">$</span><input type="text" inputmode="decimal" id="cobrarPrima" class="text-input"></div>
+          <span class="field-error">Ingresa la prima cobrada.</span>
+        </div>
+        <div class="modal__field" id="fieldCobrarFechaIngreso">
+          <label for="cobrarFechaIngreso" class="form-label">Fecha del ingreso en la aseguradora</label>
+          <input type="date" id="cobrarFechaIngreso" class="text-input" required>
+          <span class="field-error">Selecciona la fecha de ingreso en la aseguradora.</span>
+        </div>
+        <div class="form-feedback" id="cobrarFormFeedback"></div>
+        <div class="modal__footer">
+          <button type="button" class="btn btn--cancel" id="cancelCobrarBtn">Cancelar</button>
+          <button type="submit" class="btn btn--primary" id="submitCobrarBtn">Registrar Cobro</button>
         </div>
       </form>
     </div>

@@ -73,6 +73,13 @@ function formatDateEs(isoDate) {
   return `${d}/${m}/${y}`;
 }
 
+/* Convierte un status a clase CSS válida (espacios -> guiones) */
+function statusToClass(status) {
+  return (status || '').toLowerCase().trim().replace(/\s+/g, '-');
+}
+
+const MESES_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
 /* =============================================================
    ARITMÉTICA DE FECHAS: suma de meses con ajuste de fin de mes
    ============================================================= */
@@ -389,6 +396,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const polizaModalCloseBtn = document.getElementById('polizaModalCloseBtn');
   const cancelPolizaModalBtn = document.getElementById('cancelPolizaModalBtn');
   const editPolizaBtn = document.getElementById('editPolizaBtn');
+  const anularPolizaBtn = document.getElementById('anularPolizaBtn');
+  const verFraccionesPolizaBtn = document.getElementById('verFraccionesPolizaBtn');
+  const polizaPrimaResumenBox = document.getElementById('polizaPrimaResumenBox');
+  const polizaPrimaTotal = document.getElementById('polizaPrimaTotal');
+  const polizaPrimaDevengada = document.getElementById('polizaPrimaDevengada');
   const polizaForm = document.getElementById('polizaForm');
   const polizaIdInput = document.getElementById('polizaId');
   const submitPolizaBtn = document.getElementById('submitPolizaBtn');
@@ -635,6 +647,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       .forEach((f) => setFieldError(f, false));
   }
 
+  /* Prima Total / Prima Devengada: se calculan en el front a partir de las
+     fracciones asociadas (no se persisten en la BD, solo son de lectura y
+     únicamente se muestran en el detalle de la póliza). */
+  function refrescarPrimaResumen(polizaId) {
+    const fraccionesPoliza = allFracciones.filter((f) => f.poliza_id === polizaId);
+    const primaTotal = fraccionesPoliza.reduce((sum, f) => sum + Number(f.prima || 0), 0);
+    const primaDevengada = fraccionesPoliza
+      .filter((f) => f.status === 'Cobrado')
+      .reduce((sum, f) => sum + Number(f.prima || 0), 0);
+    polizaPrimaTotal.value = formatMoney(primaTotal);
+    polizaPrimaDevengada.value = formatMoney(primaDevengada);
+  }
+
   function openPolizaModal({ edit = false, item = null, readOnly = false, clientePreseleccionado = null } = {}) {
     isEditModePoliza = edit;
     isReadOnlyPoliza = readOnly;
@@ -679,17 +704,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       // Modo Ver siempre por defecto; "Editar" lo reactiva
       setPolizaFormDisabled(true);
-      editPolizaBtn.style.display = readOnly ? 'inline-flex' : 'none';
+      editPolizaBtn.style.display = readOnly && item.status !== 'Anulado' ? 'inline-flex' : 'none';
       submitPolizaBtn.style.display = readOnly ? 'none' : 'inline-flex';
       submitPolizaBtn.textContent = 'Guardar Cambios';
       polizaModalOverlay.querySelector('.modal').classList.toggle('modal--readonly', readOnly);
       if (!readOnly) polizaModalTitle.textContent = 'Editar Póliza';
+
+      // Prima Total / Prima Devengada + accesos rápidos: solo en el detalle (Ver)
+      polizaPrimaResumenBox.style.display = readOnly ? 'grid' : 'none';
+      if (readOnly) refrescarPrimaResumen(item.id);
+      verFraccionesPolizaBtn.style.display = readOnly ? 'inline-flex' : 'none';
+      anularPolizaBtn.style.display = (readOnly && item.status !== 'Anulado') ? 'inline-flex' : 'none';
     } else {
       polizaModalTitle.textContent = 'Registrar Póliza';
       submitPolizaBtn.textContent = 'Registrar';
       polizaIdInput.value = '';
       setPolizaFormDisabled(false);
       editPolizaBtn.style.display = 'none';
+      anularPolizaBtn.style.display = 'none';
+      verFraccionesPolizaBtn.style.display = 'none';
+      polizaPrimaResumenBox.style.display = 'none';
       submitPolizaBtn.style.display = 'inline-flex';
       polizaModalOverlay.querySelector('.modal').classList.remove('modal--readonly');
 
@@ -725,6 +759,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   editPolizaBtn.addEventListener('click', () => {
     if (!currentPolizaItem) return;
     openPolizaModal({ edit: true, item: currentPolizaItem, readOnly: false });
+  });
+  verFraccionesPolizaBtn.addEventListener('click', () => {
+    if (currentPolizaItem) openVerFraccionesModal(currentPolizaItem);
+  });
+  anularPolizaBtn.addEventListener('click', () => {
+    if (currentPolizaItem) openAnularPolizaModal(currentPolizaItem);
   });
 
   /* =========================================================
@@ -875,6 +915,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         fecha_inicio: f.fecha_inicio,
         fecha_fin: f.fecha_fin,
         prima: f.prima,
+        status: 'Por Cobrar',
         usuario_creacion: currentUser,
         usuario_modificacion: currentUser,
       }));
@@ -921,7 +962,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     polizasEmpty.style.display = 'none';
 
     items.forEach((item) => {
-      const statusClass = `status-pill--${(item.status || 'Vigente').toLowerCase()}`;
+      const status = item.status || 'Vigente';
+      const statusClass = `status-pill--${statusToClass(status)}`;
+      const esAnulada = status === 'Anulado';
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td data-label="Cliente">${escapeHtml(item.cliente_nombre)}</td>
@@ -930,14 +973,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td data-label="Ramo">${escapeHtml(item.ramo_nombre)}</td>
         <td data-label="Vigencia">${formatDateEs(item.inicio_vigencia)} — ${formatDateEs(item.fin_vigencia)}</td>
         <td data-label="Prima">${formatMoney(item.prima)}</td>
-        <td data-label="Status"><span class="status-pill ${statusClass}">${escapeHtml(item.status || 'Vigente')}</span></td>
+        <td data-label="Status"><span class="status-pill ${statusClass}">${escapeHtml(status)}</span></td>
         <td data-label="Acciones" class="col-actions">
           <button type="button" class="action-btn action-btn--view" data-id="${item.id}" aria-label="Ver póliza">👁️</button>
+          <button type="button" class="action-btn action-btn--fracciones" data-id="${item.id}" aria-label="Ver fracciones">📋</button>
+          ${esAnulada ? '' : `<button type="button" class="action-btn action-btn--anular" data-id="${item.id}" aria-label="Anular póliza">🚫</button>`}
           <button type="button" class="action-btn action-btn--delete" data-id="${item.id}" aria-label="Eliminar póliza">🗑️</button>
         </td>
       `;
       polizasTableBody.appendChild(tr);
       tr.querySelector('.action-btn--view').addEventListener('click', () => openPolizaModal({ edit: true, item, readOnly: true }));
+      tr.querySelector('.action-btn--fracciones').addEventListener('click', () => openVerFraccionesModal(item));
+      const anularBtn = tr.querySelector('.action-btn--anular');
+      if (anularBtn) anularBtn.addEventListener('click', () => openAnularPolizaModal(item));
       tr.querySelector('.action-btn--delete').addEventListener('click', () => handleDeletePoliza(item));
     });
   }
@@ -1018,6 +1066,82 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  /* =========================================================
+     ANULAR PÓLIZA
+     ========================================================= */
+  const anularPolizaModalOverlay = document.getElementById('anularPolizaModalOverlay');
+  const anularPolizaModalCloseBtn = document.getElementById('anularPolizaModalCloseBtn');
+  const cancelAnularPolizaBtn = document.getElementById('cancelAnularPolizaBtn');
+  const anularPolizaForm = document.getElementById('anularPolizaForm');
+  const causaAnulacion = document.getElementById('causaAnulacion');
+  const fieldCausaAnulacion = document.getElementById('fieldCausaAnulacion');
+  const submitAnularPolizaBtn = document.getElementById('submitAnularPolizaBtn');
+  let polizaAAnular = null;
+
+  function openAnularPolizaModal(item) {
+    polizaAAnular = item;
+    anularPolizaForm.reset();
+    clearFeedback('anularPolizaFormFeedback');
+    setFieldError(fieldCausaAnulacion, false);
+    anularPolizaModalOverlay.classList.add('is-open');
+    causaAnulacion.focus();
+  }
+  function closeAnularPolizaModal() {
+    anularPolizaModalOverlay.classList.remove('is-open');
+    polizaAAnular = null;
+  }
+  anularPolizaModalCloseBtn.addEventListener('click', closeAnularPolizaModal);
+  cancelAnularPolizaBtn.addEventListener('click', closeAnularPolizaModal);
+  anularPolizaModalOverlay.addEventListener('click', (e) => { if (e.target === anularPolizaModalOverlay) closeAnularPolizaModal(); });
+
+  anularPolizaForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!polizaAAnular) return;
+    clearFeedback('anularPolizaFormFeedback');
+
+    const causa = causaAnulacion.value.trim();
+    const causaOk = causa.length >= 5;
+    setFieldError(fieldCausaAnulacion, !causaOk);
+    if (!causaOk) {
+      showFeedback('anularPolizaFormFeedback', 'Escribe la causa de la anulación (mínimo 5 caracteres).', 'error');
+      return;
+    }
+
+    submitAnularPolizaBtn.disabled = true;
+    submitAnularPolizaBtn.textContent = 'Anulando...';
+    const currentUser = getCurrentUserLabel();
+
+    try {
+      const { error } = await supabaseClient.from(TABLE_POLIZAS)
+        .update({ status: 'Anulado', causa_anulacion: causa, usuario_modificacion: currentUser })
+        .eq('id', polizaAAnular.id);
+
+      if (error) {
+        submitAnularPolizaBtn.disabled = false;
+        submitAnularPolizaBtn.textContent = 'Anular Póliza';
+        showFeedback('anularPolizaFormFeedback', `No se pudo anular la póliza: ${getErrorMessage(error)}`, 'error');
+        return;
+      }
+
+      // Cascada: las fracciones que aún no fueron cobradas pasan a Anulado.
+      await supabaseClient.from(TABLE_FRACCIONES)
+        .update({ status: 'Anulado', usuario_modificacion: currentUser })
+        .eq('poliza_id', polizaAAnular.id)
+        .neq('status', 'Cobrado');
+
+      submitAnularPolizaBtn.disabled = false;
+      submitAnularPolizaBtn.textContent = 'Anular Póliza';
+      await Promise.all([loadPolizas(), loadFracciones()]);
+      showNotification('polizasNotification', 'Póliza anulada correctamente.', 'success');
+      closeAnularPolizaModal();
+      closePolizaModal();
+    } catch (err) {
+      submitAnularPolizaBtn.disabled = false;
+      submitAnularPolizaBtn.textContent = 'Anular Póliza';
+      showFeedback('anularPolizaFormFeedback', `No se pudo anular: ${getErrorMessage(err)}`, 'error');
+    }
+  });
+
   /* =========================================================================
      ===========================  MÓDULO FRACCIONES  ============================
      ========================================================================= */
@@ -1030,10 +1154,46 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentSortFracciones = { key: 'cliente_nombre', direction: 'asc' };
   const sortableHeadersFracciones = document.querySelectorAll('#fraccionesTable th.is-sortable');
 
+  const filtroFraccionAnio = document.getElementById('filtroFraccionAnio');
+  const filtroFraccionMes = document.getElementById('filtroFraccionMes');
+  const resetFiltroFraccion = document.getElementById('resetFiltroFraccion');
+
   function fraccionConNombres(f) {
     const cliente = allClientes.find((c) => c.id === f.cliente_id);
     return { ...f, cliente_nombre: cliente?.nombre_cliente || '—' };
   }
+
+  /* ---- Filtro Año / Mes: el año se alimenta desde la fracción más antigua
+     (por fecha_inicio) hasta el año actual ---- */
+  function poblarFiltroAnios() {
+    const anioActual = new Date().getFullYear();
+    const anios = allFracciones
+      .map((f) => f.fecha_inicio ? Number(f.fecha_inicio.slice(0, 4)) : null)
+      .filter((y) => Number.isInteger(y));
+    const anioMin = anios.length ? Math.min(...anios, anioActual) : anioActual;
+
+    const valorPrevio = filtroFraccionAnio.value || String(anioActual);
+    filtroFraccionAnio.innerHTML = '';
+    for (let y = anioActual; y >= anioMin; y--) {
+      const opt = document.createElement('option');
+      opt.value = String(y);
+      opt.textContent = String(y);
+      filtroFraccionAnio.appendChild(opt);
+    }
+    filtroFraccionAnio.value = [...filtroFraccionAnio.options].some((o) => o.value === valorPrevio)
+      ? valorPrevio
+      : String(anioActual);
+  }
+
+  function resetearFiltroFraccion() {
+    poblarFiltroAnios();
+    filtroFraccionAnio.value = String(new Date().getFullYear());
+    filtroFraccionMes.value = 'Todos';
+    applyFilterFracciones();
+  }
+  filtroFraccionAnio.addEventListener('change', applyFilterFracciones);
+  filtroFraccionMes.addEventListener('change', applyFilterFracciones);
+  resetFiltroFraccion.addEventListener('click', resetearFiltroFraccion);
 
   function renderFracciones(items) {
     fraccionesTableBody.innerHTML = '';
@@ -1041,7 +1201,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     fraccionesEmpty.style.display = 'none';
 
     items.forEach((item) => {
-      const statusClass = `status-pill--${(item.status || 'Por Cobrar').toLowerCase()}`;
+      const status = item.status || 'Por Cobrar';
+      const statusClass = `status-pill--${statusToClass(status)}`;
+      const puedeCobrar = status === 'Por Cobrar';
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td data-label="Cliente">${escapeHtml(item.cliente_nombre)}</td>
@@ -1050,14 +1212,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td data-label="Inicio">${formatDateEs(item.fecha_inicio)}</td>
         <td data-label="Fin">${formatDateEs(item.fecha_fin)}</td>
         <td data-label="Prima">${formatMoney(item.prima)}</td>
-        <td data-label="Status"><span class="status-pill ${statusClass}">${escapeHtml(item.status || 'Por Cobrar')}</span></td>
+        <td data-label="Status"><span class="status-pill ${statusClass}">${escapeHtml(status)}</span></td>
         <td data-label="Acciones" class="col-actions">
-          <button type="button" class="action-btn action-btn--toggle-on" data-id="${item.id}" aria-label="Marcar como pagada" ${item.status === 'Cobrado' ? 'style="display:none;"' : ''}>✓</button>
+          ${puedeCobrar ? `<button type="button" class="action-btn action-btn--cobrar" data-id="${item.id}" aria-label="Cobrar fracción" title="Cobrar">💰</button>` : ''}
         </td>
       `;
       fraccionesTableBody.appendChild(tr);
-      const toggleBtn = tr.querySelector('.action-btn--toggle-on');
-     if (toggleBtn) toggleBtn.addEventListener('click', () => handleMarcarFraccionPagada(item));
+      const cobrarBtn = tr.querySelector('.action-btn--cobrar');
+      if (cobrarBtn) cobrarBtn.addEventListener('click', () => openCobrarModal(item));
     });
   }
 
@@ -1076,26 +1238,169 @@ document.addEventListener('DOMContentLoaded', async () => {
     const term = searchFracciones.value.trim().toLowerCase();
     clearSearchFracciones.classList.toggle('is-visible', term.length > 0);
     let result = allFracciones.map(fraccionConNombres);
+
     if (term) {
       result = result.filter((f) => f.cliente_nombre.toLowerCase().includes(term) || f.nro_poliza.toLowerCase().includes(term));
     }
+
+    const anioSel = filtroFraccionAnio.value;
+    const mesSel = filtroFraccionMes.value;
+    if (anioSel) {
+      result = result.filter((f) => f.fecha_inicio && f.fecha_inicio.slice(0, 4) === anioSel);
+    }
+    if (mesSel && mesSel !== 'Todos') {
+      result = result.filter((f) => f.fecha_inicio && String(Number(f.fecha_inicio.slice(5, 7))) === mesSel);
+    }
+
     result = sortItems(result, currentSortFracciones.key, currentSortFracciones.direction);
     renderFracciones(result);
   }
   searchFracciones.addEventListener('input', applyFilterFracciones);
   clearSearchFracciones.addEventListener('click', () => { searchFracciones.value = ''; applyFilterFracciones(); searchFracciones.focus(); });
 
-  async function handleMarcarFraccionPagada(item) {
-    const currentUser = getCurrentUserLabel();
-    try {
-      const { error } = await supabaseClient.from(TABLE_FRACCIONES).update({ status: 'Pagada', usuario_modificacion: currentUser }).eq('id', item.id);
-      if (error) { showNotification('fraccionesNotification', `No se pudo actualizar: ${getErrorMessage(error)}`, 'error'); return; }
-      await loadFracciones();
-      showNotification('fraccionesNotification', `Fracción #${item.numero_fraccion} marcada como Pagada.`, 'success');
-    } catch (err) {
-      showNotification('fraccionesNotification', `No se pudo actualizar: ${getErrorMessage(err)}`, 'error');
+  /* =========================================================
+     VER FRACCIONES DE UNA PÓLIZA (modal de detalle)
+     ========================================================= */
+  const verFraccionesModalOverlay = document.getElementById('verFraccionesModalOverlay');
+  const verFraccionesModalCloseBtn = document.getElementById('verFraccionesModalCloseBtn');
+  const closeVerFraccionesBtn = document.getElementById('closeVerFraccionesBtn');
+  const verFraccionesList = document.getElementById('verFraccionesList');
+  const verFraccionesModalTitle = document.getElementById('verFraccionesModalTitle');
+  let polizaEnVerFracciones = null;
+
+  function renderVerFraccionesList() {
+    if (!polizaEnVerFracciones) return;
+    const fraccionesPoliza = allFracciones
+      .filter((f) => f.poliza_id === polizaEnVerFracciones.id)
+      .sort((a, b) => a.numero_fraccion - b.numero_fraccion);
+
+    verFraccionesList.innerHTML = '';
+    if (!fraccionesPoliza.length) {
+      verFraccionesList.innerHTML = '<p class="fraccion-list__info">Esta póliza no tiene fracciones registradas.</p>';
+      return;
     }
+    fraccionesPoliza.forEach((f) => {
+      const status = f.status || 'Por Cobrar';
+      const statusClass = `status-pill--${statusToClass(status)}`;
+      const puedeCobrar = status === 'Por Cobrar';
+      const row = document.createElement('div');
+      row.className = 'fraccion-list__item';
+      row.innerHTML = `
+        <div class="fraccion-list__info">
+          <strong>Fracción #${f.numero_fraccion}</strong> — ${formatDateEs(f.fecha_inicio)} a ${formatDateEs(f.fecha_fin)}<br>
+          Prima: ${formatMoney(f.prima)} &nbsp;·&nbsp; <span class="status-pill ${statusClass}">${escapeHtml(status)}</span>
+        </div>
+        <div class="fraccion-list__actions">
+          ${puedeCobrar ? `<button type="button" class="btn btn--secondary btn--sm action-btn--cobrar-detalle">💰 Cobrar</button>` : ''}
+        </div>
+      `;
+      const cobrarBtn = row.querySelector('.action-btn--cobrar-detalle');
+      if (cobrarBtn) cobrarBtn.addEventListener('click', () => openCobrarModal(f));
+      verFraccionesList.appendChild(row);
+    });
   }
+
+  function openVerFraccionesModal(polizaItem) {
+    polizaEnVerFracciones = polizaItem;
+    verFraccionesModalTitle.textContent = `Fracciones — Póliza ${polizaItem.nro_poliza}`;
+    renderVerFraccionesList();
+    verFraccionesModalOverlay.classList.add('is-open');
+  }
+  function closeVerFraccionesModal() {
+    verFraccionesModalOverlay.classList.remove('is-open');
+    polizaEnVerFracciones = null;
+  }
+  verFraccionesModalCloseBtn.addEventListener('click', closeVerFraccionesModal);
+  closeVerFraccionesBtn.addEventListener('click', closeVerFraccionesModal);
+  verFraccionesModalOverlay.addEventListener('click', (e) => { if (e.target === verFraccionesModalOverlay) closeVerFraccionesModal(); });
+
+  /* =========================================================
+     COBRAR FRACCIÓN
+     ========================================================= */
+  const cobrarModalOverlay = document.getElementById('cobrarModalOverlay');
+  const cobrarModalCloseBtn = document.getElementById('cobrarModalCloseBtn');
+  const cancelCobrarBtn = document.getElementById('cancelCobrarBtn');
+  const cobrarForm = document.getElementById('cobrarForm');
+  const cobrarFecha = document.getElementById('cobrarFecha');
+  const cobrarMoneda = document.getElementById('cobrarMoneda');
+  const cobrarPrima = document.getElementById('cobrarPrima');
+  const cobrarFechaIngreso = document.getElementById('cobrarFechaIngreso');
+  const submitCobrarBtn = document.getElementById('submitCobrarBtn');
+  const fieldCobrarFecha = document.getElementById('fieldCobrarFecha');
+  const fieldCobrarMoneda = document.getElementById('fieldCobrarMoneda');
+  const fieldCobrarPrima = document.getElementById('fieldCobrarPrima');
+  const fieldCobrarFechaIngreso = document.getElementById('fieldCobrarFechaIngreso');
+  attachMoneyFormatter(cobrarPrima);
+  let fraccionACobrar = null;
+
+  function openCobrarModal(fraccion) {
+    fraccionACobrar = fraccion;
+    cobrarForm.reset();
+    clearFeedback('cobrarFormFeedback');
+    [fieldCobrarFecha, fieldCobrarMoneda, fieldCobrarPrima, fieldCobrarFechaIngreso].forEach((f) => setFieldError(f, false));
+    cobrarPrima.value = formatMoneyInputLive(String(fraccion.prima ?? '').replace('.', ','));
+    cobrarModalOverlay.classList.add('is-open');
+  }
+  function closeCobrarModal() {
+    cobrarModalOverlay.classList.remove('is-open');
+    fraccionACobrar = null;
+  }
+  cobrarModalCloseBtn.addEventListener('click', closeCobrarModal);
+  cancelCobrarBtn.addEventListener('click', closeCobrarModal);
+  cobrarModalOverlay.addEventListener('click', (e) => { if (e.target === cobrarModalOverlay) closeCobrarModal(); });
+
+  cobrarForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!fraccionACobrar) return;
+    clearFeedback('cobrarFormFeedback');
+
+    let valid = true;
+    const fechaOk = !!cobrarFecha.value;
+    setFieldError(fieldCobrarFecha, !fechaOk); if (!fechaOk) valid = false;
+    const monedaOk = !!cobrarMoneda.value;
+    setFieldError(fieldCobrarMoneda, !monedaOk); if (!monedaOk) valid = false;
+    const primaOk = parseMoneyInput(cobrarPrima.value) > 0;
+    setFieldError(fieldCobrarPrima, !primaOk); if (!primaOk) valid = false;
+    const fechaIngresoOk = !!cobrarFechaIngreso.value;
+    setFieldError(fieldCobrarFechaIngreso, !fechaIngresoOk); if (!fechaIngresoOk) valid = false;
+    if (!valid) {
+      showFeedback('cobrarFormFeedback', 'Revisa los campos marcados antes de continuar.', 'error');
+      return;
+    }
+
+    submitCobrarBtn.disabled = true;
+    submitCobrarBtn.textContent = 'Registrando...';
+    const currentUser = getCurrentUserLabel();
+
+    const payload = {
+      status: 'Cobrado',
+      fecha_cobro: cobrarFecha.value,
+      moneda_pago: cobrarMoneda.value,
+      prima: parseMoneyInput(cobrarPrima.value),
+      fecha_ingreso_aseguradora: cobrarFechaIngreso.value,
+      usuario_modificacion: currentUser,
+    };
+
+    try {
+      const { error } = await supabaseClient.from(TABLE_FRACCIONES).update(payload).eq('id', fraccionACobrar.id);
+      submitCobrarBtn.disabled = false;
+      submitCobrarBtn.textContent = 'Registrar Cobro';
+
+      if (error) {
+        showFeedback('cobrarFormFeedback', `No se pudo registrar el cobro: ${getErrorMessage(error)}`, 'error');
+        return;
+      }
+
+      await Promise.all([loadFracciones(), loadPolizas()]);
+      if (polizaEnVerFracciones) renderVerFraccionesList();
+      showNotification('fraccionesNotification', `Fracción #${fraccionACobrar.numero_fraccion} cobrada correctamente.`, 'success');
+      closeCobrarModal();
+    } catch (err) {
+      submitCobrarBtn.disabled = false;
+      submitCobrarBtn.textContent = 'Registrar Cobro';
+      showFeedback('cobrarFormFeedback', `No se pudo registrar el cobro: ${getErrorMessage(err)}`, 'error');
+    }
+  });
 
   /* =========================================================================
      ============  MODAL CLIENTE EMBEBIDO (registrar sin salir)  ================
@@ -1221,6 +1526,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (e.key !== 'Escape') return;
     if (confirmOverlay.style.display === 'flex') { closeConfirmDialog(); return; }
     if (clienteModalOverlay.classList.contains('is-open')) { closeClienteModalEmbebido(); return; }
+    if (cobrarModalOverlay.classList.contains('is-open')) { closeCobrarModal(); return; }
+    if (verFraccionesModalOverlay.classList.contains('is-open')) { closeVerFraccionesModal(); return; }
+    if (anularPolizaModalOverlay.classList.contains('is-open')) { closeAnularPolizaModal(); return; }
     if (polizaModalOverlay.classList.contains('is-open')) closePolizaModal();
   });
 
@@ -1300,6 +1608,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
       allFracciones = data || [];
+      poblarFiltroAnios();
       applyFilterFracciones();
     } catch (err) {
       fraccionesLoading.style.display = 'none';
