@@ -66,17 +66,26 @@
     .modal--readonly .btn--primary { display: none; }
     .modal--readonly select.text-input,
     .modal--readonly input.text-input { pointer-events: none; background: var(--color-gray-light); }
+  </style>
+</head>
+<body>
 
+  <!-- =========================================================
+       ESTRUCTURA PRINCIPAL (Main Wrapper)
+       ========================================================= -->
+  <div class="main-wrapper">
+    <main>
+      <div class="page--users">
 
         <!-- PESTAÑAS: ambas siempre visibles -->
         <nav class="tabs-nav">
-          <button type="button" class="tab-btn" data-tab="fracciones">Fracciones</button>
+          <button type="button" class="tab-btn is-active" data-tab="fracciones">Fracciones</button>
         </nav>
 
         <!-- ============================================================
-             PESTAÑA: FRACCIONES (siempre visible, sin filtro por defecto)
+             PESTAÑA: FRACCIONES
              ============================================================ -->
-        <section id="panelFracciones" class="tab-panel">
+        <section id="panelFracciones" class="tab-panel is-active">
 
           <div class="users-toolbar">
             <div class="search-bar">
@@ -84,6 +93,15 @@
               <input type="text" id="searchFracciones" class="search-bar__input" placeholder="Buscar por cliente o nro. de póliza..." autocomplete="off">
               <button type="button" id="clearSearchFracciones" class="search-bar__clear" aria-label="Limpiar búsqueda">✕</button>
             </div>
+            
+            <!-- CHIP DE FILTRO POR PÓLIZA (Se muestra vía JS cuando hay parámetro URL) -->
+            <div id="fraccionesFilterChipWrap" style="display:none; margin: 0 1rem; align-items: center;">
+              <span style="font-size: 0.85rem; background: var(--color-gray-border); padding: 0.4rem 0.8rem; border-radius: 20px; color: var(--color-navy); font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem;">
+                Póliza: <span id="fraccionesFilterChipNombre"></span>
+                <button type="button" id="fraccionesFilterChipClear" style="border:none; background:transparent; cursor:pointer; font-size: 1rem; color: #5B6472; display: flex; align-items: center; justify-content: center; padding: 0;">✕</button>
+              </span>
+            </div>
+
             <div class="periodo-filter">
               <select id="filtroFraccionAnio" class="text-input"></select>
               <select id="filtroFraccionMes" class="text-input">
@@ -188,11 +206,15 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <!-- Asumo que tienes funciones compartidas aquí. Si no lo necesitas puedes quitarlo -->
   <script src="polizas.js"></script>
+  <script src="fracciones.js"></script>
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      initAppShell({ pageName: 'polizas.html' });
+      if (typeof initAppShell === 'function') {
+        initAppShell({ pageName: 'fracciones.html' });
+      }
     });
   </script>
 </body>
