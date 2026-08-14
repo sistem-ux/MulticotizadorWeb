@@ -294,17 +294,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     fraccionesFilterChipWrap.style.display = 'block';
     applyFilterFracciones();
   }
-  
-  if (fraccionesFilterChipClear) {
-      fraccionesFilterChipClear.addEventListener('click', () => {
-        filtroPolizaId = null;
-        fraccionesFilterChipWrap.style.display = 'none';
-        const url = new URL(window.location.href);
-        url.searchParams.delete('poliza_id');
-        window.history.replaceState({}, '', url);
-        applyFilterFracciones();
-      });
-  }
+  fraccionesFilterChipClear.addEventListener('click', () => {
+    filtroPolizaId = null;
+    fraccionesFilterChipWrap.style.display = 'none';
+    const url = new URL(window.location.href);
+    url.searchParams.delete('poliza_id');
+    window.history.replaceState({}, '', url);
+    applyFilterFracciones();
+  });
 
   /* =========================================================
      COBRAR FRACCIÓN
