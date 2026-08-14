@@ -1050,9 +1050,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td data-label="Inicio">${formatDateEs(item.fecha_inicio)}</td>
         <td data-label="Fin">${formatDateEs(item.fecha_fin)}</td>
         <td data-label="Prima">${formatMoney(item.prima)}</td>
-        <td data-label="Status"><span class="status-pill ${statusClass}">${escapeHtml(item.status || 'Pendiente')}</span></td>
+        <td data-label="Status"><span class="status-pill ${statusClass}">${escapeHtml(item.status || 'Por Cobrar')}</span></td>
         <td data-label="Acciones" class="col-actions">
-          <button type="button" class="action-btn action-btn--toggle-on" data-id="${item.id}" aria-label="Marcar como pagada" ${item.status === 'Pagada' ? 'style="display:none;"' : ''}>✓</button>
+          <button type="button" class="action-btn action-btn--toggle-on" data-id="${item.id}" aria-label="Marcar como pagada" ${item.status === 'Cobrado' ? 'style="display:none;"' : ''}>✓</button>
         </td>
       `;
       fraccionesTableBody.appendChild(tr);
