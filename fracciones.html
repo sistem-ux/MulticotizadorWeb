@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fracciones | Panel de Administración</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="stylesusers.css">
+  <style>
+    :root {
+      --color-navy: #001F5B;
+      --color-gray-light: #F2F3F5;
+      --color-gray-border: #D8DAE0;
+      --transition: 0.25s ease;
+    }
+
+    body {
+      display: flex;
+      overflow-x: hidden;
+      margin: 0;
+      background: linear-gradient(180deg, #EEF1F6 0%, #E4E8F0 100%);
+      min-height: 100vh;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .sidebar {
+      width: 260px; background: var(--color-navy); color: #FFFFFF;
+      display: flex; flex-direction: column;
+      transition: transform var(--transition), width var(--transition);
+      position: fixed; top: 0; bottom: 0; left: 0; z-index: 100;
+      box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
+    }
+    .sidebar.is-hidden { transform: translateX(-100%); }
+    .sidebar__header { padding: 1.5rem; display: flex; align-items: center; gap: 0.75rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+    .sidebar__logo { width: 40px; height: 40px; background-color: #FFFFFF; color: var(--color-navy); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Poppins', sans-serif; font-size: 1.1rem; font-weight: 700; }
+    .sidebar__title { font-size: 1.1rem; font-weight: 700; letter-spacing: 0.02em; }
+    .sidebar__nav { padding: 1.5rem 1rem; display: flex; flex-direction: column; gap: 1.25rem; overflow-y: auto; flex: 1; }
+    .menu-group__title { font-size: 0.85rem; font-weight: 700; letter-spacing: 0.05em; color: #A6A9B0; margin-bottom: 0.5rem; padding-left: 0.75rem; cursor: pointer; user-select: none; transition: color var(--transition); }
+    .menu-group__title:hover { color: #FFFFFF; }
+    .menu-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+    .menu-list.is-hidden { display: none; }
+    .menu-link { display: flex; align-items: center; padding: 0.75rem 0.85rem; color: #D8DAE0; text-decoration: none; font-size: 0.92rem; font-weight: 500; border-radius: 6px; transition: background var(--transition), color var(--transition); }
+    .menu-link:hover { background: rgba(255, 255, 255, 0.08); color: #FFFFFF; }
+    .main-wrapper { flex: 1; margin-left: 260px; display: flex; flex-direction: column; min-height: 100vh; transition: margin-left var(--transition); }
+    .main-wrapper.is-expanded { margin-left: 0; }
+    .topbar { height: 70px; background: #FFFFFF; border-bottom: 1px solid var(--color-gray-border); display: flex; align-items: center; justify-content: space-between; padding: 0 1.5rem; position: sticky; top: 0; z-index: 90; }
+    .btn-toggle { background: var(--color-gray-light); border: 1px solid var(--color-gray-border); color: var(--color-navy); padding: 0.5rem 0.9rem; border-radius: 6px; font-weight: 600; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background var(--transition); }
+    .btn-toggle:hover { background: var(--color-gray-border); }
+    .page--users { flex: 1; display: flex; justify-content: center; padding: 1.5rem; width: 100%; box-sizing: border-box; }
+    .icon-btn { background: transparent; border: none; font-size: 1.2rem; cursor: pointer; margin: 0 0.25rem; padding: 0.2rem; display: inline-flex; align-items: center; justify-content: center; transition: transform 0.2s ease, filter 0.2s ease; }
+    .icon-btn:hover { transform: scale(1.15); filter: brightness(1.2); }
+
+    .tabs-nav { display: flex; gap: 0.5rem; border-bottom: 1px solid var(--color-gray-border); margin-bottom: 1.5rem; }
+    .tab-btn { background: none; border: none; border-bottom: 3px solid transparent; padding: 0.75rem 0.25rem; margin-right: 1.5rem; font-family: 'Inter', sans-serif; font-size: 0.95rem; font-weight: 600; color: #5B6472; cursor: pointer; transition: color 0.2s ease, border-color 0.2s ease; }
+    .tab-btn:hover { color: var(--color-navy); }
+    .tab-btn.is-active { color: var(--color-navy); border-bottom-color: #2C7D3C; }
+    .tab-panel { display: none; }
+    .tab-panel.is-active { display: block; }
+
+    .users-table th.col-actions, .users-table td.col-actions { width: 1%; white-space: nowrap; padding-right: 1.25rem; }
+    .users-table td.col-actions { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-start; gap: 0.5rem; }
+    .users-table td.col-actions .action-btn { flex-shrink: 0; margin: 0; }
+
+    .modal--readonly .btn--primary { display: none; }
+    .modal--readonly select.text-input,
+    .modal--readonly input.text-input { pointer-events: none; background: var(--color-gray-light); }
+
+
+        <!-- PESTAÑAS: ambas siempre visibles -->
+        <nav class="tabs-nav">
+          <button type="button" class="tab-btn" data-tab="fracciones">Fracciones</button>
+        </nav>
+
+        <!-- ============================================================
+             PESTAÑA: FRACCIONES (siempre visible, sin filtro por defecto)
+             ============================================================ -->
+        <section id="panelFracciones" class="tab-panel">
+
+          <div class="users-toolbar">
+            <div class="search-bar">
+              <span class="search-bar__icon" aria-hidden="true">🔎</span>
+              <input type="text" id="searchFracciones" class="search-bar__input" placeholder="Buscar por cliente o nro. de póliza..." autocomplete="off">
+              <button type="button" id="clearSearchFracciones" class="search-bar__clear" aria-label="Limpiar búsqueda">✕</button>
+            </div>
+            <div class="periodo-filter">
+              <select id="filtroFraccionAnio" class="text-input"></select>
+              <select id="filtroFraccionMes" class="text-input">
+                <option value="Todos">Todos</option>
+                <option value="1">Enero</option>
+                <option value="2">Febrero</option>
+                <option value="3">Marzo</option>
+                <option value="4">Abril</option>
+                <option value="5">Mayo</option>
+                <option value="6">Junio</option>
+                <option value="7">Julio</option>
+                <option value="8">Agosto</option>
+                <option value="9">Septiembre</option>
+                <option value="10">Octubre</option>
+                <option value="11">Noviembre</option>
+                <option value="12">Diciembre</option>
+              </select>
+              <button type="button" id="resetFiltroFraccion" class="btn--reset-filter">↺ Reiniciar filtros</button>
+            </div>
+          </div>
+
+          <div id="fraccionesNotification" class="page-notification" aria-live="polite" style="display:none;"></div>
+
+          <div class="users-table-wrapper">
+            <table class="users-table" id="fraccionesTable">
+              <thead>
+                <tr>
+                  <th scope="col" class="is-sortable" data-sort-key="cliente_nombre">Cliente <span class="sort-indicator"></span></th>
+                  <th scope="col">Nro. Póliza</th>
+                  <th scope="col">N° Fracción</th>
+                  <th scope="col">Inicio</th>
+                  <th scope="col">Fin</th>
+                  <th scope="col">Prima</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" class="col-actions">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="fraccionesTableBody"></tbody>
+            </table>
+            <div id="fraccionesLoading" class="users-loading">Cargando fracciones...</div>
+            <div id="fraccionesEmpty" class="users-empty" style="display:none;">No se encontraron fracciones.</div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- =========================================================
+       MODAL: COBRAR FRACCIÓN
+       ========================================================= -->
+  <div class="modal-overlay" id="cobrarModalOverlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cobrarModalTitle">
+      <div class="modal__header">
+        <h2 class="modal__title" id="cobrarModalTitle">Cobrar Fracción</h2>
+        <button type="button" class="modal__close" id="cobrarModalCloseBtn" aria-label="Cerrar">✕</button>
+      </div>
+      <form id="cobrarForm" novalidate>
+        <div class="modal__field" id="fieldCobrarFecha">
+          <label for="cobrarFecha" class="form-label">Fecha de cobro (Día del reporte a Corporativa)</label>
+          <input type="date" id="cobrarFecha" class="text-input" required>
+          <span class="field-error">Selecciona la fecha de cobro.</span>
+        </div>
+        <div class="modal__field" id="fieldCobrarMoneda">
+          <label for="cobrarMoneda" class="form-label">Moneda de pago</label>
+          <select id="cobrarMoneda" class="text-input" required>
+            <option value="">Selecciona la moneda</option>
+            <option value="Bolívares">Bolívares</option>
+            <option value="Dólares">Dólares</option>
+          </select>
+          <span class="field-error">Selecciona la moneda de pago.</span>
+        </div>
+        <div class="modal__field" id="fieldCobrarPrima">
+          <label for="cobrarPrima" class="form-label">Prima</label>
+          <div class="input-currency"><span class="input-currency__prefix">$</span><input type="text" inputmode="decimal" id="cobrarPrima" class="text-input"></div>
+          <span class="field-error">Ingresa la prima cobrada.</span>
+        </div>
+        <div class="modal__field" id="fieldCobrarFechaIngreso">
+          <label for="cobrarFechaIngreso" class="form-label">Fecha del ingreso en la aseguradora</label>
+          <input type="date" id="cobrarFechaIngreso" class="text-input" required>
+          <span class="field-error">Selecciona la fecha de ingreso en la aseguradora.</span>
+        </div>
+        <div class="form-feedback" id="cobrarFormFeedback"></div>
+        <div class="modal__footer">
+          <button type="button" class="btn btn--cancel" id="cancelCobrarBtn">Cancelar</button>
+          <button type="submit" class="btn btn--primary" id="submitCobrarBtn">Registrar Cobro</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- CONFIRMACIÓN COMPARTIDA -->
+  <div id="confirmOverlay" class="confirm-overlay" style="display:none;">
+    <div class="confirm-modal">
+      <h3 id="confirmTitle">Confirmación</h3>
+      <p id="confirmMessage">¿Deseas continuar?</p>
+      <div class="confirm-actions">
+        <button type="button" id="confirmCancelBtn" class="btn btn--cancel">Cancelar</button>
+        <button type="button" id="confirmAcceptBtn" class="btn btn--danger">Eliminar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="polizas.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      initAppShell({ pageName: 'polizas.html' });
+    });
+  </script>
+</body>
+</html>
