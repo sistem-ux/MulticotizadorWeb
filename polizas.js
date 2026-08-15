@@ -105,6 +105,35 @@ function addDaysIso(isoDate, days) {
   return `${yy}-${mm}-${dd}`;
 }
 
+function todayIsoDate() {
+  const d = new Date();
+  const yy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
+/* Días restantes hasta la fecha fin de vigencia (negativo si ya venció). */
+function diasHastaVencimiento(finVigencia) {
+  if (!finVigencia) return null;
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const [y, m, d] = finVigencia.split('-').map(Number);
+  const fin = new Date(y, m - 1, d);
+  return Math.round((fin - hoy) / 86400000);
+}
+
+/* Estatus efectivo de la póliza: "Vencido" se calcula automáticamente en el
+   front (no se persiste en la BD) cuando fin_vigencia ya pasó, sin necesidad
+   de ninguna acción manual. No aplica sobre pólizas ya Anuladas, que
+   conservan su estatus. */
+function getPolizaStatusEfectivo(item) {
+  const status = item.status || 'Vigente';
+  if (status === 'Anulado') return 'Anulado';
+  if (item.fin_vigencia && item.fin_vigencia < todayIsoDate()) return 'Vencido';
+  return status;
+}
+
 /* =============================================================
    FRECUENCIA DE PAGO -> Cantidad de fracciones e intervalo (meses)
    ============================================================= */
@@ -830,13 +859,24 @@ document.addEventListener('DOMContentLoaded', async () => {
       polizaPrimaResumenBox.style.display = readOnly ? 'grid' : 'none';
       if (readOnly) refrescarPrimaResumen(item.id);
       verFraccionesPolizaBtn.style.display = readOnly ? 'inline-flex' : 'none';
-      anularPolizaBtn.style.display = (readOnly && item.status !== 'Anulado') ? 'inline-flex' : 'none';
-      eliminarPolizaBtn.style.display = readOnly ? 'inline-flex' : 'none';
       {
-        const statusItem = item.status || 'Vigente';
-        const puedeRenovar = statusItem === 'Vigente' || statusItem === 'Vencida';
+        const statusEfectivo = getPolizaStatusEfectivo(item);
+        const fraccionesPoliza = allFracciones.filter((f) => f.poliza_id === item.id);
+        const tieneFraccionesCobradas = fraccionesPoliza.some((f) => f.status === 'Cobrado');
+        const tieneFraccionesPorCobrar = fraccionesPoliza.some((f) => f.status === 'Por Cobrar');
+        const dias = diasHastaVencimiento(item.fin_vigencia);
+
+        // Eliminar: solo si la póliza está Vigente y no tiene fracciones ya cobradas.
+        eliminarPolizaBtn.style.display = (readOnly && statusEfectivo === 'Vigente' && !tieneFraccionesCobradas) ? 'inline-flex' : 'none';
+
+        // Anular: solo si la póliza está Vigente y aún tiene fracciones por cobrar.
+        anularPolizaBtn.style.display = (readOnly && statusEfectivo === 'Vigente' && tieneFraccionesPorCobrar) ? 'inline-flex' : 'none';
+
+        // Renovar: Vigente dentro de los 90 días previos al vencimiento, o ya Vencida.
+        const puedeRenovar = (statusEfectivo === 'Vigente' && dias !== null && dias <= 90) || statusEfectivo === 'Vencido';
         renovarPolizaBtn.style.display = (readOnly && puedeRenovar) ? 'inline-flex' : 'none';
-        reactivarPolizaBtn.style.display = (readOnly && statusItem === 'Vencida') ? 'inline-flex' : 'none';
+
+        reactivarPolizaBtn.style.display = (readOnly && statusEfectivo === 'Vencido') ? 'inline-flex' : 'none';
       }
       polizaAccionesTitle.style.display = readOnly ? 'block' : 'none';
       polizaAccionesBox.style.display = readOnly ? 'flex' : 'none';
@@ -1169,7 +1209,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     polizasEmpty.style.display = 'none';
 
     items.forEach((item) => {
-      const status = item.status || 'Vigente';
+      const status = getPolizaStatusEfectivo(item);
       const statusClass = `status-pill--${statusToClass(status)}`;
       const tr = document.createElement('tr');
       tr.innerHTML = `
