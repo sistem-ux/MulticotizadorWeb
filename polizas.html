@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pólizas | Panel de Administración</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="stylesusers.css">
+  <style>
+    :root {
+      --color-navy: #001F5B;
+      --color-gray-light: #F2F3F5;
+      --color-gray-border: #D8DAE0;
+      --transition: 0.25s ease;
+    }
+
+    body {
+      display: flex;
+      overflow-x: hidden;
+      margin: 0;
+      background: linear-gradient(180deg, #EEF1F6 0%, #E4E8F0 100%);
+      min-height: 100vh;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .sidebar {
+      width: 260px; background: var(--color-navy); color: #FFFFFF;
+      display: flex; flex-direction: column;
+      transition: transform var(--transition), width var(--transition);
+      position: fixed; top: 0; bottom: 0; left: 0; z-index: 100;
+      box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
+    }
+    .sidebar.is-hidden { transform: translateX(-100%); }
+    .sidebar__header { padding: 1.5rem; display: flex; align-items: center; gap: 0.75rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+    .sidebar__logo { width: 40px; height: 40px; background-color: #FFFFFF; color: var(--color-navy); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Poppins', sans-serif; font-size: 1.1rem; font-weight: 700; }
+    .sidebar__title { font-size: 1.1rem; font-weight: 700; letter-spacing: 0.02em; }
+    .sidebar__nav { padding: 1.5rem 1rem; display: flex; flex-direction: column; gap: 1.25rem; overflow-y: auto; flex: 1; }
+    .menu-group__title { font-size: 0.85rem; font-weight: 700; letter-spacing: 0.05em; color: #A6A9B0; margin-bottom: 0.5rem; padding-left: 0.75rem; cursor: pointer; user-select: none; transition: color var(--transition); }
+    .menu-group__title:hover { color: #FFFFFF; }
+    .menu-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+    .menu-list.is-hidden { display: none; }
+    .menu-link { display: flex; align-items: center; padding: 0.75rem 0.85rem; color: #D8DAE0; text-decoration: none; font-size: 0.92rem; font-weight: 500; border-radius: 6px; transition: background var(--transition), color var(--transition); }
+    .menu-link:hover { background: rgba(255, 255, 255, 0.08); color: #FFFFFF; }
+    .main-wrapper { flex: 1; margin-left: 260px; display: flex; flex-direction: column; min-height: 100vh; transition: margin-left var(--transition); }
+    .main-wrapper.is-expanded { margin-left: 0; }
+    .topbar { height: 70px; background: #FFFFFF; border-bottom: 1px solid var(--color-gray-border); display: flex; align-items: center; justify-content: space-between; padding: 0 1.5rem; position: sticky; top: 0; z-index: 90; }
+    .btn-toggle { background: var(--color-gray-light); border: 1px solid var(--color-gray-border); color: var(--color-navy); padding: 0.5rem 0.9rem; border-radius: 6px; font-weight: 600; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background var(--transition); }
+    .btn-toggle:hover { background: var(--color-gray-border); }
+    .page--users { flex: 1; display: flex; justify-content: center; padding: 1.5rem; width: 100%; box-sizing: border-box; }
+    .icon-btn { background: transparent; border: none; font-size: 1.2rem; cursor: pointer; margin: 0 0.25rem; padding: 0.2rem; display: inline-flex; align-items: center; justify-content: center; transition: transform 0.2s ease, filter 0.2s ease; }
+    .icon-btn:hover { transform: scale(1.15); filter: brightness(1.2); }
+
+    .tabs-nav { display: flex; gap: 0.5rem; border-bottom: 1px solid var(--color-gray-border); margin-bottom: 1.5rem; }
+    .tab-btn { background: none; border: none; border-bottom: 3px solid transparent; padding: 0.75rem 0.25rem; margin-right: 1.5rem; font-family: 'Inter', sans-serif; font-size: 0.95rem; font-weight: 600; color: #5B6472; cursor: pointer; transition: color 0.2s ease, border-color 0.2s ease; }
+    .tab-btn:hover { color: var(--color-navy); }
+    .tab-btn.is-active { color: var(--color-navy); border-bottom-color: #2C7D3C; }
+    .tab-panel { display: none; }
+    .tab-panel.is-active { display: block; }
+
+    .users-table th.col-actions, .users-table td.col-actions { width: 1%; white-space: nowrap; padding-right: 1.25rem; }
+    .users-table td.col-actions { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-start; gap: 0.5rem; }
+    .users-table td.col-actions .action-btn { flex-shrink: 0; margin: 0; }
+
+    /* Filas de la tabla de Pólizas: clicables, se abren en el modal "Ver Póliza" */
+    #polizasTable tbody tr { cursor: pointer; transition: background 0.15s ease; }
+    #polizasTable tbody tr:hover { background: #E5EFFC; }
+
+    /* Sección "Acciones" dentro del modal Ver/Editar Póliza (mismos botones
+       pequeños con ícono que se usaban antes en la columna de la tabla) */
+    .poliza-acciones {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.6rem;
+      margin-top: 0.25rem;
+    }
+
+    .modal--readonly .btn--primary { display: none; }
+    .modal--readonly select.text-input,
+    .modal--readonly input.text-input { pointer-events: none; background: var(--color-gray-light); }
+
+    /* -----------------------------------------------------------
+       Secciones del formulario de Póliza
+       ----------------------------------------------------------- */
+    .form-section__title {
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--color-navy);
+      margin: 1.5rem 0 0.75rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 2px solid var(--color-gray-border);
+    }
+    .form-section__title:first-child { margin-top: 0; }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 640px) { .form-row { grid-template-columns: 1fr; } }
+
+    /* -----------------------------------------------------------
+       Combo con buscador (Asegurado / Asesor / Aseguradora / Ramo)
+       ----------------------------------------------------------- */
+    .combo-search { position: relative; }
+    .combo-search__input-row { display: flex; gap: 0.5rem; align-items: center; }
+    .combo-search__input-row .text-input { flex: 1; }
+    .combo-btn-add {
+      flex-shrink: 0;
+      background: var(--color-navy);
+      color: #FFFFFF;
+      border: none;
+      border-radius: 6px;
+      width: 40px;
+      height: 40px;
+      font-size: 1.2rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: filter 0.2s ease;
+    }
+    .combo-btn-add:hover { filter: brightness(1.15); }
+    .combo-search__dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: #FFFFFF;
+      border: 1px solid var(--color-gray-border);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      max-height: 220px;
+      overflow-y: auto;
+      z-index: 50;
+      display: none;
+    }
+    .combo-search__dropdown.is-open { display: block; }
+    .combo-search__option {
+      padding: 0.6rem 0.85rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+      color: #2A2E37;
+    }
+    .combo-search__option:hover,
+    .combo-search__option.is-highlighted { background: var(--color-gray-light); }
+    .combo-search__empty { padding: 0.6rem 0.85rem; font-size: 0.85rem; color: #8A8F99; font-style: italic; }
+
+    /* -----------------------------------------------------------
+       Frecuencia de pago: grupo tipo "checkbox único" (radio visual)
+       ----------------------------------------------------------- */
+    .freq-group {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.6rem;
+      margin-top: 0.35rem;
+    }
+    @media (max-width: 640px) { .freq-group { grid-template-columns: repeat(2, 1fr); } }
+    .freq-option {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      border: 1px solid var(--color-gray-border);
+      border-radius: 8px;
+      padding: 0.55rem 0.7rem;
+      cursor: pointer;
+      font-size: 0.85rem;
+      color: #3C4350;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+    .freq-option:hover { border-color: var(--color-navy); }
+    .freq-option.is-selected { border-color: #2C7D3C; background: #EAF6EC; color: #1F5C2A; font-weight: 600; }
+    .freq-option input[type="checkbox"] { accent-color: #2C7D3C; }
+
+    .field-hint-box {
+      background: var(--color-gray-light);
+      border: 1px dashed var(--color-gray-border);
+      border-radius: 6px;
+      padding: 0.65rem 0.85rem;
+      font-size: 0.85rem;
+      color: #3C4350;
+      margin-top: 0.5rem;
+    }
+
+    /* Filtro activo por cliente (pestaña Pólizas, llegando desde Clientes) */
+    .active-filter-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: #E5EAF4;
+      color: var(--color-navy);
+      border-radius: 999px;
+      padding: 0.4rem 0.85rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+    .active-filter-chip button {
+      background: none;
+      border: none;
+      color: var(--color-navy);
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 0.95rem;
+      line-height: 1;
+    }
+
+    .status-pill--vigente, .status-pill--pagada, .status-pill--cobrado { background: #E1F3E4; color: #1F7A34; }
+    .status-pill--pendiente, .status-pill--por-cobrar { background: #FFF3D6; color: #8A6100; }
+    .status-pill--vencida, .status-pill--vencido { background: #FCE4E4; color: #B42318; }
+    .status-pill--anulada, .status-pill--anulado { background: #E9EAEE; color: #5B6472; }
+
+    /* Filtro Año / Mes (pestaña Fracciones) */
+    .periodo-filter { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .periodo-filter select.text-input { width: auto; min-width: 130px; }
+    .periodo-filter .btn--reset-filter {
+      background: var(--color-gray-light); border: 1px solid var(--color-gray-border);
+      color: var(--color-navy); border-radius: 6px; padding: 0.55rem 0.8rem;
+      font-weight: 600; font-size: 0.85rem; cursor: pointer; white-space: nowrap;
+    }
+    .periodo-filter .btn--reset-filter:hover { background: var(--color-gray-border); }
+
+    /* Sección "Filtros" (pestaña Pólizas, debajo del buscador) */
+    .filters-section {
+      margin-bottom: 1.25rem;
+    }
+    .filters-section__title {
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--color-navy);
+      margin: 0 0 0.6rem;
+    }
+
+    /* Detalle Prima Total / Devengada (solo lectura, visible en detalle) */
+    .prima-resumen-box {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
+      background: var(--color-gray-light); border: 1px dashed var(--color-gray-border);
+      border-radius: 8px; padding: 0.85rem; margin: 0.75rem 0 0.25rem;
+    }
+    @media (max-width: 640px) { .prima-resumen-box { grid-template-columns: 1fr; } }
+    .prima-resumen-box .form-label { margin-bottom: 0.25rem; display: block; }
+
+    /* Lista de fracciones dentro del modal de detalle */
+    .fraccion-list { display: flex; flex-direction: column; gap: 0.6rem; max-height: 360px; overflow-y: auto; }
+    .fraccion-list__item {
+      display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+      border: 1px solid var(--color-gray-border); border-radius: 8px; padding: 0.7rem 0.9rem;
+    }
+    .fraccion-list__info { font-size: 0.85rem; color: #3C4350; line-height: 1.5; }
+    .fraccion-list__info strong { color: var(--color-navy); }
+    .fraccion-list__actions { flex-shrink: 0; display: flex; align-items: center; gap: 0.5rem; }
+    .btn--sm { padding: 0.4rem 0.7rem; font-size: 0.8rem; }
+
+    @media (max-width: 768px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.is-mobile-visible { transform: translateX(0); }
+      .main-wrapper { margin-left: 0 !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <script src="auth-guard.js"></script>
+  <script>requireAccess('polizas.html');</script>
+
+  <aside id="sidebar" class="sidebar"></aside>
+
+  <div id="mainContent" class="main-wrapper">
+
+    <header class="topbar">
+      <div class="topbar__actions">
+        <button id="sidebarToggle" class="btn-toggle" title="Ocultar / Mostrar Menú">☰</button>
+      </div>
+      <div id="loggedUserDisplay" style="font-weight: 600; font-size: 0.9rem; color: var(--color-navy);">Cargando...</div>
+    </header>
+
+    <main class="page page--users">
+      <div class="card">
+
+        <header class="page-header">
+          <span class="page-header__eyebrow">Administración</span>
+          <h1 class="page-header__title">📑 Pólizas</h1>
+          <p class="page-header__subtitle">Registra pólizas y consulta sus fracciones (recibos).</p>
+        </header>
+
+        <!-- PESTAÑAS: ambas siempre visibles -->
+        <nav class="tabs-nav">
+          <button type="button" class="tab-btn is-active" data-tab="polizas">Pólizas</button>
+          <button type="button" class="tab-btn" data-tab="fracciones">Fracciones</button>
+        </nav>
+
+        <!-- ============================================================
+             PESTAÑA: PÓLIZAS
+             ============================================================ -->
+        <section id="panelPolizas" class="tab-panel is-active">
+
+          <div id="polizasFilterChipWrap" style="display:none;">
+            <span class="active-filter-chip">
+              Filtrando por cliente: <strong id="polizasFilterChipNombre"></strong>
+              <button type="button" id="polizasFilterChipClear" aria-label="Quitar filtro">✕</button>
+            </span>
+          </div>
+
+          <div class="users-toolbar">
+            <div class="search-bar">
+              <span class="search-bar__icon" aria-hidden="true">🔎</span>
+              <input type="text" id="searchPolizas" class="search-bar__input" placeholder="Buscar por cliente o nro. de póliza..." autocomplete="off">
+              <button type="button" id="clearSearchPolizas" class="search-bar__clear" aria-label="Limpiar búsqueda">✕</button>
+            </div>
+            <button type="button" id="openPolizaModalBtn" class="btn btn--register">
+              <span aria-hidden="true">＋</span> Registrar Póliza
+            </button>
+          </div>
+
+          <div class="filters-section">
+            <div class="filters-section__title">Filtros</div>
+            <div class="periodo-filter">
+              <select id="filtroPolizaTipo" class="text-input">
+                <option value="Producción">Producción</option>
+                <option value="Vencimiento">Vencimiento</option>
+              </select>
+              <select id="filtroPolizaAnio" class="text-input"></select>
+              <select id="filtroPolizaMes" class="text-input">
+                <option value="Todos">Todos</option>
+                <option value="1">Enero</option>
+                <option value="2">Febrero</option>
+                <option value="3">Marzo</option>
+                <option value="4">Abril</option>
+                <option value="5">Mayo</option>
+                <option value="6">Junio</option>
+                <option value="7">Julio</option>
+                <option value="8">Agosto</option>
+                <option value="9">Septiembre</option>
+                <option value="10">Octubre</option>
+                <option value="11">Noviembre</option>
+                <option value="12">Diciembre</option>
+              </select>
+              <button type="button" id="resetFiltroPoliza" class="btn--reset-filter">↺ Reiniciar filtros</button>
+            </div>
+            <div class="periodo-filter" style="margin-top: 0.6rem;">
+              <select id="filtroPolizaSucursal" class="text-input">
+                <option value="">Todas las sucursales</option>
+              </select>
+              <select id="filtroPolizaAsesor" class="text-input">
+                <option value="">Todos los asesores</option>
+              </select>
+              <select id="filtroPolizaEjecutivo" class="text-input">
+                <option value="">Todos los ejecutivos</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="polizasNotification" class="page-notification" aria-live="polite" style="display:none;"></div>
+
+          <div class="users-table-wrapper">
+            <table class="users-table" id="polizasTable">
+              <thead>
+                <tr>
+                  <th scope="col" class="is-sortable" data-sort-key="cliente_nombre">Cliente <span class="sort-indicator"></span></th>
+                  <th scope="col">Nro. Póliza</th>
+                  <th scope="col">Aseguradora</th>
+                  <th scope="col">Ramo</th>
+                  <th scope="col">Sucursal</th>
+                  <th scope="col">Asesor</th>
+                  <th scope="col">Ejecutivo</th>
+                  <th scope="col">Vigencia</th>
+                  <th scope="col">Prima</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody id="polizasTableBody"></tbody>
+            </table>
+            <div id="polizasLoading" class="users-loading">Cargando pólizas...</div>
+            <div id="polizasEmpty" class="users-empty" style="display:none;">No se encontraron pólizas.</div>
+          </div>
+        </section>
+
+        <!-- ============================================================
+             PESTAÑA: FRACCIONES (siempre visible, sin filtro por defecto)
+             ============================================================ -->
+        <section id="panelFracciones" class="tab-panel">
+
+          <div class="users-toolbar">
+            <div class="search-bar">
+              <span class="search-bar__icon" aria-hidden="true">🔎</span>
+              <input type="text" id="searchFracciones" class="search-bar__input" placeholder="Buscar por cliente o nro. de póliza..." autocomplete="off">
+              <button type="button" id="clearSearchFracciones" class="search-bar__clear" aria-label="Limpiar búsqueda">✕</button>
+            </div>
+            <div class="periodo-filter">
+              <select id="filtroFraccionAnio" class="text-input"></select>
+              <select id="filtroFraccionMes" class="text-input">
+                <option value="Todos">Todos</option>
+                <option value="1">Enero</option>
+                <option value="2">Febrero</option>
+                <option value="3">Marzo</option>
+                <option value="4">Abril</option>
+                <option value="5">Mayo</option>
+                <option value="6">Junio</option>
+                <option value="7">Julio</option>
+                <option value="8">Agosto</option>
+                <option value="9">Septiembre</option>
+                <option value="10">Octubre</option>
+                <option value="11">Noviembre</option>
+                <option value="12">Diciembre</option>
+              </select>
+              <button type="button" id="resetFiltroFraccion" class="btn--reset-filter">↺ Reiniciar filtros</button>
+            </div>
+            <div class="periodo-filter" style="margin-top: 0.6rem;">
+              <select id="filtroFraccionSucursal" class="text-input">
+                <option value="">Todas las sucursales</option>
+              </select>
+              <select id="filtroFraccionAsesor" class="text-input">
+                <option value="">Todos los asesores</option>
+              </select>
+              <select id="filtroFraccionEjecutivo" class="text-input">
+                <option value="">Todos los ejecutivos</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="fraccionesNotification" class="page-notification" aria-live="polite" style="display:none;"></div>
+
+          <div class="users-table-wrapper">
+            <table class="users-table" id="fraccionesTable">
+              <thead>
+                <tr>
+                  <th scope="col" class="is-sortable" data-sort-key="cliente_nombre">Cliente <span class="sort-indicator"></span></th>
+                  <th scope="col">Nro. Póliza</th>
+                  <th scope="col">Sucursal</th>
+                  <th scope="col">Asesor</th>
+                  <th scope="col">Ejecutivo</th>
+                  <th scope="col">N° Fracción</th>
+                  <th scope="col">Inicio</th>
+                  <th scope="col">Fin</th>
+                  <th scope="col">Prima</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" class="col-actions">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="fraccionesTableBody"></tbody>
+            </table>
+            <div id="fraccionesLoading" class="users-loading">Cargando fracciones...</div>
+            <div id="fraccionesEmpty" class="users-empty" style="display:none;">No se encontraron fracciones.</div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- =========================================================
+       MODAL: REGISTRAR / VER PÓLIZA
+       ========================================================= -->
+  <div class="modal-overlay" id="polizaModalOverlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="polizaModalTitle" style="max-width: 640px;">
+      <div class="modal__header">
+        <h2 class="modal__title" id="polizaModalTitle">Registrar Póliza</h2>
+        <button type="button" class="modal__close" id="polizaModalCloseBtn" aria-label="Cerrar">✕</button>
+      </div>
+
+      <form id="polizaForm" novalidate>
+        <input type="hidden" id="polizaId" value="">
+
+        <div class="form-section__title">Datos principales</div>
+
+        <div class="modal__field" id="fieldPolizaCliente">
+          <label class="form-label">Asegurado</label>
+          <div class="combo-search" id="comboPolizaCliente">
+            <div class="combo-search__input-row">
+              <input type="text" id="polizaClienteInput" class="text-input" placeholder="Busca un cliente por nombre o identificación..." autocomplete="off">
+              <button type="button" class="combo-btn-add" id="btnNuevoClienteDesdePoliza" title="Registrar nuevo cliente">＋</button>
+            </div>
+            <input type="hidden" id="polizaClienteId">
+            <div class="combo-search__dropdown" id="polizaClienteDropdown"></div>
+          </div>
+          <span class="field-error">Selecciona el cliente asegurado.</span>
+        </div>
+
+        <div class="modal__field" id="fieldPolizaAsesor">
+          <label class="form-label">Asesor</label>
+          <div class="combo-search" id="comboPolizaAsesor">
+            <div class="combo-search__input-row">
+              <input type="text" id="polizaAsesorInput" class="text-input" placeholder="Busca un usuario..." autocomplete="off">
+            </div>
+            <input type="hidden" id="polizaAsesorId">
+            <div class="combo-search__dropdown" id="polizaAsesorDropdown"></div>
+          </div>
+          <span class="field-error">Selecciona el asesor.</span>
+        </div>
+
+        <div class="modal__field" id="fieldPolizaSucursal">
+          <label for="polizaSucursal" class="form-label">Sucursal</label>
+          <select id="polizaSucursal" class="text-input" required>
+            <option value="">Selecciona primero un asesor</option>
+          </select>
+          <span class="form-hint" id="polizaSucursalHint">Se autocompleta con la sucursal del asesor seleccionado.</span>
+          <span class="field-error">Selecciona la sucursal.</span>
+        </div>
+
+        <div class="modal__field" id="fieldPolizaAseguradora">
+          <label class="form-label">Aseguradora</label>
+          <div class="combo-search" id="comboPolizaAseguradora">
+            <div class="combo-search__input-row">
+              <input type="text" id="polizaAseguradoraInput" class="text-input" placeholder="Busca una aseguradora..." autocomplete="off">
+            </div>
+            <input type="hidden" id="polizaAseguradoraId">
+            <div class="combo-search__dropdown" id="polizaAseguradoraDropdown"></div>
+          </div>
+          <span class="field-error">Selecciona la aseguradora.</span>
+        </div>
+
+        <div class="form-section__title">Datos de la póliza</div>
+
+        <div class="modal__field" id="fieldPolizaTipoPoliza">
+          <label for="polizaTipoPoliza" class="form-label">Tipo de Póliza</label>
+          <select id="polizaTipoPoliza" class="text-input" required>
+            <option value="">Selecciona el tipo</option>
+            <option value="Emisión">Emisión</option>
+            <option value="Renovación">Renovación</option>
+          </select>
+          <span class="field-error">Selecciona el tipo de póliza.</span>
+        </div>
+
+        <div class="modal__field" id="fieldPolizaNroPoliza">
+          <label for="polizaNroPoliza" class="form-label">Nro. de Póliza</label>
+          <input type="text" id="polizaNroPoliza" class="text-input" placeholder="Ej: HCM-2026-00123" autocomplete="off" required>
+          <span class="form-hint">Solo mayúsculas, números y el símbolo "-".</span>
+          <span class="field-error">Ingresa el número de póliza.</span>
+        </div>
+
+        <div class="modal__field" id="fieldPolizaRamo">
+          <label class="form-label">Ramo</label>
+          <div class="combo-search" id="comboPolizaRamo">
+            <div class="combo-search__input-row">
+              <input type="text" id="polizaRamoInput" class="text-input" placeholder="Busca un ramo..." autocomplete="off">
+            </div>
+            <input type="hidden" id="polizaRamoId">
+            <div class="combo-search__dropdown" id="polizaRamoDropdown"></div>
+          </div>
+          <span class="field-error">Selecciona el ramo.</span>
+        </div>
+
+        <div class="modal__field" id="fieldPolizaSumaAsegurada" style="display:none;">
+          <label for="polizaSumaAsegurada" class="form-label">Suma Asegurada</label>
+          <select id="polizaSumaAsegurada" class="text-input">
+            <option value="">Selecciona aseguradora y ramo primero</option>
+          </select>
+          <span class="form-hint">Proviene de los planes activos registrados para la aseguradora y el ramo seleccionados.</span>
+          <span class="field-error">Selecciona la suma asegurada.</span>
+        </div>
+
+        <div class="form-section__title">Datos de la vigencia</div>
+
+        <div class="form-row">
+          <div class="modal__field" id="fieldPolizaInicioVigencia">
+            <label for="polizaInicioVigencia" class="form-label">Inicio de Vigencia</label>
+            <input type="date" id="polizaInicioVigencia" class="text-input" required>
+            <span class="field-error">Selecciona la fecha de inicio.</span>
+          </div>
+          <div class="modal__field" id="fieldPolizaFinVigencia">
+            <label for="polizaFinVigencia" class="form-label">Fin de Vigencia</label>
+            <input type="text" id="polizaFinVigencia" class="text-input" disabled placeholder="Se calcula automáticamente">
+          </div>
+        </div>
+
+        <div class="modal__field" id="fieldPolizaPrima">
+          <label for="polizaPrima" class="form-label">Prima</label>
+          <div class="input-currency"><span class="input-currency__prefix">$</span><input type="text" inputmode="decimal" id="polizaPrima" class="text-input"></div>
+          <span class="field-error">Ingresa la prima de la póliza.</span>
+        </div>
+
+        <div class="modal__field" id="fieldPolizaFrecuencia">
+          <label class="form-label">Frecuencia de Pago</label>
+          <div class="freq-group" id="polizaFrecuenciaGroup">
+            <label class="freq-option" data-value="Anual"><input type="checkbox" data-value="Anual"> Anual (1)</label>
+            <label class="freq-option" data-value="Semestral"><input type="checkbox" data-value="Semestral"> Semestral (2)</label>
+            <label class="freq-option" data-value="Cuatrimestral"><input type="checkbox" data-value="Cuatrimestral"> Cuatrimestral (3)</label>
+            <label class="freq-option" data-value="Trimestral"><input type="checkbox" data-value="Trimestral"> Trimestral (4)</label>
+            <label class="freq-option" data-value="Bimestral"><input type="checkbox" data-value="Bimestral"> Bimestral (6)</label>
+            <label class="freq-option" data-value="Mensual"><input type="checkbox" data-value="Mensual"> Mensual</label>
+          </div>
+          <span class="field-error">Selecciona una frecuencia de pago.</span>
+        </div>
+
+        <div class="modal__field" id="fieldPolizaMensualFracciones" style="display:none;">
+          <label for="polizaMensualFracciones" class="form-label">Cantidad de Fracciones Mensuales</label>
+          <select id="polizaMensualFracciones" class="text-input">
+            <option value="10">10 fracciones</option>
+            <option value="12">12 fracciones</option>
+          </select>
+        </div>
+
+        <div class="field-hint-box" id="polizaFraccionesPreview">Selecciona inicio de vigencia, prima y frecuencia para previsualizar las fracciones a generar.</div>
+
+        <!-- Prima Total / Prima Devengada: solo visibles en el detalle (Ver Póliza), siempre deshabilitados -->
+        <div class="prima-resumen-box" id="polizaPrimaResumenBox" style="display:none;">
+          <div>
+            <label class="form-label">Prima Total</label>
+            <input type="text" id="polizaPrimaTotal" class="text-input" disabled>
+          </div>
+          <div>
+            <label class="form-label">Prima Devengada</label>
+            <input type="text" id="polizaPrimaDevengada" class="text-input" disabled>
+          </div>
+        </div>
+
+        <div class="form-feedback" id="polizaFormFeedback"></div>
+
+        <!-- Acciones: solo visibles en el detalle (Ver Póliza) -->
+        <div class="form-section__title" id="polizaAccionesTitle" style="display:none;">Acciones</div>
+        <div class="poliza-acciones" id="polizaAccionesBox" style="display:none;">
+          <button type="button" class="action-btn action-btn--fracciones" id="verFraccionesPolizaBtn" aria-label="Ver fracciones" title="Ver Fracciones" style="display:none;">📋</button>
+          <button type="button" class="action-btn action-btn--reactivar" id="reactivarPolizaBtn" aria-label="Reactivar póliza" title="Reactivar" style="display:none;">♻️</button>
+          <button type="button" class="action-btn action-btn--renovar" id="renovarPolizaBtn" aria-label="Renovar póliza" title="Renovar" style="display:none;">🔁</button>
+          <button type="button" class="action-btn action-btn--anular" id="anularPolizaBtn" aria-label="Anular póliza" title="Anular" style="display:none;">🚫</button>
+          <button type="button" class="action-btn action-btn--edit" id="editPolizaBtn" aria-label="Editar póliza" title="Editar" style="display:none;">✏️</button>
+          <button type="button" class="action-btn action-btn--delete" id="eliminarPolizaBtn" aria-label="Eliminar póliza" title="Eliminar" style="display:none;">🗑️</button>
+        </div>
+
+        <div class="modal__footer">
+          <button type="button" class="btn btn--cancel" id="cancelPolizaModalBtn">Cerrar</button>
+          <button type="submit" class="btn btn--primary" id="submitPolizaBtn">Registrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL: REGISTRAR CLIENTE (embebido — mismo esquema que clientes.js,
+       para no salir de la pestaña Pólizas)
+       ========================================================= -->
+  <div class="modal-overlay" id="clienteModalOverlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="clienteModalTitle">
+      <div class="modal__header">
+        <h2 class="modal__title" id="clienteModalTitle">Registrar Cliente</h2>
+        <button type="button" class="modal__close" id="clienteModalCloseBtn" aria-label="Cerrar">✕</button>
+      </div>
+
+      <form id="clienteForm" novalidate>
+        <div class="modal__field" id="fieldClienteNacionalidad">
+          <label for="clienteNacionalidad" class="form-label">Nacionalidad</label>
+          <select id="clienteNacionalidad" class="text-input" required>
+            <option value="">Selecciona la nacionalidad</option>
+            <option value="Venezolano">Venezolano</option>
+            <option value="Extranjero">Extranjero</option>
+            <option value="Jurídico">Jurídico</option>
+            <option value="Gubernamental">Gubernamental</option>
+            <option value="Pasaporte">Pasaporte</option>
+            <option value="Menor de Edad">Menor de Edad</option>
+          </select>
+          <span class="field-error">Selecciona la nacionalidad del cliente.</span>
+        </div>
+
+        <div class="modal__field" id="fieldClienteNroIdentificacion">
+          <label for="clienteNroIdentificacion" class="form-label">Nro. Identificación</label>
+          <input type="text" inputmode="numeric" id="clienteNroIdentificacion" class="text-input" placeholder="Ej: 15223224" autocomplete="off" required>
+          <span class="form-hint">Solo números, sin puntos, letras ni caracteres especiales.</span>
+          <span class="field-error">Ingresa el número de identificación (solo dígitos).</span>
+        </div>
+
+        <div class="modal__field" id="fieldClienteNombre">
+          <label for="clienteNombre" class="form-label">Nombre del Cliente</label>
+          <input type="text" id="clienteNombre" class="text-input" placeholder="Ej: Juan Carlos Pérez" autocomplete="off" required>
+          <span class="field-error">Ingresa el nombre del cliente.</span>
+        </div>
+
+        <div class="client-preview-box" style="background: var(--color-gray-light); border: 1px dashed var(--color-gray-border); border-radius: 6px; padding: 0.65rem 0.85rem; font-size: 0.85rem; color: #3C4350; margin-top: 0.75rem;">
+          <strong>Identificación (automática):</strong>
+          <div id="clienteIdentificacionPreview">Completa los campos para generar la identificación.</div>
+        </div>
+
+        <div class="form-feedback" id="clienteFormFeedback"></div>
+
+        <div class="modal__footer">
+          <button type="button" class="btn btn--cancel" id="cancelClienteModalBtn">Cancelar</button>
+          <button type="submit" class="btn btn--primary" id="submitClienteBtn">Registrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL: ANULAR PÓLIZA
+       ========================================================= -->
+  <div class="modal-overlay" id="anularPolizaModalOverlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="anularPolizaModalTitle">
+      <div class="modal__header">
+        <h2 class="modal__title" id="anularPolizaModalTitle">Anular Póliza</h2>
+        <button type="button" class="modal__close" id="anularPolizaModalCloseBtn" aria-label="Cerrar">✕</button>
+      </div>
+      <form id="anularPolizaForm" novalidate>
+        <div class="modal__field" id="fieldCausaAnulacion">
+          <label for="causaAnulacion" class="form-label">Causa de la Anulación</label>
+          <textarea id="causaAnulacion" class="text-input" rows="4" placeholder="Escribe el motivo de la anulación..."></textarea>
+          <span class="field-error">Escribe la causa de la anulación.</span>
+        </div>
+        <div class="form-feedback" id="anularPolizaFormFeedback"></div>
+        <div class="modal__footer">
+          <button type="button" class="btn btn--cancel" id="cancelAnularPolizaBtn">Cancelar</button>
+          <button type="submit" class="btn btn--danger" id="submitAnularPolizaBtn">Anular Póliza</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL: VER FRACCIONES DE UNA PÓLIZA
+       ========================================================= -->
+  <div class="modal-overlay" id="verFraccionesModalOverlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="verFraccionesModalTitle">
+      <div class="modal__header">
+        <h2 class="modal__title" id="verFraccionesModalTitle">Fracciones de la Póliza</h2>
+        <button type="button" class="modal__close" id="verFraccionesModalCloseBtn" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="fraccion-list" id="verFraccionesList"></div>
+      <div class="modal__footer">
+        <button type="button" class="btn btn--cancel" id="closeVerFraccionesBtn">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL: COBRAR FRACCIÓN
+       ========================================================= -->
+  <div class="modal-overlay" id="cobrarModalOverlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cobrarModalTitle">
+      <div class="modal__header">
+        <h2 class="modal__title" id="cobrarModalTitle">Cobrar Fracción</h2>
+        <button type="button" class="modal__close" id="cobrarModalCloseBtn" aria-label="Cerrar">✕</button>
+      </div>
+      <form id="cobrarForm" novalidate>
+        <div class="modal__field" id="fieldCobrarFecha">
+          <label for="cobrarFecha" class="form-label">Fecha de cobro (Día del reporte a Corporativa)</label>
+          <input type="date" id="cobrarFecha" class="text-input" required>
+          <span class="field-error">Selecciona la fecha de cobro.</span>
+        </div>
+        <div class="modal__field" id="fieldCobrarMoneda">
+          <label for="cobrarMoneda" class="form-label">Moneda de pago</label>
+          <select id="cobrarMoneda" class="text-input" required>
+            <option value="">Selecciona la moneda</option>
+            <option value="Bolívares">Bolívares</option>
+            <option value="Dólares">Dólares</option>
+          </select>
+          <span class="field-error">Selecciona la moneda de pago.</span>
+        </div>
+        <div class="modal__field" id="fieldCobrarPrima">
+          <label for="cobrarPrima" class="form-label">Prima</label>
+          <div class="input-currency"><span class="input-currency__prefix">$</span><input type="text" inputmode="decimal" id="cobrarPrima" class="text-input"></div>
+          <span class="field-error">Ingresa la prima cobrada.</span>
+        </div>
+        <div class="modal__field" id="fieldCobrarFechaIngreso">
+          <label for="cobrarFechaIngreso" class="form-label">Fecha del ingreso en la aseguradora</label>
+          <input type="date" id="cobrarFechaIngreso" class="text-input" required>
+          <span class="field-error">Selecciona la fecha de ingreso en la aseguradora.</span>
+        </div>
+        <div class="form-feedback" id="cobrarFormFeedback"></div>
+        <div class="modal__footer">
+          <button type="button" class="btn btn--cancel" id="cancelCobrarBtn">Cancelar</button>
+          <button type="submit" class="btn btn--primary" id="submitCobrarBtn">Registrar Cobro</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- CONFIRMACIÓN COMPARTIDA -->
+  <div id="confirmOverlay" class="confirm-overlay" style="display:none;">
+    <div class="confirm-modal">
+      <h3 id="confirmTitle">Confirmación</h3>
+      <p id="confirmMessage">¿Deseas continuar?</p>
+      <div class="confirm-actions">
+        <button type="button" id="confirmCancelBtn" class="btn btn--cancel">Cancelar</button>
+        <button type="button" id="confirmAcceptBtn" class="btn btn--danger">Eliminar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="polizas.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      initAppShell({ pageName: 'polizas.html' });
+    });
+  </script>
+</body>
+</html>
