@@ -345,12 +345,12 @@
               <select id="filtroPolizaSucursal" class="text-input">
                 <option value="">Todas las sucursales</option>
               </select>
+              </select>
               <select id="filtroPolizaEjecutivo" class="text-input">
                 <option value="">Todos los ejecutivos</option>
               </select>
               <select id="filtroPolizaAsesor" class="text-input">
                 <option value="">Todos los asesores</option>
-              </select>
             </div>
           </div>
 
@@ -409,6 +409,17 @@
               </select>
               <button type="button" id="resetFiltroFraccion" class="btn--reset-filter">↺ Reiniciar filtros</button>
             </div>
+            <div class="periodo-filter" style="margin-top: 0.6rem;">
+              <select id="filtroFraccionSucursal" class="text-input">
+                <option value="">Todas las sucursales</option>
+              </select>
+              <select id="filtroFraccionAsesor" class="text-input">
+                <option value="">Todos los asesores</option>
+              </select>
+              <select id="filtroFraccionEjecutivo" class="text-input">
+                <option value="">Todos los ejecutivos</option>
+              </select>
+            </div>
           </div>
 
           <div id="fraccionesNotification" class="page-notification" aria-live="polite" style="display:none;"></div>
@@ -419,6 +430,9 @@
                 <tr>
                   <th scope="col" class="is-sortable" data-sort-key="cliente_nombre">Cliente <span class="sort-indicator"></span></th>
                   <th scope="col">Nro. Póliza</th>
+                  <th scope="col">Sucursal</th>
+                  <th scope="col">Asesor</th>
+                  <th scope="col">Ejecutivo</th>
                   <th scope="col">N° Fracción</th>
                   <th scope="col">Inicio</th>
                   <th scope="col">Fin</th>

@@ -691,55 +691,39 @@ document.addEventListener('DOMContentLoaded', async () => {
       : String(anioActual);
   }
 
-  /* Filtros por Sucursal / Asesor / Ejecutivo: selects poblados desde los
-     catálogos ya cargados (allSucursales, allUsuarios). El de "Ejecutivo"
-     solo lista usuarios que efectivamente son ejecutivo de alguien (su id
-     aparece como ejecutivo_id en al menos un usuario), evitando listar
-     asesores que nunca son ejecutivo de nadie. */
-  function poblarFiltrosSucursalAsesorEjecutivo() {
-    const valorSucursalPrevio = filtroPolizaSucursal.value;
-    filtroPolizaSucursal.innerHTML = '<option value="">Todas las sucursales</option>';
-    allSucursales.forEach((s) => {
+  /* Filtros por Sucursal / Asesor / Ejecutivo: helper genérico reutilizado
+     por las pestañas de Pólizas y Fracciones. Puebla un <select> con las
+     opciones dadas, preservando el valor previamente seleccionado si sigue
+     existiendo. */
+  function poblarSelectFiltro(selectEl, items, placeholderLabel, getLabel) {
+    const valorPrevio = selectEl.value;
+    selectEl.innerHTML = `<option value="">${placeholderLabel}</option>`;
+    items.forEach((item) => {
       const opt = document.createElement('option');
-      opt.value = s.id;
-      opt.textContent = s.sucursal;
-      filtroPolizaSucursal.appendChild(opt);
+      opt.value = item.id;
+      opt.textContent = getLabel(item);
+      selectEl.appendChild(opt);
     });
-    if ([...filtroPolizaSucursal.options].some((o) => o.value === valorSucursalPrevio)) {
-      filtroPolizaSucursal.value = valorSucursalPrevio;
+    if ([...selectEl.options].some((o) => o.value === valorPrevio)) {
+      selectEl.value = valorPrevio;
     }
+  }
 
-    const valorAsesorPrevio = filtroPolizaAsesor.value;
-    filtroPolizaAsesor.innerHTML = '<option value="">Todos los asesores</option>';
-    allUsuarios.forEach((u) => {
-      const opt = document.createElement('option');
-      opt.value = u.id;
-      opt.textContent = u.full_name;
-      filtroPolizaAsesor.appendChild(opt);
-    });
-    if ([...filtroPolizaAsesor.options].some((o) => o.value === valorAsesorPrevio)) {
-      filtroPolizaAsesor.value = valorAsesorPrevio;
-    }
-
-    const valorEjecutivoPrevio = filtroPolizaEjecutivo.value;
-    // "Ejecutivo" = usuarios con perfil Colaborador, Administrador Nacional o
-    // Administrador Sucursal (misma convención de esPerfilAdministrador /
-    // esPerfilColaborador usada en usuarios.js, basada en el campo legacy
-    // "perfil").
-    const ejecutivos = allUsuarios.filter((u) => {
+  // "Ejecutivo" = usuarios con perfil Colaborador, Administrador Nacional o
+  // Administrador Sucursal (misma convención de esPerfilAdministrador /
+  // esPerfilColaborador usada en usuarios.js, basada en el campo legacy
+  // "perfil").
+  function getEjecutivos() {
+    return allUsuarios.filter((u) => {
       const perfilNombre = (u.perfil || '').trim().toLowerCase();
       return perfilNombre.startsWith('administrador') || perfilNombre === 'colaborador';
     });
-    filtroPolizaEjecutivo.innerHTML = '<option value="">Todos los ejecutivos</option>';
-    ejecutivos.forEach((u) => {
-      const opt = document.createElement('option');
-      opt.value = u.id;
-      opt.textContent = u.full_name;
-      filtroPolizaEjecutivo.appendChild(opt);
-    });
-    if ([...filtroPolizaEjecutivo.options].some((o) => o.value === valorEjecutivoPrevio)) {
-      filtroPolizaEjecutivo.value = valorEjecutivoPrevio;
-    }
+  }
+
+  function poblarFiltrosSucursalAsesorEjecutivo() {
+    poblarSelectFiltro(filtroPolizaSucursal, allSucursales, 'Todas las sucursales', (s) => s.sucursal);
+    poblarSelectFiltro(filtroPolizaAsesor, allUsuarios, 'Todos los asesores', (u) => u.full_name);
+    poblarSelectFiltro(filtroPolizaEjecutivo, getEjecutivos(), 'Todos los ejecutivos', (u) => u.full_name);
   }
 
   function resetearFiltroPoliza() {
@@ -1444,11 +1428,29 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const filtroFraccionAnio = document.getElementById('filtroFraccionAnio');
   const filtroFraccionMes = document.getElementById('filtroFraccionMes');
+  const filtroFraccionSucursal = document.getElementById('filtroFraccionSucursal');
+  const filtroFraccionAsesor = document.getElementById('filtroFraccionAsesor');
+  const filtroFraccionEjecutivo = document.getElementById('filtroFraccionEjecutivo');
   const resetFiltroFraccion = document.getElementById('resetFiltroFraccion');
 
   function fraccionConNombres(f) {
     const cliente = allClientes.find((c) => c.id === f.cliente_id);
-    return { ...f, cliente_nombre: cliente?.nombre_cliente || '—' };
+    const asesor = allUsuarios.find((u) => u.id === f.asesor_id);
+    const sucursal = allSucursales.find((s) => s.id === f.sucursal_id);
+    const ejecutivo = asesor ? allUsuarios.find((u) => u.id === asesor.ejecutivo_id) : null;
+    return {
+      ...f,
+      cliente_nombre: cliente?.nombre_cliente || '—',
+      asesor_nombre: asesor?.full_name || '—',
+      sucursal_nombre: sucursal?.sucursal || '—',
+      ejecutivo_nombre: ejecutivo?.full_name || '—',
+    };
+  }
+
+  function poblarFiltrosFraccionSucursalAsesorEjecutivo() {
+    poblarSelectFiltro(filtroFraccionSucursal, allSucursales, 'Todas las sucursales', (s) => s.sucursal);
+    poblarSelectFiltro(filtroFraccionAsesor, allUsuarios, 'Todos los asesores', (u) => u.full_name);
+    poblarSelectFiltro(filtroFraccionEjecutivo, getEjecutivos(), 'Todos los ejecutivos', (u) => u.full_name);
   }
 
   /* ---- Filtro Año / Mes: el año se alimenta desde la fracción más antigua
@@ -1477,10 +1479,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     poblarFiltroAnios();
     filtroFraccionAnio.value = String(new Date().getFullYear());
     filtroFraccionMes.value = 'Todos';
+    filtroFraccionSucursal.value = '';
+    filtroFraccionAsesor.value = '';
+    filtroFraccionEjecutivo.value = '';
     applyFilterFracciones();
   }
   filtroFraccionAnio.addEventListener('change', applyFilterFracciones);
   filtroFraccionMes.addEventListener('change', applyFilterFracciones);
+  filtroFraccionSucursal.addEventListener('change', applyFilterFracciones);
+  filtroFraccionAsesor.addEventListener('change', applyFilterFracciones);
+  filtroFraccionEjecutivo.addEventListener('change', applyFilterFracciones);
   resetFiltroFraccion.addEventListener('click', resetearFiltroFraccion);
 
   function renderFracciones(items) {
@@ -1496,6 +1504,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       tr.innerHTML = `
         <td data-label="Cliente">${escapeHtml(item.cliente_nombre)}</td>
         <td data-label="Nro. Póliza">${escapeHtml(item.nro_poliza)}</td>
+        <td data-label="Sucursal">${escapeHtml(item.sucursal_nombre)}</td>
+        <td data-label="Asesor">${escapeHtml(item.asesor_nombre)}</td>
+        <td data-label="Ejecutivo">${escapeHtml(item.ejecutivo_nombre)}</td>
         <td data-label="N° Fracción">${item.numero_fraccion}</td>
         <td data-label="Inicio">${formatDateEs(item.fecha_inicio)}</td>
         <td data-label="Fin">${formatDateEs(item.fecha_fin)}</td>
@@ -1538,6 +1549,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (mesSel && mesSel !== 'Todos') {
       result = result.filter((f) => f.fecha_inicio && String(Number(f.fecha_inicio.slice(5, 7))) === mesSel);
+    }
+
+    const sucursalSel = filtroFraccionSucursal.value;
+    if (sucursalSel) result = result.filter((f) => f.sucursal_id === sucursalSel);
+
+    const asesorSel = filtroFraccionAsesor.value;
+    if (asesorSel) result = result.filter((f) => f.asesor_id === asesorSel);
+
+    const ejecutivoSel = filtroFraccionEjecutivo.value;
+    if (ejecutivoSel) {
+      result = result.filter((f) => {
+        const asesor = allUsuarios.find((u) => u.id === f.asesor_id);
+        return asesor && asesor.ejecutivo_id === ejecutivoSel;
+      });
     }
 
     result = sortItems(result, currentSortFracciones.key, currentSortFracciones.direction);
@@ -1899,6 +1924,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       allFracciones = data || [];
       poblarFiltroAnios();
+      poblarFiltrosFraccionSucursalAsesorEjecutivo();
       applyFilterFracciones();
     } catch (err) {
       fraccionesLoading.style.display = 'none';
