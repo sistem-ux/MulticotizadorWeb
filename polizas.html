@@ -341,6 +341,17 @@
               </select>
               <button type="button" id="resetFiltroPoliza" class="btn--reset-filter">↺ Reiniciar filtros</button>
             </div>
+            <div class="periodo-filter" style="margin-top: 0.6rem;">
+              <select id="filtroPolizaSucursal" class="text-input">
+                <option value="">Todas las sucursales</option>
+              </select>
+              <select id="filtroPolizaAsesor" class="text-input">
+                <option value="">Todos los asesores</option>
+              </select>
+              <select id="filtroPolizaEjecutivo" class="text-input">
+                <option value="">Todos los ejecutivos</option>
+              </select>
+            </div>
           </div>
 
           <div id="polizasNotification" class="page-notification" aria-live="polite" style="display:none;"></div>
@@ -353,6 +364,9 @@
                   <th scope="col">Nro. Póliza</th>
                   <th scope="col">Aseguradora</th>
                   <th scope="col">Ramo</th>
+                  <th scope="col">Sucursal</th>
+                  <th scope="col">Asesor</th>
+                  <th scope="col">Ejecutivo</th>
                   <th scope="col">Vigencia</th>
                   <th scope="col">Prima</th>
                   <th scope="col">Status</th>
