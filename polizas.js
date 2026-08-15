@@ -480,6 +480,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const filtroPolizaTipo = document.getElementById('filtroPolizaTipo');
   const filtroPolizaAnio = document.getElementById('filtroPolizaAnio');
   const filtroPolizaMes = document.getElementById('filtroPolizaMes');
+  const filtroPolizaSucursal = document.getElementById('filtroPolizaSucursal');
+  const filtroPolizaAsesor = document.getElementById('filtroPolizaAsesor');
+  const filtroPolizaEjecutivo = document.getElementById('filtroPolizaEjecutivo');
   const resetFiltroPoliza = document.getElementById('resetFiltroPoliza');
   let polizaOrigenRenovacion = null;
 
@@ -659,11 +662,65 @@ document.addEventListener('DOMContentLoaded', async () => {
       : String(anioActual);
   }
 
+  /* Filtros por Sucursal / Asesor / Ejecutivo: selects poblados desde los
+     catálogos ya cargados (allSucursales, allUsuarios). El de "Ejecutivo"
+     solo lista usuarios que efectivamente son ejecutivo de alguien (su id
+     aparece como ejecutivo_id en al menos un usuario), evitando listar
+     asesores que nunca son ejecutivo de nadie. */
+  function poblarFiltrosSucursalAsesorEjecutivo() {
+    const valorSucursalPrevio = filtroPolizaSucursal.value;
+    filtroPolizaSucursal.innerHTML = '<option value="">Todas las sucursales</option>';
+    allSucursales.forEach((s) => {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.sucursal;
+      filtroPolizaSucursal.appendChild(opt);
+    });
+    if ([...filtroPolizaSucursal.options].some((o) => o.value === valorSucursalPrevio)) {
+      filtroPolizaSucursal.value = valorSucursalPrevio;
+    }
+
+    const valorAsesorPrevio = filtroPolizaAsesor.value;
+    filtroPolizaAsesor.innerHTML = '<option value="">Todos los asesores</option>';
+    allUsuarios.forEach((u) => {
+      const opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = u.full_name;
+      filtroPolizaAsesor.appendChild(opt);
+    });
+    if ([...filtroPolizaAsesor.options].some((o) => o.value === valorAsesorPrevio)) {
+      filtroPolizaAsesor.value = valorAsesorPrevio;
+    }
+
+    const valorEjecutivoPrevio = filtroPolizaEjecutivo.value;
+    // "Ejecutivo" = usuarios con perfil Colaborador, Administrador Nacional o
+    // Administrador Sucursal (misma convención de esPerfilAdministrador /
+    // esPerfilColaborador usada en usuarios.js, basada en el campo legacy
+    // "perfil").
+    const ejecutivos = allUsuarios.filter((u) => {
+      const perfilNombre = (u.perfil || '').trim().toLowerCase();
+      return perfilNombre.startsWith('administrador') || perfilNombre === 'colaborador';
+    });
+    filtroPolizaEjecutivo.innerHTML = '<option value="">Todos los ejecutivos</option>';
+    ejecutivos.forEach((u) => {
+      const opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = u.full_name;
+      filtroPolizaEjecutivo.appendChild(opt);
+    });
+    if ([...filtroPolizaEjecutivo.options].some((o) => o.value === valorEjecutivoPrevio)) {
+      filtroPolizaEjecutivo.value = valorEjecutivoPrevio;
+    }
+  }
+
   function resetearFiltroPoliza() {
     filtroPolizaTipo.value = 'Producción';
     poblarFiltroAniosPoliza();
     filtroPolizaAnio.value = String(new Date().getFullYear());
     filtroPolizaMes.value = 'Todos';
+    filtroPolizaSucursal.value = '';
+    filtroPolizaAsesor.value = '';
+    filtroPolizaEjecutivo.value = '';
     applyFilterPolizas();
   }
 
@@ -673,6 +730,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   filtroPolizaAnio.addEventListener('change', applyFilterPolizas);
   filtroPolizaMes.addEventListener('change', applyFilterPolizas);
+  filtroPolizaSucursal.addEventListener('change', applyFilterPolizas);
+  filtroPolizaAsesor.addEventListener('change', applyFilterPolizas);
+  filtroPolizaEjecutivo.addEventListener('change', applyFilterPolizas);
   resetFiltroPoliza.addEventListener('click', resetearFiltroPoliza);
 
   /* =========================================================
@@ -1089,11 +1149,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     const cliente = allClientes.find((c) => c.id === p.cliente_id);
     const aseguradora = allAseguradoras.find((a) => a.id === p.aseguradora_id);
     const ramo = allRamos.find((r) => r.id === p.ramo_id);
+    const asesor = allUsuarios.find((u) => u.id === p.asesor_id);
+    const sucursal = allSucursales.find((s) => s.id === p.sucursal_id);
+    const ejecutivo = asesor ? allUsuarios.find((u) => u.id === asesor.ejecutivo_id) : null;
     return {
       ...p,
       cliente_nombre: cliente?.nombre_cliente || '—',
       aseguradora_nombre: aseguradora?.nombre || '—',
       ramo_nombre: ramo?.nombre_ramo || '—',
+      asesor_nombre: asesor?.full_name || '—',
+      sucursal_nombre: sucursal?.sucursal || '—',
+      ejecutivo_nombre: ejecutivo?.full_name || '—',
     };
   }
 
@@ -1111,6 +1177,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td data-label="Nro. Póliza">${escapeHtml(item.nro_poliza)}</td>
         <td data-label="Aseguradora">${escapeHtml(item.aseguradora_nombre)}</td>
         <td data-label="Ramo">${escapeHtml(item.ramo_nombre)}</td>
+        <td data-label="Sucursal">${escapeHtml(item.sucursal_nombre)}</td>
+        <td data-label="Asesor">${escapeHtml(item.asesor_nombre)}</td>
+        <td data-label="Ejecutivo">${escapeHtml(item.ejecutivo_nombre)}</td>
         <td data-label="Vigencia">${formatDateEs(item.inicio_vigencia)} — ${formatDateEs(item.fin_vigencia)}</td>
         <td data-label="Prima">${formatMoney(item.prima)}</td>
         <td data-label="Status"><span class="status-pill ${statusClass}">${escapeHtml(status)}</span></td>
@@ -1155,6 +1224,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (mesSel && mesSel !== 'Todos') {
       result = result.filter((p) => p[campoFiltro] && String(Number(p[campoFiltro].slice(5, 7))) === mesSel);
+    }
+
+    const sucursalSel = filtroPolizaSucursal.value;
+    if (sucursalSel) result = result.filter((p) => p.sucursal_id === sucursalSel);
+
+    const asesorSel = filtroPolizaAsesor.value;
+    if (asesorSel) result = result.filter((p) => p.asesor_id === asesorSel);
+
+    const ejecutivoSel = filtroPolizaEjecutivo.value;
+    if (ejecutivoSel) {
+      result = result.filter((p) => {
+        const asesor = allUsuarios.find((u) => u.id === p.asesor_id);
+        return asesor && asesor.ejecutivo_id === ejecutivoSel;
+      });
     }
 
     result = sortItems(result, currentSortPolizas.key, currentSortPolizas.direction);
@@ -1746,6 +1829,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       allPolizas = data || [];
       poblarFiltroAniosPoliza();
+      poblarFiltrosSucursalAsesorEjecutivo();
       applyFilterPolizas();
     } catch (err) {
       polizasLoading.style.display = 'none';
