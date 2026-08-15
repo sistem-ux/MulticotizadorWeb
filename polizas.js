@@ -400,6 +400,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const renovarPolizaBtn = document.getElementById('renovarPolizaBtn');
   const reactivarPolizaBtn = document.getElementById('reactivarPolizaBtn');
   const verFraccionesPolizaBtn = document.getElementById('verFraccionesPolizaBtn');
+  const eliminarPolizaBtn = document.getElementById('eliminarPolizaBtn');
+  const polizaAccionesTitle = document.getElementById('polizaAccionesTitle');
+  const polizaAccionesBox = document.getElementById('polizaAccionesBox');
   const polizaPrimaResumenBox = document.getElementById('polizaPrimaResumenBox');
   const polizaPrimaTotal = document.getElementById('polizaPrimaTotal');
   const polizaPrimaDevengada = document.getElementById('polizaPrimaDevengada');
@@ -768,12 +771,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (readOnly) refrescarPrimaResumen(item.id);
       verFraccionesPolizaBtn.style.display = readOnly ? 'inline-flex' : 'none';
       anularPolizaBtn.style.display = (readOnly && item.status !== 'Anulado') ? 'inline-flex' : 'none';
+      eliminarPolizaBtn.style.display = readOnly ? 'inline-flex' : 'none';
       {
         const statusItem = item.status || 'Vigente';
         const puedeRenovar = statusItem === 'Vigente' || statusItem === 'Vencida';
         renovarPolizaBtn.style.display = (readOnly && puedeRenovar) ? 'inline-flex' : 'none';
         reactivarPolizaBtn.style.display = (readOnly && statusItem === 'Vencida') ? 'inline-flex' : 'none';
       }
+      polizaAccionesTitle.style.display = readOnly ? 'block' : 'none';
+      polizaAccionesBox.style.display = readOnly ? 'flex' : 'none';
     } else {
       polizaModalTitle.textContent = renewFrom ? 'Renovar Póliza' : 'Registrar Póliza';
       submitPolizaBtn.textContent = renewFrom ? 'Registrar Renovación' : 'Registrar';
@@ -784,6 +790,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       renovarPolizaBtn.style.display = 'none';
       reactivarPolizaBtn.style.display = 'none';
       verFraccionesPolizaBtn.style.display = 'none';
+      eliminarPolizaBtn.style.display = 'none';
+      polizaAccionesTitle.style.display = 'none';
+      polizaAccionesBox.style.display = 'none';
       polizaPrimaResumenBox.style.display = 'none';
       submitPolizaBtn.style.display = 'inline-flex';
       polizaModalOverlay.querySelector('.modal').classList.remove('modal--readonly');
@@ -891,6 +900,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const item = currentPolizaItem;
     closePolizaModal();
     openRenovarPolizaModal(item);
+  });
+  eliminarPolizaBtn.addEventListener('click', () => {
+    if (currentPolizaItem) handleDeletePoliza(currentPolizaItem);
   });
   reactivarPolizaBtn.addEventListener('click', () => {
     if (currentPolizaItem) handleReactivarPoliza(currentPolizaItem);
@@ -1093,9 +1105,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     items.forEach((item) => {
       const status = item.status || 'Vigente';
       const statusClass = `status-pill--${statusToClass(status)}`;
-      const esAnulada = status === 'Anulado';
-      const esVencida = status === 'Vencida';
-      const puedeRenovar = status === 'Vigente' || status === 'Vencida';
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td data-label="Cliente">${escapeHtml(item.cliente_nombre)}</td>
@@ -1105,25 +1114,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td data-label="Vigencia">${formatDateEs(item.inicio_vigencia)} — ${formatDateEs(item.fin_vigencia)}</td>
         <td data-label="Prima">${formatMoney(item.prima)}</td>
         <td data-label="Status"><span class="status-pill ${statusClass}">${escapeHtml(status)}</span></td>
-        <td data-label="Acciones" class="col-actions">
-          <button type="button" class="action-btn action-btn--view" data-id="${item.id}" aria-label="Ver póliza">👁️</button>
-          <button type="button" class="action-btn action-btn--fracciones" data-id="${item.id}" aria-label="Ver fracciones">📋</button>
-          ${puedeRenovar ? `<button type="button" class="action-btn action-btn--renovar" data-id="${item.id}" aria-label="Renovar póliza" title="Renovar">🔁</button>` : ''}
-          ${esVencida ? `<button type="button" class="action-btn action-btn--reactivar" data-id="${item.id}" aria-label="Reactivar póliza" title="Reactivar">♻️</button>` : ''}
-          ${esAnulada ? '' : `<button type="button" class="action-btn action-btn--anular" data-id="${item.id}" aria-label="Anular póliza">🚫</button>`}
-          <button type="button" class="action-btn action-btn--delete" data-id="${item.id}" aria-label="Eliminar póliza">🗑️</button>
-        </td>
       `;
+      // Toda la fila es clicable: abre el detalle de la póliza (modal "Ver Póliza"),
+      // donde viven ahora todas las acciones (Fracciones, Renovar, Reactivar, Anular, Editar, Eliminar).
+      tr.addEventListener('click', () => openPolizaModal({ edit: true, item, readOnly: true }));
       polizasTableBody.appendChild(tr);
-      tr.querySelector('.action-btn--view').addEventListener('click', () => openPolizaModal({ edit: true, item, readOnly: true }));
-      tr.querySelector('.action-btn--fracciones').addEventListener('click', () => openVerFraccionesModal(item));
-      const renovarBtn = tr.querySelector('.action-btn--renovar');
-      if (renovarBtn) renovarBtn.addEventListener('click', () => openRenovarPolizaModal(item));
-      const reactivarBtn = tr.querySelector('.action-btn--reactivar');
-      if (reactivarBtn) reactivarBtn.addEventListener('click', () => handleReactivarPoliza(item));
-      const anularBtn = tr.querySelector('.action-btn--anular');
-      if (anularBtn) anularBtn.addEventListener('click', () => openAnularPolizaModal(item));
-      tr.querySelector('.action-btn--delete').addEventListener('click', () => handleDeletePoliza(item));
     });
   }
 
@@ -1208,6 +1203,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!data || !data.length) { showNotification('polizasNotification', 'No se pudo eliminar: la política de seguridad (RLS) bloqueó la operación.', 'error'); return; }
       await Promise.all([loadPolizas(), loadFracciones()]);
       showNotification('polizasNotification', 'Póliza eliminada correctamente.', 'success');
+      closePolizaModal();
     } catch (err) {
       showNotification('polizasNotification', `No se pudo eliminar: ${getErrorMessage(err)}`, 'error');
     }

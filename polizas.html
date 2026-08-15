@@ -63,6 +63,20 @@
     .users-table td.col-actions { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-start; gap: 0.5rem; }
     .users-table td.col-actions .action-btn { flex-shrink: 0; margin: 0; }
 
+    /* Filas de la tabla de Pólizas: clicables, se abren en el modal "Ver Póliza" */
+    #polizasTable tbody tr { cursor: pointer; transition: background 0.15s ease; }
+    #polizasTable tbody tr:hover { background: #E5EFFC; }
+
+    /* Sección "Acciones" dentro del modal Ver/Editar Póliza (mismos botones
+       pequeños con ícono que se usaban antes en la columna de la tabla) */
+    .poliza-acciones {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.6rem;
+      margin-top: 0.25rem;
+    }
+
     .modal--readonly .btn--primary { display: none; }
     .modal--readonly select.text-input,
     .modal--readonly input.text-input { pointer-events: none; background: var(--color-gray-light); }
@@ -342,7 +356,6 @@
                   <th scope="col">Vigencia</th>
                   <th scope="col">Prima</th>
                   <th scope="col">Status</th>
-                  <th scope="col" class="col-actions">Acciones</th>
                 </tr>
               </thead>
               <tbody id="polizasTableBody"></tbody>
@@ -569,13 +582,19 @@
 
         <div class="form-feedback" id="polizaFormFeedback"></div>
 
+        <!-- Acciones: solo visibles en el detalle (Ver Póliza) -->
+        <div class="form-section__title" id="polizaAccionesTitle" style="display:none;">Acciones</div>
+        <div class="poliza-acciones" id="polizaAccionesBox" style="display:none;">
+          <button type="button" class="action-btn action-btn--fracciones" id="verFraccionesPolizaBtn" aria-label="Ver fracciones" title="Ver Fracciones" style="display:none;">📋</button>
+          <button type="button" class="action-btn action-btn--reactivar" id="reactivarPolizaBtn" aria-label="Reactivar póliza" title="Reactivar" style="display:none;">♻️</button>
+          <button type="button" class="action-btn action-btn--renovar" id="renovarPolizaBtn" aria-label="Renovar póliza" title="Renovar" style="display:none;">🔁</button>
+          <button type="button" class="action-btn action-btn--anular" id="anularPolizaBtn" aria-label="Anular póliza" title="Anular" style="display:none;">🚫</button>
+          <button type="button" class="action-btn action-btn--edit" id="editPolizaBtn" aria-label="Editar póliza" title="Editar" style="display:none;">✏️</button>
+          <button type="button" class="action-btn action-btn--delete" id="eliminarPolizaBtn" aria-label="Eliminar póliza" title="Eliminar" style="display:none;">🗑️</button>
+        </div>
+
         <div class="modal__footer">
           <button type="button" class="btn btn--cancel" id="cancelPolizaModalBtn">Cerrar</button>
-          <button type="button" class="btn btn--secondary" id="verFraccionesPolizaBtn" style="display:none;">📋 Ver Fracciones</button>
-          <button type="button" class="btn btn--secondary" id="reactivarPolizaBtn" style="display:none;">♻️ Reactivar</button>
-          <button type="button" class="btn btn--secondary" id="renovarPolizaBtn" style="display:none;">🔁 Renovar</button>
-          <button type="button" class="btn btn--danger" id="anularPolizaBtn" style="display:none;">🚫 Anular</button>
-          <button type="button" class="btn btn--secondary" id="editPolizaBtn" style="display:none;">✏️ Editar</button>
           <button type="submit" class="btn btn--primary" id="submitPolizaBtn">Registrar</button>
         </div>
       </form>
