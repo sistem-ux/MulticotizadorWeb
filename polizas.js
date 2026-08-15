@@ -397,6 +397,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cancelPolizaModalBtn = document.getElementById('cancelPolizaModalBtn');
   const editPolizaBtn = document.getElementById('editPolizaBtn');
   const anularPolizaBtn = document.getElementById('anularPolizaBtn');
+  const renovarPolizaBtn = document.getElementById('renovarPolizaBtn');
+  const reactivarPolizaBtn = document.getElementById('reactivarPolizaBtn');
   const verFraccionesPolizaBtn = document.getElementById('verFraccionesPolizaBtn');
   const polizaPrimaResumenBox = document.getElementById('polizaPrimaResumenBox');
   const polizaPrimaTotal = document.getElementById('polizaPrimaTotal');
@@ -471,6 +473,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let currentSortPolizas = { key: 'cliente_nombre', direction: 'asc' };
   const sortableHeadersPolizas = document.querySelectorAll('#polizasTable th.is-sortable');
+
+  const filtroPolizaTipo = document.getElementById('filtroPolizaTipo');
+  const filtroPolizaAnio = document.getElementById('filtroPolizaAnio');
+  const filtroPolizaMes = document.getElementById('filtroPolizaMes');
+  const resetFiltroPoliza = document.getElementById('resetFiltroPoliza');
+  let polizaOrigenRenovacion = null;
 
   /* ---- Combos ---- */
   const comboCliente = setupSearchableCombo({
@@ -621,6 +629,50 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   /* =========================================================
+     FILTROS (Producción / Vencimiento + Año + Mes)
+     ========================================================= */
+  function getCampoFechaFiltroPoliza() {
+    return filtroPolizaTipo.value === 'Vencimiento' ? 'fin_vigencia' : 'inicio_vigencia';
+  }
+
+  function poblarFiltroAniosPoliza() {
+    const campo = getCampoFechaFiltroPoliza();
+    const anioActual = new Date().getFullYear();
+    const anios = allPolizas
+      .map((p) => p[campo] ? Number(p[campo].slice(0, 4)) : null)
+      .filter((y) => Number.isInteger(y));
+    const anioMin = anios.length ? Math.min(...anios, anioActual) : anioActual;
+
+    const valorPrevio = filtroPolizaAnio.value || String(anioActual);
+    filtroPolizaAnio.innerHTML = '';
+    for (let y = anioActual; y >= anioMin; y--) {
+      const opt = document.createElement('option');
+      opt.value = String(y);
+      opt.textContent = String(y);
+      filtroPolizaAnio.appendChild(opt);
+    }
+    filtroPolizaAnio.value = [...filtroPolizaAnio.options].some((o) => o.value === valorPrevio)
+      ? valorPrevio
+      : String(anioActual);
+  }
+
+  function resetearFiltroPoliza() {
+    filtroPolizaTipo.value = 'Producción';
+    poblarFiltroAniosPoliza();
+    filtroPolizaAnio.value = String(new Date().getFullYear());
+    filtroPolizaMes.value = 'Todos';
+    applyFilterPolizas();
+  }
+
+  filtroPolizaTipo.addEventListener('change', () => {
+    poblarFiltroAniosPoliza();
+    applyFilterPolizas();
+  });
+  filtroPolizaAnio.addEventListener('change', applyFilterPolizas);
+  filtroPolizaMes.addEventListener('change', applyFilterPolizas);
+  resetFiltroPoliza.addEventListener('click', resetearFiltroPoliza);
+
+  /* =========================================================
      MODAL PÓLIZA: abrir / cerrar
      ========================================================= */
   function resetPolizaFormUI() {
@@ -660,10 +712,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     polizaPrimaDevengada.value = formatMoney(primaDevengada);
   }
 
-  function openPolizaModal({ edit = false, item = null, readOnly = false, clientePreseleccionado = null } = {}) {
+  function openPolizaModal({ edit = false, item = null, readOnly = false, clientePreseleccionado = null, renewFrom = null } = {}) {
     isEditModePoliza = edit;
     isReadOnlyPoliza = readOnly;
     currentPolizaItem = item;
+    polizaOrigenRenovacion = null;
 
     polizaForm.reset();
     clearFeedback('polizaFormFeedback');
@@ -715,22 +768,83 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (readOnly) refrescarPrimaResumen(item.id);
       verFraccionesPolizaBtn.style.display = readOnly ? 'inline-flex' : 'none';
       anularPolizaBtn.style.display = (readOnly && item.status !== 'Anulado') ? 'inline-flex' : 'none';
+      {
+        const statusItem = item.status || 'Vigente';
+        const puedeRenovar = statusItem === 'Vigente' || statusItem === 'Vencida';
+        renovarPolizaBtn.style.display = (readOnly && puedeRenovar) ? 'inline-flex' : 'none';
+        reactivarPolizaBtn.style.display = (readOnly && statusItem === 'Vencida') ? 'inline-flex' : 'none';
+      }
     } else {
-      polizaModalTitle.textContent = 'Registrar Póliza';
-      submitPolizaBtn.textContent = 'Registrar';
+      polizaModalTitle.textContent = renewFrom ? 'Renovar Póliza' : 'Registrar Póliza';
+      submitPolizaBtn.textContent = renewFrom ? 'Registrar Renovación' : 'Registrar';
       polizaIdInput.value = '';
       setPolizaFormDisabled(false);
       editPolizaBtn.style.display = 'none';
       anularPolizaBtn.style.display = 'none';
+      renovarPolizaBtn.style.display = 'none';
+      reactivarPolizaBtn.style.display = 'none';
       verFraccionesPolizaBtn.style.display = 'none';
       polizaPrimaResumenBox.style.display = 'none';
       submitPolizaBtn.style.display = 'inline-flex';
       polizaModalOverlay.querySelector('.modal').classList.remove('modal--readonly');
 
       if (clientePreseleccionado) comboCliente.setValue(clientePreseleccionado);
+      if (renewFrom) prellenarRenovacion(renewFrom);
     }
 
     polizaModalOverlay.classList.add('is-open');
+  }
+
+  /* ---- Renovación: prellenar datos de la póliza anterior y bloquear
+     los campos que no se deben editar en una renovación ---- */
+  function prellenarRenovacion(original) {
+    polizaOrigenRenovacion = original;
+
+    const cliente = allClientes.find((c) => c.id === original.cliente_id);
+    if (cliente) comboCliente.setValue(cliente);
+
+    const asesor = allUsuarios.find((u) => u.id === original.asesor_id);
+    if (asesor) { polizaAsesorInput.value = asesor.full_name; polizaAsesorId.value = asesor.id; }
+
+    poblarSelectSucursal(original.sucursal_id);
+
+    const aseguradora = allAseguradoras.find((a) => a.id === original.aseguradora_id);
+    if (aseguradora) { polizaAseguradoraInput.value = aseguradora.nombre; polizaAseguradoraId.value = aseguradora.id; }
+
+    polizaTipoPoliza.value = 'Renovación';
+    polizaNroPoliza.value = original.nro_poliza;
+
+    const ramo = allRamos.find((r) => r.id === original.ramo_id);
+    if (ramo) { polizaRamoInput.value = ramo.nombre_ramo; polizaRamoId.value = ramo.id; }
+    refrescarSumaAsegurada();
+    if (original.plan_id) polizaSumaAsegurada.value = original.plan_id;
+
+    if (original.fin_vigencia) {
+      polizaInicioVigencia.value = original.fin_vigencia;
+      refrescarFinVigencia();
+    }
+
+    // Prima vacía y frecuencia sin seleccionar: el usuario debe registrarlas
+    polizaPrima.value = '';
+    refrescarPreviewFracciones();
+
+    [fieldPolizaCliente, fieldPolizaAsesor, fieldPolizaSucursal, fieldPolizaAseguradora,
+     fieldPolizaTipoPoliza, fieldPolizaNroPoliza].forEach((f) => setFieldError(f, false));
+
+    // Campos que se mantienen igual a la póliza anterior: no se editan
+    polizaClienteInput.disabled = true;
+    btnNuevoClienteDesdePoliza.disabled = true;
+    polizaAsesorInput.disabled = true;
+    polizaSucursal.disabled = true;
+    polizaAseguradoraInput.disabled = true;
+    polizaTipoPoliza.disabled = true;
+    polizaNroPoliza.disabled = true;
+
+    polizaSucursalHint.textContent = 'Se mantiene la sucursal de la póliza original (renovación).';
+  }
+
+  function openRenovarPolizaModal(item) {
+    openPolizaModal({ edit: false, renewFrom: item });
   }
 
   function setPolizaFormDisabled(disabled) {
@@ -743,10 +857,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     polizaFrecuenciaGroup.style.opacity = disabled ? '0.7' : '1';
   }
 
+  function submitPolizaBtnIdleLabel() {
+    if (isEditModePoliza) return 'Guardar Cambios';
+    return polizaOrigenRenovacion ? 'Registrar Renovación' : 'Registrar';
+  }
+
   function closePolizaModal() {
     polizaModalOverlay.classList.remove('is-open');
     polizaForm.reset();
     currentPolizaItem = null;
+    polizaOrigenRenovacion = null;
   }
 
   openPolizaModalBtn.addEventListener('click', () => {
@@ -765,6 +885,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   anularPolizaBtn.addEventListener('click', () => {
     if (currentPolizaItem) openAnularPolizaModal(currentPolizaItem);
+  });
+  renovarPolizaBtn.addEventListener('click', () => {
+    if (!currentPolizaItem) return;
+    const item = currentPolizaItem;
+    closePolizaModal();
+    openRenovarPolizaModal(item);
+  });
+  reactivarPolizaBtn.addEventListener('click', () => {
+    if (currentPolizaItem) handleReactivarPoliza(currentPolizaItem);
   });
 
   /* =========================================================
@@ -893,7 +1022,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       if (error) {
         submitPolizaBtn.disabled = false;
-        submitPolizaBtn.textContent = isEditModePoliza ? 'Guardar Cambios' : 'Registrar';
+        submitPolizaBtn.textContent = submitPolizaBtnIdleLabel();
         const prefix = error.code === '23505' ? 'Ya existe una póliza con ese número para esta aseguradora.' : 'No se pudo guardar la póliza.';
         showFeedback('polizaFormFeedback', `${prefix} ${getErrorMessage(error)}`, 'error');
         return;
@@ -923,7 +1052,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const { error: errorFracciones } = await supabaseClient.from(TABLE_FRACCIONES).insert(fraccionesPayload);
 
       submitPolizaBtn.disabled = false;
-      submitPolizaBtn.textContent = isEditModePoliza ? 'Guardar Cambios' : 'Registrar';
+      submitPolizaBtn.textContent = submitPolizaBtnIdleLabel();
 
       if (errorFracciones) {
         showFeedback('polizaFormFeedback', `La póliza se guardó, pero hubo un error generando las fracciones: ${getErrorMessage(errorFracciones)}`, 'error');
@@ -936,7 +1065,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       setTimeout(closePolizaModal, 700);
     } catch (err) {
       submitPolizaBtn.disabled = false;
-      submitPolizaBtn.textContent = isEditModePoliza ? 'Guardar Cambios' : 'Registrar';
+      submitPolizaBtn.textContent = submitPolizaBtnIdleLabel();
       showFeedback('polizaFormFeedback', `No se pudo guardar: ${getErrorMessage(err)}`, 'error');
     }
   });
@@ -965,6 +1094,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       const status = item.status || 'Vigente';
       const statusClass = `status-pill--${statusToClass(status)}`;
       const esAnulada = status === 'Anulado';
+      const esVencida = status === 'Vencida';
+      const puedeRenovar = status === 'Vigente' || status === 'Vencida';
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td data-label="Cliente">${escapeHtml(item.cliente_nombre)}</td>
@@ -977,6 +1108,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td data-label="Acciones" class="col-actions">
           <button type="button" class="action-btn action-btn--view" data-id="${item.id}" aria-label="Ver póliza">👁️</button>
           <button type="button" class="action-btn action-btn--fracciones" data-id="${item.id}" aria-label="Ver fracciones">📋</button>
+          ${puedeRenovar ? `<button type="button" class="action-btn action-btn--renovar" data-id="${item.id}" aria-label="Renovar póliza" title="Renovar">🔁</button>` : ''}
+          ${esVencida ? `<button type="button" class="action-btn action-btn--reactivar" data-id="${item.id}" aria-label="Reactivar póliza" title="Reactivar">♻️</button>` : ''}
           ${esAnulada ? '' : `<button type="button" class="action-btn action-btn--anular" data-id="${item.id}" aria-label="Anular póliza">🚫</button>`}
           <button type="button" class="action-btn action-btn--delete" data-id="${item.id}" aria-label="Eliminar póliza">🗑️</button>
         </td>
@@ -984,6 +1117,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       polizasTableBody.appendChild(tr);
       tr.querySelector('.action-btn--view').addEventListener('click', () => openPolizaModal({ edit: true, item, readOnly: true }));
       tr.querySelector('.action-btn--fracciones').addEventListener('click', () => openVerFraccionesModal(item));
+      const renovarBtn = tr.querySelector('.action-btn--renovar');
+      if (renovarBtn) renovarBtn.addEventListener('click', () => openRenovarPolizaModal(item));
+      const reactivarBtn = tr.querySelector('.action-btn--reactivar');
+      if (reactivarBtn) reactivarBtn.addEventListener('click', () => handleReactivarPoliza(item));
       const anularBtn = tr.querySelector('.action-btn--anular');
       if (anularBtn) anularBtn.addEventListener('click', () => openAnularPolizaModal(item));
       tr.querySelector('.action-btn--delete').addEventListener('click', () => handleDeletePoliza(item));
@@ -1013,6 +1150,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       result = result.filter((p) =>
         p.cliente_nombre.toLowerCase().includes(term) || p.nro_poliza.toLowerCase().includes(term)
       );
+    }
+
+    const campoFiltro = getCampoFechaFiltroPoliza();
+    const anioSel = filtroPolizaAnio.value;
+    const mesSel = filtroPolizaMes.value;
+    if (anioSel) {
+      result = result.filter((p) => p[campoFiltro] && p[campoFiltro].slice(0, 4) === anioSel);
+    }
+    if (mesSel && mesSel !== 'Todos') {
+      result = result.filter((p) => p[campoFiltro] && String(Number(p[campoFiltro].slice(5, 7))) === mesSel);
     }
 
     result = sortItems(result, currentSortPolizas.key, currentSortPolizas.direction);
@@ -1063,6 +1210,28 @@ document.addEventListener('DOMContentLoaded', async () => {
       showNotification('polizasNotification', 'Póliza eliminada correctamente.', 'success');
     } catch (err) {
       showNotification('polizasNotification', `No se pudo eliminar: ${getErrorMessage(err)}`, 'error');
+    }
+  }
+
+  async function handleReactivarPoliza(item) {
+    const confirmed = await openConfirmDialog({
+      title: 'Reactivar póliza',
+      message: `¿Reactivar la póliza "${item.nro_poliza}"? Su estado pasará a Vigente.`,
+      acceptLabel: 'Reactivar',
+    });
+    if (!confirmed) return;
+
+    const currentUser = getCurrentUserLabel();
+    try {
+      const { error } = await supabaseClient.from(TABLE_POLIZAS)
+        .update({ status: 'Vigente', usuario_modificacion: currentUser })
+        .eq('id', item.id);
+      if (error) { showNotification('polizasNotification', `No se pudo reactivar: ${getErrorMessage(error)}`, 'error'); return; }
+      await Promise.all([loadPolizas(), loadFracciones()]);
+      showNotification('polizasNotification', 'Póliza reactivada correctamente.', 'success');
+      closePolizaModal();
+    } catch (err) {
+      showNotification('polizasNotification', `No se pudo reactivar: ${getErrorMessage(err)}`, 'error');
     }
   }
 
@@ -1580,6 +1749,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
       allPolizas = data || [];
+      poblarFiltroAniosPoliza();
       applyFilterPolizas();
     } catch (err) {
       polizasLoading.style.display = 'none';
