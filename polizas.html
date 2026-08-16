@@ -260,6 +260,100 @@
       .sidebar.is-mobile-visible { transform: translateX(0); }
       .main-wrapper { margin-left: 0 !important; }
     }
+
+    /* -----------------------------------------------------------
+       Botón "Filtros avanzados" (pestaña Pólizas)
+       ----------------------------------------------------------- */
+    .btn--filtros-avanzados {
+      background: #FFFFFF;
+      border: 1px solid var(--color-gray-border);
+      color: var(--color-navy);
+      border-radius: 8px;
+      padding: 0.65rem 1rem;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      white-space: nowrap;
+      transition: background var(--transition), border-color var(--transition);
+    }
+    .btn--filtros-avanzados:hover { background: var(--color-gray-light); border-color: var(--color-navy); }
+    .btn--filtros-avanzados.has-active-filters {
+      border-color: var(--color-navy);
+      background: #E5EAF4;
+    }
+
+    /* -----------------------------------------------------------
+       Barra lateral derecha: Filtros avanzados
+       ----------------------------------------------------------- */
+    .advanced-filters-overlay {
+      position: fixed; inset: 0; background: rgba(10, 15, 30, 0.45);
+      z-index: 199; opacity: 0; pointer-events: none;
+      transition: opacity var(--transition);
+    }
+    .advanced-filters-overlay.is-open { opacity: 1; pointer-events: auto; }
+
+    .advanced-filters-panel {
+      position: fixed; top: 0; right: 0; bottom: 0; width: 360px; max-width: 92vw;
+      background: #FFFFFF; z-index: 200;
+      display: flex; flex-direction: column;
+      transform: translateX(100%);
+      transition: transform var(--transition);
+      box-shadow: -6px 0 24px rgba(0, 0, 0, 0.18);
+    }
+    .advanced-filters-panel.is-open { transform: translateX(0); }
+
+    .advanced-filters-panel__header {
+      background: var(--color-navy); color: #FFFFFF;
+      padding: 1.1rem 1.25rem; display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .advanced-filters-panel__title {
+      font-family: 'Poppins', sans-serif; font-size: 1.05rem; font-weight: 700; margin: 0;
+    }
+    .advanced-filters-panel__close {
+      background: rgba(255,255,255,0.12); border: none; color: #FFFFFF;
+      width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
+      font-size: 1rem; display: flex; align-items: center; justify-content: center;
+      transition: background var(--transition);
+    }
+    .advanced-filters-panel__close:hover { background: rgba(255,255,255,0.25); }
+
+    .advanced-filters-panel__body {
+      flex: 1; overflow-y: auto; padding: 1.25rem;
+      display: flex; flex-direction: column; gap: 1.1rem;
+    }
+
+    .advanced-filters-panel__footer {
+      flex-shrink: 0; padding: 1rem 1.25rem; border-top: 1px solid var(--color-gray-border);
+    }
+    .btn--reset-filter-panel {
+      width: 100%; background: var(--color-navy); color: #FFFFFF; border: none;
+      border-radius: 8px; padding: 0.75rem 1rem; font-weight: 600; font-size: 0.92rem;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+      transition: filter var(--transition);
+    }
+    .btn--reset-filter-panel:hover { filter: brightness(1.15); }
+
+    /* Chips de selección múltiple (Sucursal / Ejecutivo / Asesor) */
+    .multiselect-combo__chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.4rem; }
+    .multiselect-combo__chips:empty { display: none; }
+    .ms-chip {
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      background: #E5EAF4; color: var(--color-navy); border-radius: 999px;
+      padding: 0.3rem 0.65rem; font-size: 0.8rem; font-weight: 600;
+    }
+    .ms-chip button {
+      background: none; border: none; color: var(--color-navy); cursor: pointer;
+      font-size: 0.8rem; line-height: 1; padding: 0; display: inline-flex;
+    }
+    .ms-option { display: flex; align-items: center; gap: 0.5rem; }
+    .ms-option__check { width: 16px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; color: #2C7D3C; font-weight: 700; }
+    .ms-option.is-selected { background: var(--color-gray-light); font-weight: 600; }
+    .ms-option--all { border-bottom: 1px solid var(--color-gray-border); font-style: italic; color: #5B6472; }
+    .ms-option--all.is-selected { color: var(--color-navy); font-style: normal; }
   </style>
 </head>
 <body>
@@ -293,6 +387,7 @@
           <button type="button" class="tab-btn" data-tab="fracciones">Fracciones</button>
         </nav>
 
+
         <!-- ============================================================
              PESTAÑA: PÓLIZAS
              ============================================================ -->
@@ -311,57 +406,102 @@
               <input type="text" id="searchPolizas" class="search-bar__input" placeholder="Buscar por cliente o nro. de póliza..." autocomplete="off">
               <button type="button" id="clearSearchPolizas" class="search-bar__clear" aria-label="Limpiar búsqueda">✕</button>
             </div>
+            <button type="button" id="openPolizaFiltrosBtn" class="btn btn--filtros-avanzados">
+              <span aria-hidden="true">⚙️</span> Filtros avanzados
+            </button>
             <button type="button" id="openPolizaModalBtn" class="btn btn--register">
               <span aria-hidden="true">＋</span> Registrar Póliza
             </button>
           </div>
 
-          <div class="filters-section">
-            <div class="filters-section__title">Filtros</div>
-            <div class="periodo-filter">
-              <select id="filtroPolizaTipo" class="text-input">
-                <option value="Producción">Producción</option>
-                <option value="Vencimiento">Vencimiento</option>
-              </select>
-              <select id="filtroPolizaAnio" class="text-input"></select>
-              <select id="filtroPolizaMes" class="text-input">
-                <option value="Todos">Todos</option>
-                <option value="1">Enero</option>
-                <option value="2">Febrero</option>
-                <option value="3">Marzo</option>
-                <option value="4">Abril</option>
-                <option value="5">Mayo</option>
-                <option value="6">Junio</option>
-                <option value="7">Julio</option>
-                <option value="8">Agosto</option>
-                <option value="9">Septiembre</option>
-                <option value="10">Octubre</option>
-                <option value="11">Noviembre</option>
-                <option value="12">Diciembre</option>
-              </select>
-              <button type="button" id="resetFiltroPoliza" class="btn--reset-filter">↺ Reiniciar filtros</button>
-            </div>
-            <div class="periodo-filter" style="margin-top: 0.6rem;">
-              <select id="filtroPolizaSucursal" class="text-input">
-                <option value="">Todas las sucursales</option>
-              </select>
-              <select id="filtroPolizaAsesor" class="text-input">
-                <option value="">Todos los asesores</option>
-              </select>
-              <select id="filtroPolizaEjecutivo" class="text-input">
-                <option value="">Todos los ejecutivos</option>
-              </select>
-            </div>
-          </div>
-
           <div id="polizasNotification" class="page-notification" aria-live="polite" style="display:none;"></div>
+
+          <!-- Barra lateral derecha: Filtros avanzados -->
+          <div class="advanced-filters-overlay" id="polizaFiltrosOverlay"></div>
+          <aside class="advanced-filters-panel" id="polizaFiltrosPanel" aria-hidden="true">
+            <div class="advanced-filters-panel__header">
+              <h2 class="advanced-filters-panel__title">Filtros avanzados</h2>
+              <button type="button" class="advanced-filters-panel__close" id="closePolizaFiltrosBtn" aria-label="Cerrar">✕</button>
+            </div>
+            <div class="advanced-filters-panel__body">
+              <div class="modal__field">
+                <label class="form-label" for="filtroPolizaTipo">Tipo de fecha</label>
+                <select id="filtroPolizaTipo" class="text-input">
+                  <option value="Todos">Todos</option>
+                  <option value="Producción">Producción</option>
+                  <option value="Vencimiento">Vencimiento</option>
+                </select>
+              </div>
+              <div class="modal__field">
+                <label class="form-label" for="filtroPolizaAnio">Año</label>
+                <select id="filtroPolizaAnio" class="text-input"></select>
+              </div>
+              <div class="modal__field">
+                <label class="form-label" for="filtroPolizaMes">Mes</label>
+                <select id="filtroPolizaMes" class="text-input">
+                  <option value="Todos">Todos</option>
+                  <option value="1">Enero</option>
+                  <option value="2">Febrero</option>
+                  <option value="3">Marzo</option>
+                  <option value="4">Abril</option>
+                  <option value="5">Mayo</option>
+                  <option value="6">Junio</option>
+                  <option value="7">Julio</option>
+                  <option value="8">Agosto</option>
+                  <option value="9">Septiembre</option>
+                  <option value="10">Octubre</option>
+                  <option value="11">Noviembre</option>
+                  <option value="12">Diciembre</option>
+                </select>
+              </div>
+
+              <div class="modal__field combo-search multiselect-combo" id="fieldFiltroPolizaSucursal">
+                <label class="form-label">Sucursal</label>
+                <div class="multiselect-combo__chips" id="filtroPolizaSucursalChips"></div>
+                <div class="combo-search__input-row">
+                  <input type="text" id="filtroPolizaSucursalInput" class="text-input" placeholder="Todas las sucursales" autocomplete="off">
+                </div>
+                <div class="combo-search__dropdown" id="filtroPolizaSucursalDropdown"></div>
+              </div>
+
+              <div class="modal__field combo-search multiselect-combo" id="fieldFiltroPolizaEjecutivo">
+                <label class="form-label">Ejecutivo</label>
+                <div class="multiselect-combo__chips" id="filtroPolizaEjecutivoChips"></div>
+                <div class="combo-search__input-row">
+                  <input type="text" id="filtroPolizaEjecutivoInput" class="text-input" placeholder="Todos los ejecutivos" autocomplete="off">
+                </div>
+                <div class="combo-search__dropdown" id="filtroPolizaEjecutivoDropdown"></div>
+              </div>
+
+              <div class="modal__field combo-search multiselect-combo" id="fieldFiltroPolizaAsesor">
+                <label class="form-label">Asesor</label>
+                <div class="multiselect-combo__chips" id="filtroPolizaAsesorChips"></div>
+                <div class="combo-search__input-row">
+                  <input type="text" id="filtroPolizaAsesorInput" class="text-input" placeholder="Todos los asesores" autocomplete="off">
+                </div>
+                <div class="combo-search__dropdown" id="filtroPolizaAsesorDropdown"></div>
+              </div>
+
+              <div class="modal__field combo-search multiselect-combo" id="fieldFiltroPolizaAseguradora">
+                <label class="form-label">Aseguradora</label>
+                <div class="multiselect-combo__chips" id="filtroPolizaAseguradoraChips"></div>
+                <div class="combo-search__input-row">
+                  <input type="text" id="filtroPolizaAseguradoraInput" class="text-input" placeholder="Todas las aseguradoras" autocomplete="off">
+                </div>
+                <div class="combo-search__dropdown" id="filtroPolizaAseguradoraDropdown"></div>
+              </div>
+            </div>
+            <div class="advanced-filters-panel__footer">
+              <button type="button" id="resetFiltroPoliza" class="btn--reset-filter-panel">↺ Reiniciar filtros</button>
+            </div>
+          </aside>
 
           <div class="users-table-wrapper">
             <table class="users-table" id="polizasTable">
               <thead>
                 <tr>
                   <th scope="col" class="is-sortable" data-sort-key="cliente_nombre">Cliente <span class="sort-indicator"></span></th>
-                  <th scope="col">Póliza</th>
+                  <th scope="col">Nro. Póliza</th>
                   <th scope="col">Aseguradora</th>
                   <th scope="col">Ramo</th>
                   <th scope="col">Sucursal</th>
@@ -417,11 +557,11 @@
               <select id="filtroFraccionSucursal" class="text-input">
                 <option value="">Todas las sucursales</option>
               </select>
-              <select id="filtroFraccionEjecutivo" class="text-input">
-                <option value="">Todos los ejecutivos</option>
-              </select>
               <select id="filtroFraccionAsesor" class="text-input">
                 <option value="">Todos los asesores</option>
+              </select>
+              <select id="filtroFraccionEjecutivo" class="text-input">
+                <option value="">Todos los ejecutivos</option>
               </select>
             </div>
           </div>
@@ -433,11 +573,11 @@
               <thead>
                 <tr>
                   <th scope="col" class="is-sortable" data-sort-key="cliente_nombre">Cliente <span class="sort-indicator"></span></th>
-                  <th scope="col">Póliza</th>
+                  <th scope="col">Nro. Póliza</th>
                   <th scope="col">Sucursal</th>
                   <th scope="col">Asesor</th>
                   <th scope="col">Ejecutivo</th>
-                  <th scope="col">Fracción</th>
+                  <th scope="col">N° Fracción</th>
                   <th scope="col">Inicio</th>
                   <th scope="col">Fin</th>
                   <th scope="col">Prima</th>

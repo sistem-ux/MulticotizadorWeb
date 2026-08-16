@@ -509,11 +509,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   const filtroPolizaTipo = document.getElementById('filtroPolizaTipo');
   const filtroPolizaAnio = document.getElementById('filtroPolizaAnio');
   const filtroPolizaMes = document.getElementById('filtroPolizaMes');
-  const filtroPolizaSucursal = document.getElementById('filtroPolizaSucursal');
-  const filtroPolizaAsesor = document.getElementById('filtroPolizaAsesor');
-  const filtroPolizaEjecutivo = document.getElementById('filtroPolizaEjecutivo');
   const resetFiltroPoliza = document.getElementById('resetFiltroPoliza');
   let polizaOrigenRenovacion = null;
+
+  /* ---- Panel lateral "Filtros avanzados" ---- */
+  const openPolizaFiltrosBtn = document.getElementById('openPolizaFiltrosBtn');
+  const closePolizaFiltrosBtn = document.getElementById('closePolizaFiltrosBtn');
+  const polizaFiltrosOverlay = document.getElementById('polizaFiltrosOverlay');
+  const polizaFiltrosPanel = document.getElementById('polizaFiltrosPanel');
+
+  function abrirPanelFiltrosPoliza() {
+    polizaFiltrosPanel.classList.add('is-open');
+    polizaFiltrosOverlay.classList.add('is-open');
+    polizaFiltrosPanel.setAttribute('aria-hidden', 'false');
+  }
+  function cerrarPanelFiltrosPoliza() {
+    polizaFiltrosPanel.classList.remove('is-open');
+    polizaFiltrosOverlay.classList.remove('is-open');
+    polizaFiltrosPanel.setAttribute('aria-hidden', 'true');
+  }
+  openPolizaFiltrosBtn.addEventListener('click', abrirPanelFiltrosPoliza);
+  closePolizaFiltrosBtn.addEventListener('click', cerrarPanelFiltrosPoliza);
+  polizaFiltrosOverlay.addEventListener('click', cerrarPanelFiltrosPoliza);
 
   /* ---- Combos ---- */
   const comboCliente = setupSearchableCombo({
@@ -667,19 +684,22 @@ document.addEventListener('DOMContentLoaded', async () => {
      FILTROS (Producción / Vencimiento + Año + Mes)
      ========================================================= */
   function getCampoFechaFiltroPoliza() {
-    return filtroPolizaTipo.value === 'Vencimiento' ? 'fin_vigencia' : 'inicio_vigencia';
+    if (filtroPolizaTipo.value === 'Vencimiento') return 'fin_vigencia';
+    if (filtroPolizaTipo.value === 'Todos') return null; // sin campo único: se evalúan ambas fechas
+    return 'inicio_vigencia';
   }
 
   function poblarFiltroAniosPoliza() {
     const campo = getCampoFechaFiltroPoliza();
+    const campos = campo ? [campo] : ['inicio_vigencia', 'fin_vigencia'];
     const anioActual = new Date().getFullYear();
     const anios = allPolizas
-      .map((p) => p[campo] ? Number(p[campo].slice(0, 4)) : null)
+      .flatMap((p) => campos.map((c) => (p[c] ? Number(p[c].slice(0, 4)) : null)))
       .filter((y) => Number.isInteger(y));
     const anioMin = anios.length ? Math.min(...anios, anioActual) : anioActual;
 
-    const valorPrevio = filtroPolizaAnio.value || String(anioActual);
-    filtroPolizaAnio.innerHTML = '';
+    const valorPrevio = filtroPolizaAnio.value || 'Todos';
+    filtroPolizaAnio.innerHTML = '<option value="Todos">Todos</option>';
     for (let y = anioActual; y >= anioMin; y--) {
       const opt = document.createElement('option');
       opt.value = String(y);
@@ -688,12 +708,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     filtroPolizaAnio.value = [...filtroPolizaAnio.options].some((o) => o.value === valorPrevio)
       ? valorPrevio
-      : String(anioActual);
+      : 'Todos';
   }
 
-  /* Filtros por Sucursal / Asesor / Ejecutivo: helper genérico reutilizado
-     por las pestañas de Pólizas y Fracciones. Puebla un <select> con las
-     opciones dadas, preservando el valor previamente seleccionado si sigue
+  /* Filtros por Sucursal / Asesor / Ejecutivo (pestaña Fracciones, siguen
+     siendo <select> de valor único): puebla un <select> con las opciones
+     dadas, preservando el valor previamente seleccionado si sigue
      existiendo. */
   function poblarSelectFiltro(selectEl, items, placeholderLabel, getLabel) {
     const valorPrevio = selectEl.value;
@@ -720,20 +740,203 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  function poblarFiltrosSucursalAsesorEjecutivo() {
-    poblarSelectFiltro(filtroPolizaSucursal, allSucursales, 'Todas las sucursales', (s) => s.sucursal);
-    poblarSelectFiltro(filtroPolizaAsesor, allUsuarios, 'Todos los asesores', (u) => u.full_name);
-    poblarSelectFiltro(filtroPolizaEjecutivo, getEjecutivos(), 'Todos los ejecutivos', (u) => u.full_name);
+  /* =========================================================================
+     ==================  COMBO CON BUSCADOR Y MULTI-SELECCIÓN  ==================
+     Usado por los criterios Sucursal / Ejecutivo / Asesor del panel de
+     "Filtros avanzados" de Pólizas: permite elegir varios valores (chips),
+     con buscador de texto sobre la lista de opciones disponibles.
+     ========================================================================= */
+  function setupMultiSelectCombo({ inputEl, chipsEl, dropdownEl, getItems, getId, renderLabel, onChange, allOptionLabel }) {
+    let selectedIds = [];
+
+    function renderChips() {
+      chipsEl.innerHTML = '';
+      const items = getItems();
+      selectedIds.forEach((id) => {
+        const item = items.find((it) => getId(it) === id);
+        if (!item) return;
+        const chip = document.createElement('span');
+        chip.className = 'ms-chip';
+        const label = document.createElement('span');
+        label.textContent = renderLabel(item);
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.setAttribute('aria-label', 'Quitar');
+        removeBtn.textContent = '✕';
+        removeBtn.addEventListener('click', () => {
+          selectedIds = selectedIds.filter((v) => v !== id);
+          renderChips();
+          renderDropdown(inputEl.value);
+          onChange();
+        });
+        chip.appendChild(label);
+        chip.appendChild(removeBtn);
+        chipsEl.appendChild(chip);
+      });
+    }
+
+    function renderDropdown(term) {
+      const items = getItems();
+      const termLower = (term || '').trim().toLowerCase();
+      const filtered = termLower ? items.filter((it) => renderLabel(it).toLowerCase().includes(termLower)) : items;
+
+      dropdownEl.innerHTML = '';
+      if (allOptionLabel) {
+        const allOpt = document.createElement('div');
+        allOpt.className = 'combo-search__option ms-option ms-option--all' + (selectedIds.length === 0 ? ' is-selected' : '');
+        const allCheck = document.createElement('span');
+        allCheck.className = 'ms-option__check';
+        allCheck.textContent = selectedIds.length === 0 ? '✓' : '';
+        const allLabel = document.createElement('span');
+        allLabel.textContent = allOptionLabel;
+        allOpt.appendChild(allCheck);
+        allOpt.appendChild(allLabel);
+        allOpt.addEventListener('click', () => {
+          selectedIds = [];
+          renderChips();
+          renderDropdown(inputEl.value);
+          onChange();
+        });
+        dropdownEl.appendChild(allOpt);
+      }
+      if (!filtered.length) {
+        const empty = document.createElement('div');
+        empty.className = 'combo-search__empty';
+        empty.textContent = 'Sin resultados.';
+        dropdownEl.appendChild(empty);
+      } else {
+        filtered.slice(0, 50).forEach((item) => {
+          const id = getId(item);
+          const isSel = selectedIds.includes(id);
+          const opt = document.createElement('div');
+          opt.className = 'combo-search__option ms-option' + (isSel ? ' is-selected' : '');
+          const check = document.createElement('span');
+          check.className = 'ms-option__check';
+          check.textContent = isSel ? '✓' : '';
+          const label = document.createElement('span');
+          label.textContent = renderLabel(item);
+          opt.appendChild(check);
+          opt.appendChild(label);
+          opt.addEventListener('click', () => {
+            selectedIds = isSel ? selectedIds.filter((v) => v !== id) : [...selectedIds, id];
+            renderChips();
+            renderDropdown(inputEl.value);
+            onChange();
+          });
+          dropdownEl.appendChild(opt);
+        });
+      }
+      dropdownEl.classList.add('is-open');
+    }
+
+    inputEl.addEventListener('focus', () => renderDropdown(inputEl.value));
+    inputEl.addEventListener('input', () => renderDropdown(inputEl.value));
+    document.addEventListener('click', (e) => {
+      if (!inputEl.contains(e.target) && !dropdownEl.contains(e.target) && !chipsEl.contains(e.target)) {
+        dropdownEl.classList.remove('is-open');
+      }
+    });
+
+    return {
+      getValues() { return selectedIds; },
+      reset() {
+        selectedIds = [];
+        inputEl.value = '';
+        renderChips();
+        dropdownEl.classList.remove('is-open');
+      },
+      /* Quita de la selección los ids que ya no existan en getItems() (tras
+         un cambio en cascada, p.ej. al cambiar la Sucursal seleccionada).
+         Devuelve true si hubo algún cambio. */
+      prune() {
+        const validIds = new Set(getItems().map(getId));
+        const before = selectedIds.length;
+        selectedIds = selectedIds.filter((id) => validIds.has(id));
+        renderChips();
+        return selectedIds.length !== before;
+      },
+    };
   }
 
+  /* ---- Criterios Sucursal / Ejecutivo / Asesor (panel "Filtros avanzados"
+     de Pólizas), en cascada:
+     Sucursal -> acota las opciones de Ejecutivo y Asesor a esa(s) sucursal(es).
+     Ejecutivo -> acota las opciones de Asesor a los asesores de ese(esos) ejecutivo(s). ---- */
+  const filtroPolizaSucursalInput = document.getElementById('filtroPolizaSucursalInput');
+  const filtroPolizaSucursalChips = document.getElementById('filtroPolizaSucursalChips');
+  const filtroPolizaSucursalDropdown = document.getElementById('filtroPolizaSucursalDropdown');
+
+  const filtroPolizaEjecutivoInput = document.getElementById('filtroPolizaEjecutivoInput');
+  const filtroPolizaEjecutivoChips = document.getElementById('filtroPolizaEjecutivoChips');
+  const filtroPolizaEjecutivoDropdown = document.getElementById('filtroPolizaEjecutivoDropdown');
+
+  const filtroPolizaAsesorInput = document.getElementById('filtroPolizaAsesorInput');
+  const filtroPolizaAsesorChips = document.getElementById('filtroPolizaAsesorChips');
+  const filtroPolizaAsesorDropdown = document.getElementById('filtroPolizaAsesorDropdown');
+
+  const filtroPolizaAseguradoraInput = document.getElementById('filtroPolizaAseguradoraInput');
+  const filtroPolizaAseguradoraChips = document.getElementById('filtroPolizaAseguradoraChips');
+  const filtroPolizaAseguradoraDropdown = document.getElementById('filtroPolizaAseguradoraDropdown');
+
+  const comboFiltroSucursal = setupMultiSelectCombo({
+    inputEl: filtroPolizaSucursalInput, chipsEl: filtroPolizaSucursalChips, dropdownEl: filtroPolizaSucursalDropdown,
+    getItems: () => allSucursales,
+    getId: (s) => s.id,
+    renderLabel: (s) => s.sucursal,
+    onChange: () => {
+      comboFiltroEjecutivo.prune();
+      comboFiltroAsesor.prune();
+      applyFilterPolizas();
+    },
+  });
+
+  const comboFiltroEjecutivo = setupMultiSelectCombo({
+    inputEl: filtroPolizaEjecutivoInput, chipsEl: filtroPolizaEjecutivoChips, dropdownEl: filtroPolizaEjecutivoDropdown,
+    getItems: () => {
+      const sucursalSel = comboFiltroSucursal.getValues();
+      return getEjecutivos().filter((u) => !sucursalSel.length || sucursalSel.includes(u.sucursal_id));
+    },
+    getId: (u) => u.id,
+    renderLabel: (u) => u.full_name,
+    onChange: () => {
+      comboFiltroAsesor.prune();
+      applyFilterPolizas();
+    },
+  });
+
+  const comboFiltroAsesor = setupMultiSelectCombo({
+    inputEl: filtroPolizaAsesorInput, chipsEl: filtroPolizaAsesorChips, dropdownEl: filtroPolizaAsesorDropdown,
+    getItems: () => {
+      const sucursalSel = comboFiltroSucursal.getValues();
+      const ejecutivoSel = comboFiltroEjecutivo.getValues();
+      return allUsuarios.filter((u) =>
+        (!sucursalSel.length || sucursalSel.includes(u.sucursal_id)) &&
+        (!ejecutivoSel.length || ejecutivoSel.includes(u.ejecutivo_id))
+      );
+    },
+    getId: (u) => u.id,
+    renderLabel: (u) => u.full_name,
+    onChange: () => applyFilterPolizas(),
+  });
+
+  const comboFiltroAseguradora = setupMultiSelectCombo({
+    inputEl: filtroPolizaAseguradoraInput, chipsEl: filtroPolizaAseguradoraChips, dropdownEl: filtroPolizaAseguradoraDropdown,
+    getItems: () => allAseguradoras,
+    getId: (a) => a.id,
+    renderLabel: (a) => a.nombre,
+    allOptionLabel: 'Todas las aseguradoras',
+    onChange: () => applyFilterPolizas(),
+  });
+
   function resetearFiltroPoliza() {
-    filtroPolizaTipo.value = 'Producción';
+    filtroPolizaTipo.value = 'Todos';
     poblarFiltroAniosPoliza();
-    filtroPolizaAnio.value = String(new Date().getFullYear());
+    filtroPolizaAnio.value = 'Todos';
     filtroPolizaMes.value = 'Todos';
-    filtroPolizaSucursal.value = '';
-    filtroPolizaAsesor.value = '';
-    filtroPolizaEjecutivo.value = '';
+    comboFiltroSucursal.reset();
+    comboFiltroEjecutivo.reset();
+    comboFiltroAsesor.reset();
+    comboFiltroAseguradora.reset();
     applyFilterPolizas();
   }
 
@@ -743,9 +946,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   filtroPolizaAnio.addEventListener('change', applyFilterPolizas);
   filtroPolizaMes.addEventListener('change', applyFilterPolizas);
-  filtroPolizaSucursal.addEventListener('change', applyFilterPolizas);
-  filtroPolizaAsesor.addEventListener('change', applyFilterPolizas);
-  filtroPolizaEjecutivo.addEventListener('change', applyFilterPolizas);
   resetFiltroPoliza.addEventListener('click', resetearFiltroPoliza);
 
   /* =========================================================
@@ -1241,28 +1441,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const campoFiltro = getCampoFechaFiltroPoliza();
+    const camposFecha = campoFiltro ? [campoFiltro] : ['inicio_vigencia', 'fin_vigencia'];
     const anioSel = filtroPolizaAnio.value;
     const mesSel = filtroPolizaMes.value;
-    if (anioSel) {
-      result = result.filter((p) => p[campoFiltro] && p[campoFiltro].slice(0, 4) === anioSel);
+    if (anioSel && anioSel !== 'Todos') {
+      result = result.filter((p) => camposFecha.some((c) => p[c] && p[c].slice(0, 4) === anioSel));
     }
     if (mesSel && mesSel !== 'Todos') {
-      result = result.filter((p) => p[campoFiltro] && String(Number(p[campoFiltro].slice(5, 7))) === mesSel);
+      result = result.filter((p) => camposFecha.some((c) => p[c] && String(Number(p[c].slice(5, 7))) === mesSel));
     }
 
-    const sucursalSel = filtroPolizaSucursal.value;
-    if (sucursalSel) result = result.filter((p) => p.sucursal_id === sucursalSel);
+    const sucursalSel = comboFiltroSucursal.getValues();
+    if (sucursalSel.length) result = result.filter((p) => sucursalSel.includes(p.sucursal_id));
 
-    const asesorSel = filtroPolizaAsesor.value;
-    if (asesorSel) result = result.filter((p) => p.asesor_id === asesorSel);
+    const asesorSel = comboFiltroAsesor.getValues();
+    if (asesorSel.length) result = result.filter((p) => asesorSel.includes(p.asesor_id));
 
-    const ejecutivoSel = filtroPolizaEjecutivo.value;
-    if (ejecutivoSel) {
+    const ejecutivoSel = comboFiltroEjecutivo.getValues();
+    if (ejecutivoSel.length) {
       result = result.filter((p) => {
         const asesor = allUsuarios.find((u) => u.id === p.asesor_id);
-        return asesor && asesor.ejecutivo_id === ejecutivoSel;
+        return asesor && ejecutivoSel.includes(asesor.ejecutivo_id);
       });
     }
+
+    const aseguradoraSel = comboFiltroAseguradora.getValues();
+    if (aseguradoraSel.length) result = result.filter((p) => aseguradoraSel.includes(p.aseguradora_id));
 
     result = sortItems(result, currentSortPolizas.key, currentSortPolizas.direction);
     renderPolizas(result);
@@ -1894,7 +2098,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       allPolizas = data || [];
       poblarFiltroAniosPoliza();
-      poblarFiltrosSucursalAsesorEjecutivo();
       applyFilterPolizas();
     } catch (err) {
       polizasLoading.style.display = 'none';
