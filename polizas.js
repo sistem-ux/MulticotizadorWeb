@@ -697,10 +697,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       .flatMap((p) => campos.map((c) => (p[c] ? Number(p[c].slice(0, 4)) : null)))
       .filter((y) => Number.isInteger(y));
     const anioMin = anios.length ? Math.min(...anios, anioActual) : anioActual;
+    const anioMax = anios.length ? Math.max(...anios, anioActual) : anioActual;
 
     const valorPrevio = filtroPolizaAnio.value || 'Todos';
     filtroPolizaAnio.innerHTML = '<option value="Todos">Todos</option>';
-    for (let y = anioActual; y >= anioMin; y--) {
+    for (let y = anioMax; y >= anioMin; y--) {
       const opt = document.createElement('option');
       opt.value = String(y);
       opt.textContent = String(y);
@@ -711,28 +712,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       : 'Todos';
   }
 
-  /* Filtros por Sucursal / Asesor / Ejecutivo (pestaña Fracciones, siguen
-     siendo <select> de valor único): puebla un <select> con las opciones
-     dadas, preservando el valor previamente seleccionado si sigue
-     existiendo. */
-  function poblarSelectFiltro(selectEl, items, placeholderLabel, getLabel) {
-    const valorPrevio = selectEl.value;
-    selectEl.innerHTML = `<option value="">${placeholderLabel}</option>`;
-    items.forEach((item) => {
-      const opt = document.createElement('option');
-      opt.value = item.id;
-      opt.textContent = getLabel(item);
-      selectEl.appendChild(opt);
-    });
-    if ([...selectEl.options].some((o) => o.value === valorPrevio)) {
-      selectEl.value = valorPrevio;
-    }
-  }
-
-  // "Ejecutivo" = usuarios con perfil Colaborador, Administrador Nacional o
-  // Administrador Sucursal (misma convención de esPerfilAdministrador /
-  // esPerfilColaborador usada en usuarios.js, basada en el campo legacy
-  // "perfil").
+  /* "Ejecutivo" = usuarios con perfil Colaborador, Administrador Nacional o
+     Administrador Sucursal (misma convención de esPerfilAdministrador /
+     esPerfilColaborador usada en usuarios.js, basada en el campo legacy
+     "perfil"). */
   function getEjecutivos() {
     return allUsuarios.filter((u) => {
       const perfilNombre = (u.perfil || '').trim().toLowerCase();
@@ -1630,45 +1613,60 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentSortFracciones = { key: 'cliente_nombre', direction: 'asc' };
   const sortableHeadersFracciones = document.querySelectorAll('#fraccionesTable th.is-sortable');
 
+  const filtroFraccionStatus = document.getElementById('filtroFraccionStatus');
   const filtroFraccionAnio = document.getElementById('filtroFraccionAnio');
   const filtroFraccionMes = document.getElementById('filtroFraccionMes');
-  const filtroFraccionSucursal = document.getElementById('filtroFraccionSucursal');
-  const filtroFraccionAsesor = document.getElementById('filtroFraccionAsesor');
-  const filtroFraccionEjecutivo = document.getElementById('filtroFraccionEjecutivo');
   const resetFiltroFraccion = document.getElementById('resetFiltroFraccion');
+
+  /* ---- Panel lateral "Filtros avanzados" (Fracciones) ---- */
+  const openFraccionFiltrosBtn = document.getElementById('openFraccionFiltrosBtn');
+  const closeFraccionFiltrosBtn = document.getElementById('closeFraccionFiltrosBtn');
+  const fraccionFiltrosOverlay = document.getElementById('fraccionFiltrosOverlay');
+  const fraccionFiltrosPanel = document.getElementById('fraccionFiltrosPanel');
+
+  function abrirPanelFiltrosFraccion() {
+    fraccionFiltrosPanel.classList.add('is-open');
+    fraccionFiltrosOverlay.classList.add('is-open');
+    fraccionFiltrosPanel.setAttribute('aria-hidden', 'false');
+  }
+  function cerrarPanelFiltrosFraccion() {
+    fraccionFiltrosPanel.classList.remove('is-open');
+    fraccionFiltrosOverlay.classList.remove('is-open');
+    fraccionFiltrosPanel.setAttribute('aria-hidden', 'true');
+  }
+  openFraccionFiltrosBtn.addEventListener('click', abrirPanelFiltrosFraccion);
+  closeFraccionFiltrosBtn.addEventListener('click', cerrarPanelFiltrosFraccion);
+  fraccionFiltrosOverlay.addEventListener('click', cerrarPanelFiltrosFraccion);
 
   function fraccionConNombres(f) {
     const cliente = allClientes.find((c) => c.id === f.cliente_id);
     const asesor = allUsuarios.find((u) => u.id === f.asesor_id);
     const sucursal = allSucursales.find((s) => s.id === f.sucursal_id);
     const ejecutivo = asesor ? allUsuarios.find((u) => u.id === asesor.ejecutivo_id) : null;
+    const poliza = allPolizas.find((p) => p.id === f.poliza_id);
     return {
       ...f,
       cliente_nombre: cliente?.nombre_cliente || '—',
       asesor_nombre: asesor?.full_name || '—',
       sucursal_nombre: sucursal?.sucursal || '—',
       ejecutivo_nombre: ejecutivo?.full_name || '—',
+      aseguradora_id: poliza?.aseguradora_id || null,
     };
   }
 
-  function poblarFiltrosFraccionSucursalAsesorEjecutivo() {
-    poblarSelectFiltro(filtroFraccionSucursal, allSucursales, 'Todas las sucursales', (s) => s.sucursal);
-    poblarSelectFiltro(filtroFraccionAsesor, allUsuarios, 'Todos los asesores', (u) => u.full_name);
-    poblarSelectFiltro(filtroFraccionEjecutivo, getEjecutivos(), 'Todos los ejecutivos', (u) => u.full_name);
-  }
-
   /* ---- Filtro Año / Mes: el año se alimenta desde la fracción más antigua
-     (por fecha_inicio) hasta el año actual ---- */
+     (por fecha_inicio) hasta el año actual. Incluye opción "Todos". ---- */
   function poblarFiltroAnios() {
     const anioActual = new Date().getFullYear();
     const anios = allFracciones
       .map((f) => f.fecha_inicio ? Number(f.fecha_inicio.slice(0, 4)) : null)
       .filter((y) => Number.isInteger(y));
     const anioMin = anios.length ? Math.min(...anios, anioActual) : anioActual;
+    const anioMax = anios.length ? Math.max(...anios, anioActual) : anioActual;
 
-    const valorPrevio = filtroFraccionAnio.value || String(anioActual);
-    filtroFraccionAnio.innerHTML = '';
-    for (let y = anioActual; y >= anioMin; y--) {
+    const valorPrevio = filtroFraccionAnio.value || 'Todos';
+    filtroFraccionAnio.innerHTML = '<option value="Todos">Todos</option>';
+    for (let y = anioMax; y >= anioMin; y--) {
       const opt = document.createElement('option');
       opt.value = String(y);
       opt.textContent = String(y);
@@ -1676,23 +1674,93 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     filtroFraccionAnio.value = [...filtroFraccionAnio.options].some((o) => o.value === valorPrevio)
       ? valorPrevio
-      : String(anioActual);
+      : 'Todos';
   }
 
+  /* ---- Criterios Sucursal / Ejecutivo / Asesor / Aseguradora (panel
+     "Filtros avanzados" de Fracciones), en cascada:
+     Sucursal -> acota las opciones de Ejecutivo y Asesor a esa(s) sucursal(es).
+     Ejecutivo -> acota las opciones de Asesor a los asesores de ese(esos) ejecutivo(s). ---- */
+  const filtroFraccionSucursalInput = document.getElementById('filtroFraccionSucursalInput');
+  const filtroFraccionSucursalChips = document.getElementById('filtroFraccionSucursalChips');
+  const filtroFraccionSucursalDropdown = document.getElementById('filtroFraccionSucursalDropdown');
+
+  const filtroFraccionEjecutivoInput = document.getElementById('filtroFraccionEjecutivoInput');
+  const filtroFraccionEjecutivoChips = document.getElementById('filtroFraccionEjecutivoChips');
+  const filtroFraccionEjecutivoDropdown = document.getElementById('filtroFraccionEjecutivoDropdown');
+
+  const filtroFraccionAsesorInput = document.getElementById('filtroFraccionAsesorInput');
+  const filtroFraccionAsesorChips = document.getElementById('filtroFraccionAsesorChips');
+  const filtroFraccionAsesorDropdown = document.getElementById('filtroFraccionAsesorDropdown');
+
+  const filtroFraccionAseguradoraInput = document.getElementById('filtroFraccionAseguradoraInput');
+  const filtroFraccionAseguradoraChips = document.getElementById('filtroFraccionAseguradoraChips');
+  const filtroFraccionAseguradoraDropdown = document.getElementById('filtroFraccionAseguradoraDropdown');
+
+  const comboFiltroFraccionSucursal = setupMultiSelectCombo({
+    inputEl: filtroFraccionSucursalInput, chipsEl: filtroFraccionSucursalChips, dropdownEl: filtroFraccionSucursalDropdown,
+    getItems: () => allSucursales,
+    getId: (s) => s.id,
+    renderLabel: (s) => s.sucursal,
+    onChange: () => {
+      comboFiltroFraccionEjecutivo.prune();
+      comboFiltroFraccionAsesor.prune();
+      applyFilterFracciones();
+    },
+  });
+
+  const comboFiltroFraccionEjecutivo = setupMultiSelectCombo({
+    inputEl: filtroFraccionEjecutivoInput, chipsEl: filtroFraccionEjecutivoChips, dropdownEl: filtroFraccionEjecutivoDropdown,
+    getItems: () => {
+      const sucursalSel = comboFiltroFraccionSucursal.getValues();
+      return getEjecutivos().filter((u) => !sucursalSel.length || sucursalSel.includes(u.sucursal_id));
+    },
+    getId: (u) => u.id,
+    renderLabel: (u) => u.full_name,
+    onChange: () => {
+      comboFiltroFraccionAsesor.prune();
+      applyFilterFracciones();
+    },
+  });
+
+  const comboFiltroFraccionAsesor = setupMultiSelectCombo({
+    inputEl: filtroFraccionAsesorInput, chipsEl: filtroFraccionAsesorChips, dropdownEl: filtroFraccionAsesorDropdown,
+    getItems: () => {
+      const sucursalSel = comboFiltroFraccionSucursal.getValues();
+      const ejecutivoSel = comboFiltroFraccionEjecutivo.getValues();
+      return allUsuarios.filter((u) =>
+        (!sucursalSel.length || sucursalSel.includes(u.sucursal_id)) &&
+        (!ejecutivoSel.length || ejecutivoSel.includes(u.ejecutivo_id))
+      );
+    },
+    getId: (u) => u.id,
+    renderLabel: (u) => u.full_name,
+    onChange: () => applyFilterFracciones(),
+  });
+
+  const comboFiltroFraccionAseguradora = setupMultiSelectCombo({
+    inputEl: filtroFraccionAseguradoraInput, chipsEl: filtroFraccionAseguradoraChips, dropdownEl: filtroFraccionAseguradoraDropdown,
+    getItems: () => allAseguradoras,
+    getId: (a) => a.id,
+    renderLabel: (a) => a.nombre,
+    allOptionLabel: 'Todas las aseguradoras',
+    onChange: () => applyFilterFracciones(),
+  });
+
   function resetearFiltroFraccion() {
+    filtroFraccionStatus.value = 'Todos';
     poblarFiltroAnios();
-    filtroFraccionAnio.value = String(new Date().getFullYear());
+    filtroFraccionAnio.value = 'Todos';
     filtroFraccionMes.value = 'Todos';
-    filtroFraccionSucursal.value = '';
-    filtroFraccionAsesor.value = '';
-    filtroFraccionEjecutivo.value = '';
+    comboFiltroFraccionSucursal.reset();
+    comboFiltroFraccionEjecutivo.reset();
+    comboFiltroFraccionAsesor.reset();
+    comboFiltroFraccionAseguradora.reset();
     applyFilterFracciones();
   }
+  filtroFraccionStatus.addEventListener('change', applyFilterFracciones);
   filtroFraccionAnio.addEventListener('change', applyFilterFracciones);
   filtroFraccionMes.addEventListener('change', applyFilterFracciones);
-  filtroFraccionSucursal.addEventListener('change', applyFilterFracciones);
-  filtroFraccionAsesor.addEventListener('change', applyFilterFracciones);
-  filtroFraccionEjecutivo.addEventListener('change', applyFilterFracciones);
   resetFiltroFraccion.addEventListener('click', resetearFiltroFraccion);
 
   function renderFracciones(items) {
@@ -1746,28 +1814,36 @@ document.addEventListener('DOMContentLoaded', async () => {
       result = result.filter((f) => f.cliente_nombre.toLowerCase().includes(term) || f.nro_poliza.toLowerCase().includes(term));
     }
 
+    const statusSel = filtroFraccionStatus.value;
+    if (statusSel && statusSel !== 'Todos') {
+      result = result.filter((f) => (f.status || 'Por Cobrar') === statusSel);
+    }
+
     const anioSel = filtroFraccionAnio.value;
     const mesSel = filtroFraccionMes.value;
-    if (anioSel) {
+    if (anioSel && anioSel !== 'Todos') {
       result = result.filter((f) => f.fecha_inicio && f.fecha_inicio.slice(0, 4) === anioSel);
     }
     if (mesSel && mesSel !== 'Todos') {
       result = result.filter((f) => f.fecha_inicio && String(Number(f.fecha_inicio.slice(5, 7))) === mesSel);
     }
 
-    const sucursalSel = filtroFraccionSucursal.value;
-    if (sucursalSel) result = result.filter((f) => f.sucursal_id === sucursalSel);
+    const sucursalSel = comboFiltroFraccionSucursal.getValues();
+    if (sucursalSel.length) result = result.filter((f) => sucursalSel.includes(f.sucursal_id));
 
-    const asesorSel = filtroFraccionAsesor.value;
-    if (asesorSel) result = result.filter((f) => f.asesor_id === asesorSel);
+    const asesorSel = comboFiltroFraccionAsesor.getValues();
+    if (asesorSel.length) result = result.filter((f) => asesorSel.includes(f.asesor_id));
 
-    const ejecutivoSel = filtroFraccionEjecutivo.value;
-    if (ejecutivoSel) {
+    const ejecutivoSel = comboFiltroFraccionEjecutivo.getValues();
+    if (ejecutivoSel.length) {
       result = result.filter((f) => {
         const asesor = allUsuarios.find((u) => u.id === f.asesor_id);
-        return asesor && asesor.ejecutivo_id === ejecutivoSel;
+        return asesor && ejecutivoSel.includes(asesor.ejecutivo_id);
       });
     }
+
+    const aseguradoraSel = comboFiltroFraccionAseguradora.getValues();
+    if (aseguradoraSel.length) result = result.filter((f) => aseguradoraSel.includes(f.aseguradora_id));
 
     result = sortItems(result, currentSortFracciones.key, currentSortFracciones.direction);
     renderFracciones(result);
@@ -2127,7 +2203,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       allFracciones = data || [];
       poblarFiltroAnios();
-      poblarFiltrosFraccionSucursalAsesorEjecutivo();
       applyFilterFracciones();
     } catch (err) {
       fraccionesLoading.style.display = 'none';

@@ -530,43 +530,93 @@
               <input type="text" id="searchFracciones" class="search-bar__input" placeholder="Buscar por cliente o nro. de póliza..." autocomplete="off">
               <button type="button" id="clearSearchFracciones" class="search-bar__clear" aria-label="Limpiar búsqueda">✕</button>
             </div>
-          </div>
-
-          <div class="filters-section">
-            <div class="filters-section__title">Filtros</div>
-            <div class="periodo-filter">
-              <select id="filtroFraccionAnio" class="text-input"></select>
-              <select id="filtroFraccionMes" class="text-input">
-                <option value="Todos">Todos</option>
-                <option value="1">Enero</option>
-                <option value="2">Febrero</option>
-                <option value="3">Marzo</option>
-                <option value="4">Abril</option>
-                <option value="5">Mayo</option>
-                <option value="6">Junio</option>
-                <option value="7">Julio</option>
-                <option value="8">Agosto</option>
-                <option value="9">Septiembre</option>
-                <option value="10">Octubre</option>
-                <option value="11">Noviembre</option>
-                <option value="12">Diciembre</option>
-              </select>
-              <button type="button" id="resetFiltroFraccion" class="btn--reset-filter">↺ Reiniciar filtros</button>
-            </div>
-            <div class="periodo-filter" style="margin-top: 0.6rem;">
-              <select id="filtroFraccionSucursal" class="text-input">
-                <option value="">Todas las sucursales</option>
-              </select>
-              <select id="filtroFraccionAsesor" class="text-input">
-                <option value="">Todos los asesores</option>
-              </select>
-              <select id="filtroFraccionEjecutivo" class="text-input">
-                <option value="">Todos los ejecutivos</option>
-              </select>
-            </div>
+            <button type="button" id="openFraccionFiltrosBtn" class="btn btn--filtros-avanzados">
+              <span aria-hidden="true">⚙️</span> Filtros avanzados
+            </button>
           </div>
 
           <div id="fraccionesNotification" class="page-notification" aria-live="polite" style="display:none;"></div>
+
+          <!-- Barra lateral derecha: Filtros avanzados -->
+          <div class="advanced-filters-overlay" id="fraccionFiltrosOverlay"></div>
+          <aside class="advanced-filters-panel" id="fraccionFiltrosPanel" aria-hidden="true">
+            <div class="advanced-filters-panel__header">
+              <h2 class="advanced-filters-panel__title">Filtros avanzados</h2>
+              <button type="button" class="advanced-filters-panel__close" id="closeFraccionFiltrosBtn" aria-label="Cerrar">✕</button>
+            </div>
+            <div class="advanced-filters-panel__body">
+              <div class="modal__field">
+                <label class="form-label" for="filtroFraccionStatus">Status</label>
+                <select id="filtroFraccionStatus" class="text-input">
+                  <option value="Todos">Todos los estatus</option>
+                  <option value="Por Cobrar">Por Cobrar</option>
+                  <option value="Cobrado">Cobrado</option>
+                  <option value="Anulado">Anulado</option>
+                </select>
+              </div>
+              <div class="modal__field">
+                <label class="form-label" for="filtroFraccionAnio">Año</label>
+                <select id="filtroFraccionAnio" class="text-input"></select>
+              </div>
+              <div class="modal__field">
+                <label class="form-label" for="filtroFraccionMes">Mes</label>
+                <select id="filtroFraccionMes" class="text-input">
+                  <option value="Todos">Todos</option>
+                  <option value="1">Enero</option>
+                  <option value="2">Febrero</option>
+                  <option value="3">Marzo</option>
+                  <option value="4">Abril</option>
+                  <option value="5">Mayo</option>
+                  <option value="6">Junio</option>
+                  <option value="7">Julio</option>
+                  <option value="8">Agosto</option>
+                  <option value="9">Septiembre</option>
+                  <option value="10">Octubre</option>
+                  <option value="11">Noviembre</option>
+                  <option value="12">Diciembre</option>
+                </select>
+              </div>
+
+              <div class="modal__field combo-search multiselect-combo" id="fieldFiltroFraccionSucursal">
+                <label class="form-label">Sucursal</label>
+                <div class="multiselect-combo__chips" id="filtroFraccionSucursalChips"></div>
+                <div class="combo-search__input-row">
+                  <input type="text" id="filtroFraccionSucursalInput" class="text-input" placeholder="Todas las sucursales" autocomplete="off">
+                </div>
+                <div class="combo-search__dropdown" id="filtroFraccionSucursalDropdown"></div>
+              </div>
+
+              <div class="modal__field combo-search multiselect-combo" id="fieldFiltroFraccionEjecutivo">
+                <label class="form-label">Ejecutivo</label>
+                <div class="multiselect-combo__chips" id="filtroFraccionEjecutivoChips"></div>
+                <div class="combo-search__input-row">
+                  <input type="text" id="filtroFraccionEjecutivoInput" class="text-input" placeholder="Todos los ejecutivos" autocomplete="off">
+                </div>
+                <div class="combo-search__dropdown" id="filtroFraccionEjecutivoDropdown"></div>
+              </div>
+
+              <div class="modal__field combo-search multiselect-combo" id="fieldFiltroFraccionAsesor">
+                <label class="form-label">Asesor</label>
+                <div class="multiselect-combo__chips" id="filtroFraccionAsesorChips"></div>
+                <div class="combo-search__input-row">
+                  <input type="text" id="filtroFraccionAsesorInput" class="text-input" placeholder="Todos los asesores" autocomplete="off">
+                </div>
+                <div class="combo-search__dropdown" id="filtroFraccionAsesorDropdown"></div>
+              </div>
+
+              <div class="modal__field combo-search multiselect-combo" id="fieldFiltroFraccionAseguradora">
+                <label class="form-label">Aseguradora</label>
+                <div class="multiselect-combo__chips" id="filtroFraccionAseguradoraChips"></div>
+                <div class="combo-search__input-row">
+                  <input type="text" id="filtroFraccionAseguradoraInput" class="text-input" placeholder="Todas las aseguradoras" autocomplete="off">
+                </div>
+                <div class="combo-search__dropdown" id="filtroFraccionAseguradoraDropdown"></div>
+              </div>
+            </div>
+            <div class="advanced-filters-panel__footer">
+              <button type="button" id="resetFiltroFraccion" class="btn--reset-filter-panel">↺ Reiniciar filtros</button>
+            </div>
+          </aside>
 
           <div class="users-table-wrapper">
             <table class="users-table" id="fraccionesTable">
