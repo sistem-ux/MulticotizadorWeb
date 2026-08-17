@@ -106,10 +106,34 @@ function getCotizacionStatus(item) {
   return diasTranscurridosDesde(item.fecha_creacion) >= 8 ? 'Vencida' : 'Vigente';
 }
 
+// Interpreta una fecha de nacimiento guardada en grupo_familiar, que puede
+// venir en formato ISO ("AAAA-MM-DD") o "DD/MM/AAAA" (igual que en el
+// cotizador — ver parseDateValue en script.js). new Date() por sí solo no
+// entiende "DD/MM/AAAA" y devuelve Invalid Date, por eso hacía falta este
+// parser explícito.
+function parseFechaNacimiento(value) {
+  if (!value) return null;
+  const trimmed = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const [year, month, day] = trimmed.split('-').map(Number);
+    const parsed = new Date(year, month - 1, day);
+    if (parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day) {
+      return parsed;
+    }
+  }
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(trimmed)) {
+    const [day, month, year] = trimmed.split('/').map(Number);
+    const parsed = new Date(year, month - 1, day);
+    if (parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
 function getNumericAgeFromDate(dateStr) {
-  if (!dateStr) return -1;
-  const bd = new Date(dateStr);
-  if (Number.isNaN(bd.getTime())) return -1;
+  const bd = parseFechaNacimiento(dateStr);
+  if (!bd) return -1;
   const today = new Date();
   let age = today.getFullYear() - bd.getFullYear();
   const m = today.getMonth() - bd.getMonth();
