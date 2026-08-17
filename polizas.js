@@ -1772,7 +1772,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     items.forEach((item) => {
       const status = item.status || 'Por Cobrar';
       const statusClass = `status-pill--${statusToClass(status)}`;
-      const puedeCobrar = status === 'Por Cobrar';
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td data-label="Cliente">${escapeHtml(item.cliente_nombre)}</td>
@@ -1785,13 +1784,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td data-label="Fin">${formatDateEs(item.fecha_fin)}</td>
         <td data-label="Prima">${formatMoney(item.prima)}</td>
         <td data-label="Status"><span class="status-pill ${statusClass}">${escapeHtml(status)}</span></td>
-        <td data-label="Acciones" class="col-actions">
-          ${puedeCobrar ? `<button type="button" class="action-btn action-btn--cobrar" data-id="${item.id}" aria-label="Cobrar fracción" title="Cobrar">💰</button>` : ''}
-        </td>
       `;
+      // Toda la fila es clicable: abre el modal "Detalle de Fracción",
+      // donde vive ahora la acción de Cobrar.
+      tr.addEventListener('click', () => openDetalleFraccionModal(item));
       fraccionesTableBody.appendChild(tr);
-      const cobrarBtn = tr.querySelector('.action-btn--cobrar');
-      if (cobrarBtn) cobrarBtn.addEventListener('click', () => openCobrarModal(item));
     });
   }
 
@@ -1918,6 +1915,78 @@ document.addEventListener('DOMContentLoaded', async () => {
   verFraccionesModalOverlay.addEventListener('click', (e) => { if (e.target === verFraccionesModalOverlay) closeVerFraccionesModal(); });
 
   /* =========================================================
+     DETALLE DE FRACCIÓN (modal abierto al hacer click en una fila
+     de la tabla de la pestaña Fracciones). Aquí vive la acción "Cobrar".
+     ========================================================= */
+  const detalleFraccionModalOverlay = document.getElementById('detalleFraccionModalOverlay');
+  const detalleFraccionModalCloseBtn = document.getElementById('detalleFraccionModalCloseBtn');
+  const detalleFraccionCancelBtn = document.getElementById('detalleFraccionCancelBtn');
+  const detalleFraccionCliente = document.getElementById('detalleFraccionCliente');
+  const detalleFraccionNroPoliza = document.getElementById('detalleFraccionNroPoliza');
+  const detalleFraccionSucursal = document.getElementById('detalleFraccionSucursal');
+  const detalleFraccionAsesor = document.getElementById('detalleFraccionAsesor');
+  const detalleFraccionEjecutivo = document.getElementById('detalleFraccionEjecutivo');
+  const detalleFraccionNumero = document.getElementById('detalleFraccionNumero');
+  const detalleFraccionInicio = document.getElementById('detalleFraccionInicio');
+  const detalleFraccionFin = document.getElementById('detalleFraccionFin');
+  const detalleFraccionPrima = document.getElementById('detalleFraccionPrima');
+  const detalleFraccionStatus = document.getElementById('detalleFraccionStatus');
+  const detalleFraccionCobroBox = document.getElementById('detalleFraccionCobroBox');
+  const detalleFraccionCobroInfo = document.getElementById('detalleFraccionCobroInfo');
+  const detalleFraccionAccionesTitle = document.getElementById('detalleFraccionAccionesTitle');
+  const detalleFraccionAccionesBox = document.getElementById('detalleFraccionAccionesBox');
+  const detalleFraccionCobrarBtn = document.getElementById('detalleFraccionCobrarBtn');
+  let fraccionEnDetalle = null;
+
+  function renderDetalleFraccion() {
+    if (!fraccionEnDetalle) return;
+    const f = fraccionEnDetalle;
+    const status = f.status || 'Por Cobrar';
+    const statusClass = `status-pill--${statusToClass(status)}`;
+    const puedeCobrar = status === 'Por Cobrar';
+    const estaCobrada = status === 'Cobrado';
+
+    detalleFraccionCliente.textContent = f.cliente_nombre || '—';
+    detalleFraccionNroPoliza.textContent = f.nro_poliza || '—';
+    detalleFraccionSucursal.textContent = f.sucursal_nombre || '—';
+    detalleFraccionAsesor.textContent = f.asesor_nombre || '—';
+    detalleFraccionEjecutivo.textContent = f.ejecutivo_nombre || '—';
+    detalleFraccionNumero.textContent = f.numero_fraccion;
+    detalleFraccionInicio.textContent = formatDateEs(f.fecha_inicio);
+    detalleFraccionFin.textContent = formatDateEs(f.fecha_fin);
+    detalleFraccionPrima.textContent = formatMoney(f.prima);
+    detalleFraccionStatus.innerHTML = `<span class="status-pill ${statusClass}">${escapeHtml(status)}</span>`;
+
+    if (estaCobrada) {
+      detalleFraccionCobroInfo.innerHTML = `
+        Fecha de Cobro: <strong>${formatDateEs(f.fecha_cobro)}</strong> &nbsp;·&nbsp;
+        Nro. de Recibo: <strong>${escapeHtml(f.numero_recibo || '—')}</strong> &nbsp;·&nbsp;
+        Moneda de Pago: <strong>${escapeHtml(f.moneda_pago || '—')}</strong>
+      `;
+      detalleFraccionCobroBox.style.display = '';
+    } else {
+      detalleFraccionCobroBox.style.display = 'none';
+    }
+
+    detalleFraccionAccionesTitle.style.display = puedeCobrar ? '' : 'none';
+    detalleFraccionAccionesBox.style.display = puedeCobrar ? '' : 'none';
+  }
+
+  function openDetalleFraccionModal(item) {
+    fraccionEnDetalle = item;
+    renderDetalleFraccion();
+    detalleFraccionModalOverlay.classList.add('is-open');
+  }
+  function closeDetalleFraccionModal() {
+    detalleFraccionModalOverlay.classList.remove('is-open');
+    fraccionEnDetalle = null;
+  }
+  detalleFraccionModalCloseBtn.addEventListener('click', closeDetalleFraccionModal);
+  detalleFraccionCancelBtn.addEventListener('click', closeDetalleFraccionModal);
+  detalleFraccionModalOverlay.addEventListener('click', (e) => { if (e.target === detalleFraccionModalOverlay) closeDetalleFraccionModal(); });
+  detalleFraccionCobrarBtn.addEventListener('click', () => { if (fraccionEnDetalle) openCobrarModal(fraccionEnDetalle); });
+
+  /* =========================================================
      COBRAR FRACCIÓN
      ========================================================= */
   const cobrarModalOverlay = document.getElementById('cobrarModalOverlay');
@@ -2031,6 +2100,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       await Promise.all([loadFracciones(), loadPolizas()]);
       if (polizaEnVerFracciones) renderVerFraccionesList();
+      if (fraccionEnDetalle && fraccionEnDetalle.id === fraccionACobrar.id) {
+        const actualizada = allFracciones.find((f) => f.id === fraccionACobrar.id);
+        fraccionEnDetalle = actualizada ? fraccionConNombres(actualizada) : fraccionEnDetalle;
+        renderDetalleFraccion();
+      }
       showNotification('fraccionesNotification', `Fracción #${fraccionACobrar.numero_fraccion} cobrada correctamente.`, 'success');
       closeCobrarModal();
     } catch (err) {
@@ -2165,6 +2239,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (confirmOverlay.style.display === 'flex') { closeConfirmDialog(); return; }
     if (clienteModalOverlay.classList.contains('is-open')) { closeClienteModalEmbebido(); return; }
     if (cobrarModalOverlay.classList.contains('is-open')) { closeCobrarModal(); return; }
+    if (detalleFraccionModalOverlay.classList.contains('is-open')) { closeDetalleFraccionModal(); return; }
     if (verFraccionesModalOverlay.classList.contains('is-open')) { closeVerFraccionesModal(); return; }
     if (anularPolizaModalOverlay.classList.contains('is-open')) { closeAnularPolizaModal(); return; }
     if (polizaModalOverlay.classList.contains('is-open')) closePolizaModal();
