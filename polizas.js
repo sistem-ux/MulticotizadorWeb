@@ -1876,12 +1876,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       const status = f.status || 'Por Cobrar';
       const statusClass = `status-pill--${statusToClass(status)}`;
       const puedeCobrar = status === 'Por Cobrar';
+      const estaCobrada = status === 'Cobrado';
+      const datosCobroHtml = estaCobrada
+        ? `<br><span class="fraccion-list__cobro">
+             Fecha de Cobro: <strong>${formatDateEs(f.fecha_cobro)}</strong> &nbsp;·&nbsp;
+             Nro. de Recibo: <strong>${escapeHtml(f.numero_recibo || '—')}</strong> &nbsp;·&nbsp;
+             Moneda de Pago: <strong>${escapeHtml(f.moneda_pago || '—')}</strong>
+           </span>`
+        : '';
       const row = document.createElement('div');
       row.className = 'fraccion-list__item';
       row.innerHTML = `
         <div class="fraccion-list__info">
           <strong>Fracción #${f.numero_fraccion}</strong> — ${formatDateEs(f.fecha_inicio)} a ${formatDateEs(f.fecha_fin)}<br>
           Prima: ${formatMoney(f.prima)} &nbsp;·&nbsp; <span class="status-pill ${statusClass}">${escapeHtml(status)}</span>
+          ${datosCobroHtml}
         </div>
         <div class="fraccion-list__actions">
           ${puedeCobrar ? `<button type="button" class="btn btn--secondary btn--sm action-btn--cobrar-detalle">💰 Cobrar</button>` : ''}
@@ -1915,22 +1924,31 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cancelCobrarBtn = document.getElementById('cancelCobrarBtn');
   const cobrarForm = document.getElementById('cobrarForm');
   const cobrarFecha = document.getElementById('cobrarFecha');
+  const cobrarFechaIngreso = document.getElementById('cobrarFechaIngreso');
+  const cobrarNumeroRecibo = document.getElementById('cobrarNumeroRecibo');
   const cobrarMoneda = document.getElementById('cobrarMoneda');
   const cobrarPrima = document.getElementById('cobrarPrima');
-  const cobrarFechaIngreso = document.getElementById('cobrarFechaIngreso');
   const submitCobrarBtn = document.getElementById('submitCobrarBtn');
   const fieldCobrarFecha = document.getElementById('fieldCobrarFecha');
+  const fieldCobrarFechaIngreso = document.getElementById('fieldCobrarFechaIngreso');
+  const fieldCobrarNumeroRecibo = document.getElementById('fieldCobrarNumeroRecibo');
+  const cobrarNumeroReciboError = document.getElementById('cobrarNumeroReciboError');
   const fieldCobrarMoneda = document.getElementById('fieldCobrarMoneda');
   const fieldCobrarPrima = document.getElementById('fieldCobrarPrima');
-  const fieldCobrarFechaIngreso = document.getElementById('fieldCobrarFechaIngreso');
   attachMoneyFormatter(cobrarPrima);
   let fraccionACobrar = null;
+
+  // Número de recibo: solo dígitos y "-" (se limpia cualquier otro carácter al escribir/pegar).
+  cobrarNumeroRecibo.addEventListener('input', () => {
+    const limpio = cobrarNumeroRecibo.value.replace(/[^0-9-]/g, '');
+    if (limpio !== cobrarNumeroRecibo.value) cobrarNumeroRecibo.value = limpio;
+  });
 
   function openCobrarModal(fraccion) {
     fraccionACobrar = fraccion;
     cobrarForm.reset();
     clearFeedback('cobrarFormFeedback');
-    [fieldCobrarFecha, fieldCobrarMoneda, fieldCobrarPrima, fieldCobrarFechaIngreso].forEach((f) => setFieldError(f, false));
+    [fieldCobrarFecha, fieldCobrarFechaIngreso, fieldCobrarNumeroRecibo, fieldCobrarMoneda, fieldCobrarPrima].forEach((f) => setFieldError(f, false));
     cobrarPrima.value = formatMoneyInputLive(String(fraccion.prima ?? '').replace('.', ','));
     cobrarModalOverlay.classList.add('is-open');
   }
@@ -1950,12 +1968,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     let valid = true;
     const fechaOk = !!cobrarFecha.value;
     setFieldError(fieldCobrarFecha, !fechaOk); if (!fechaOk) valid = false;
+    const fechaIngresoOk = !!cobrarFechaIngreso.value;
+    setFieldError(fieldCobrarFechaIngreso, !fechaIngresoOk); if (!fechaIngresoOk) valid = false;
+
+    const numeroRecibo = cobrarNumeroRecibo.value.trim();
+    const numeroReciboFormatoOk = numeroRecibo === '' || /^[0-9-]+$/.test(numeroRecibo);
+    let numeroReciboOk = numeroReciboFormatoOk;
+    if (!numeroReciboFormatoOk) {
+      cobrarNumeroReciboError.textContent = 'Solo se permiten números y el carácter "-".';
+    } else if (numeroRecibo !== '') {
+      // Único dentro de la misma aseguradora: se busca la aseguradora de la
+      // póliza de esta fracción y se compara contra las demás fracciones de
+      // pólizas de esa misma aseguradora.
+      const polizaActual = allPolizas.find((p) => p.id === fraccionACobrar.poliza_id);
+      const aseguradoraId = polizaActual?.aseguradora_id || null;
+      const yaExiste = allFracciones.some((f) => {
+        if (f.id === fraccionACobrar.id) return false;
+        if (!f.numero_recibo || f.numero_recibo.trim() !== numeroRecibo) return false;
+        const polizaF = allPolizas.find((p) => p.id === f.poliza_id);
+        return (polizaF?.aseguradora_id || null) === aseguradoraId;
+      });
+      if (yaExiste) {
+        numeroReciboOk = false;
+        cobrarNumeroReciboError.textContent = 'Ese número de recibo ya está registrado para esta aseguradora.';
+      }
+    }
+    setFieldError(fieldCobrarNumeroRecibo, !numeroReciboOk); if (!numeroReciboOk) valid = false;
+
     const monedaOk = !!cobrarMoneda.value;
     setFieldError(fieldCobrarMoneda, !monedaOk); if (!monedaOk) valid = false;
     const primaOk = parseMoneyInput(cobrarPrima.value) > 0;
     setFieldError(fieldCobrarPrima, !primaOk); if (!primaOk) valid = false;
-    const fechaIngresoOk = !!cobrarFechaIngreso.value;
-    setFieldError(fieldCobrarFechaIngreso, !fechaIngresoOk); if (!fechaIngresoOk) valid = false;
     if (!valid) {
       showFeedback('cobrarFormFeedback', 'Revisa los campos marcados antes de continuar.', 'error');
       return;
@@ -1968,9 +2011,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const payload = {
       status: 'Cobrado',
       fecha_cobro: cobrarFecha.value,
+      fecha_ingreso_aseguradora: cobrarFechaIngreso.value,
+      numero_recibo: numeroRecibo || null,
       moneda_pago: cobrarMoneda.value,
       prima: parseMoneyInput(cobrarPrima.value),
-      fecha_ingreso_aseguradora: cobrarFechaIngreso.value,
       usuario_modificacion: currentUser,
     };
 
