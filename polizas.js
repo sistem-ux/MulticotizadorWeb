@@ -1115,6 +1115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     polizaAseguradoraInput.disabled = true;
     polizaTipoPoliza.disabled = true;
     polizaNroPoliza.disabled = true;
+    polizaRamoInput.disabled = true;
 
     polizaSucursalHint.textContent = 'Se mantiene la sucursal de la póliza original (renovación).';
   }
