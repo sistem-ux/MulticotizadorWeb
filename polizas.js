@@ -256,14 +256,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, duration);
   }
 
-  function openConfirmDialog({ title, message, acceptLabel = 'Eliminar' }) {
+  function openConfirmDialog({ title, message, messageHtml, acceptLabel = 'Eliminar' }) {
     const confirmOverlay = document.getElementById('confirmOverlay');
     const confirmTitle = document.getElementById('confirmTitle');
     const confirmMessage = document.getElementById('confirmMessage');
     const confirmAcceptBtn = document.getElementById('confirmAcceptBtn');
     if (!confirmOverlay) return Promise.resolve(false);
     confirmTitle.textContent = title;
-    confirmMessage.textContent = message;
+    if (messageHtml) { confirmMessage.innerHTML = messageHtml; } else { confirmMessage.textContent = message; }
     confirmAcceptBtn.textContent = acceptLabel;
     confirmOverlay.style.display = 'flex';
     confirmAcceptBtn.focus();
@@ -2073,6 +2073,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       showFeedback('cobrarFormFeedback', 'Revisa los campos marcados antes de continuar.', 'error');
       return;
     }
+
+    const montoConfirm = formatMoney(parseMoneyInput(cobrarPrima.value));
+    const confirmado = await openConfirmDialog({
+      title: 'Confirmar cobro',
+      messageHtml: `¿Confirmas el cobro de la Fracción #${fraccionACobrar.numero_fraccion} por <strong>${montoConfirm}</strong>?`,
+      acceptLabel: 'Aceptar',
+    });
+    if (!confirmado) return;
 
     submitCobrarBtn.disabled = true;
     submitCobrarBtn.textContent = 'Registrando...';
