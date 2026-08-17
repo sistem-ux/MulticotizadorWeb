@@ -192,26 +192,20 @@
     .status-pill--emision { background: #dff6e8; color: #235F2F; }
     .status-pill--continuidad { background: #E4EAF7; color: var(--color-navy); }
 
-    /* Los botones de Acciones (ver / eliminar) siempre en línea, uno al lado
-       del otro, sin importar cómo stylesusers.css maneje la celda por
-       defecto (incluida la vista de tarjeta en móvil). */
-    .users-table th.col-actions,
-    .users-table td.col-actions {
-      width: 1%;
-      white-space: nowrap;
-      padding-right: 1.25rem;
+    /* Filas de la tabla de cotizaciones: clicables en su totalidad para
+       abrir el modal "Detalle de Cotización" (ya no hay columna de
+       Acciones), con sombreado azul claro al pasar el cursor. */
+    #cotizacionesTableBody tr {
+      cursor: pointer;
+      transition: background-color 0.15s ease;
     }
-    .users-table td.col-actions {
-      display: flex;
-      flex-wrap: nowrap;
-      align-items: center;
-      justify-content: flex-start;
-      gap: 0.5rem;
+    #cotizacionesTableBody tr:hover {
+      background-color: #E5EFFC;
     }
-    .users-table td.col-actions .action-btn {
-      flex-shrink: 0;
-      margin: 0;
-    }
+
+    /* Columna de estado (Vigente / Vencida) */
+    .status-pill--vigente { background: #dff6e8; color: #235F2F; }
+    .status-pill--vencida { background: #FBE1E1; color: #9C2A2A; }
 
     /* ---------------------------------------------------------------
        Filtro por tipo de tarifa (select adicional a la barra de búsqueda)
@@ -224,7 +218,45 @@
     /* ---------------------------------------------------------------
        MODAL DE DETALLE (solo lectura): resumen de la cotización guardada
        --------------------------------------------------------------- */
-    .modal--wide { max-width: 760px; width: 94%; }
+    .modal--wide {
+      max-width: 760px;
+      width: 94%;
+      max-height: 88vh;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    /* Encabezado y pie del modal siempre visibles mientras el contenido
+       central (Datos Generales / Grupo Familiar / Planes / Control) hace
+       scroll dentro del propio modal. */
+    #cotizacionModalOverlay .modal__header {
+      position: sticky;
+      top: 0;
+      background: #FFFFFF;
+      z-index: 5;
+    }
+    #cotizacionModalOverlay .modal__footer {
+      position: sticky;
+      bottom: 0;
+      background: #FFFFFF;
+      z-index: 5;
+      border-top: 1px solid var(--color-gray-border);
+      padding-top: 0.75rem;
+      margin-top: 1.25rem;
+    }
+    #cotizacionModalOverlay .modal__footer .btn:disabled,
+    #cotizacionModalOverlay .modal__footer a.is-disabled-link {
+      opacity: 0.5;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+    .btn--warning {
+      background: #E8890C;
+      color: #FFFFFF;
+      border: none;
+    }
+    .btn--warning:hover { background: #C9750A; }
 
     .detail-section {
       border-top: 1px solid var(--color-gray-border);
@@ -417,7 +449,7 @@
                   <th scope="col">Asesor</th>
                   <th scope="col">Tarifa</th>
                   <th scope="col">Vencimiento</th>
-                  <th scope="col" class="col-actions">Acciones</th>
+                  <th scope="col">Status</th>
                 </tr>
               </thead>
               <tbody id="cotizacionesTableBody"></tbody>
@@ -477,6 +509,7 @@
         <span id="cotizacionExportFeedback" style="margin-right:auto; align-self:center; font-size: 13px;"></span>
         <button type="button" class="btn btn--cancel" id="closeCotizacionModalBtn">Cerrar</button>
         <button type="button" class="btn btn--secondary" id="editarPlanesBtn">✏️ Editar planes</button>
+        <button type="button" class="btn btn--warning" id="actualizarCotizacionBtn" style="display:none;">🔄 Actualizar cotización</button>
         <button type="button" class="btn btn--register" id="exportarPdfBtn">📄 Exportar PDF</button>
       </div>
     </div>

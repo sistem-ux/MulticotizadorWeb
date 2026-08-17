@@ -88,6 +88,24 @@ function buildGrupoFamiliarText(integrantes) {
     .join(', ');
 }
 
+// Días transcurridos (por calendario, sin horas) entre la fecha de creación
+// de la cotización y hoy.
+function diasTranscurridosDesde(isoValue) {
+  if (!isoValue) return 0;
+  const creado = new Date(isoValue);
+  if (Number.isNaN(creado.getTime())) return 0;
+  const hoy = new Date();
+  const creadoDia = new Date(creado.getFullYear(), creado.getMonth(), creado.getDate());
+  const hoyDia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  return Math.round((hoyDia - creadoDia) / 86400000);
+}
+
+// Vigente: dentro de los 7 días desde la creación. Vencida: al cumplirse
+// el día 8 en adelante.
+function getCotizacionStatus(item) {
+  return diasTranscurridosDesde(item.fecha_creacion) >= 8 ? 'Vencida' : 'Vigente';
+}
+
 function getNumericAgeFromDate(dateStr) {
   if (!dateStr) return -1;
   const bd = new Date(dateStr);
@@ -177,6 +195,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cotizacionDetallePlanesBody = document.getElementById('cotizacionDetallePlanesBody');
   const cotizacionDetalleControl = document.getElementById('cotizacionDetalleControl');
   const editarPlanesBtn = document.getElementById('editarPlanesBtn');
+  const actualizarCotizacionBtn = document.getElementById('actualizarCotizacionBtn');
   const exportarPdfBtn = document.getElementById('exportarPdfBtn');
   const cotizacionExportFeedback = document.getElementById('cotizacionExportFeedback');
   const exportPrintTemplate = document.getElementById('exportPrintTemplate');
@@ -309,6 +328,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.location.href = `cotizador.html?editar=${encodeURIComponent(currentOpenItem.id)}`;
   });
 
+  // Cotización vencida: se redirige al cotizador en modo "actualizar" para
+  // que recalcule los montos con las tarifas vigentes y regrabe (incluida
+  // fecha_creacion) al guardar.
+  actualizarCotizacionBtn.addEventListener('click', () => {
+    if (!currentOpenItem) return;
+    window.location.href = `cotizador.html?actualizar=${encodeURIComponent(currentOpenItem.id)}`;
+  });
+
   exportarPdfBtn.addEventListener('click', async () => {
     if (!currentOpenItem) return;
     exportarPdfBtn.disabled = true;
@@ -355,13 +382,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     cotizacionExportFeedback.textContent = '';
     cotizacionExportFeedback.style.color = '';
     const tarifaClass = item.tipo_tarifa === 'Continuidad' ? 'status-pill--continuidad' : 'status-pill--emision';
+    const status = getCotizacionStatus(item);
+    const isVencida = status === 'Vencida';
+    const statusClass = isVencida ? 'status-pill--vencida' : 'status-pill--vigente';
 
     cotizacionDetalleGenerales.innerHTML = [
       detailItem('Solicitante', escapeHtml(item.nombre_solicitante || '—')),
       detailItem('Elaborado por', escapeHtml(item.elaborado_por || '—')),
       detailItem('Tarifa', `<span class="status-pill ${tarifaClass}">${escapeHtml(item.tipo_tarifa || '—')}</span>`),
       detailItem('Vencimiento', formatDateEs(item.vencimiento)),
+      detailItem('Status', `<span class="status-pill ${statusClass}">${status}</span>`),
     ].join('');
+
+    // Vencida: se deshabilita "Exportar PDF" y el enlace del PDF guardado;
+    // aparece "Actualizar cotización" en su lugar.
+    exportarPdfBtn.disabled = isVencida;
+    actualizarCotizacionBtn.style.display = isVencida ? 'inline-flex' : 'none';
 
     cotizacionDetalleGrupoFamiliar.textContent = buildGrupoFamiliarText(item.grupo_familiar);
 
@@ -390,9 +426,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       detailItem('Fecha de creación', formatDateTimeEs(item.fecha_creacion)),
       detailItem('Modificado por', escapeHtml(item.usuario_modificador_nombre || '—')),
       detailItem('Última modificación', formatDateTimeEs(item.fecha_modificacion)),
-      detailItem('PDF guardado', item.pdf_url
-        ? `<a href="${escapeHtml(item.pdf_url)}" target="_blank" rel="noopener">Ver documento</a>`
-        : 'Aún no se ha exportado'),
+      detailItem('PDF guardado', isVencida
+        ? '<span style="color:#9C2A2A;">Cotización vencida — actualízala para generar un nuevo PDF</span>'
+        : (item.pdf_url
+          ? `<a href="${escapeHtml(item.pdf_url)}" target="_blank" rel="noopener">Ver documento</a>`
+          : 'Aún no se ha exportado')),
     ].join('');
 
     cotizacionModalOverlay.classList.add('is-open');
@@ -419,7 +457,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     items.forEach((item) => {
       const tr = document.createElement('tr');
       const tarifaClass = item.tipo_tarifa === 'Continuidad' ? 'status-pill--continuidad' : 'status-pill--emision';
-      const cantidadPlanes = Array.isArray(item.planes) ? item.planes.length : 0;
+      const status = getCotizacionStatus(item);
+      const statusClass = status === 'Vencida' ? 'status-pill--vencida' : 'status-pill--vigente';
 
       tr.innerHTML = `
         <td data-label="Fecha">${formatDateEs(item.fecha_creacion)}</td>
@@ -427,15 +466,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td data-label="Asesor">${escapeHtml(item.elaborado_por || '—')}</td>
         <td data-label="Tarifa"><span class="status-pill ${tarifaClass}">${escapeHtml(item.tipo_tarifa)}</span></td>
         <td data-label="Vencimiento">${formatDateEs(item.vencimiento)}</td>
-        <td data-label="Acciones" class="col-actions">
-          <button type="button" class="action-btn action-btn--view" data-id="${item.id}" aria-label="Ver cotización">👁️</button>
-          <button type="button" class="action-btn action-btn--delete" data-id="${item.id}" aria-label="Eliminar cotización">🗑️</button>
-        </td>
+        <td data-label="Status"><span class="status-pill ${statusClass}">${status}</span></td>
       `;
+      tr.addEventListener('click', () => openCotizacionModal(item));
       cotizacionesTableBody.appendChild(tr);
-
-      tr.querySelector('.action-btn--view').addEventListener('click', () => openCotizacionModal(item));
-      tr.querySelector('.action-btn--delete').addEventListener('click', () => handleDeleteCotizacion(item.id));
     });
   }
 

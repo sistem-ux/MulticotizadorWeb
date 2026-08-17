@@ -122,6 +122,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   let cotizacionGuardadaId = null; // ID de la cotización ya guardada en Supabase para esta comparación (habilita "Exportar a PDF")
   let familyFormHasRelativeAgeError = false; // true si Madre/Padre/Hijos incumplen el rango mínimo de 10 años vs. el Titular
   let origenEdicionId = null; // ID de la cotización original cuando se llega vía "Editar planes" (?editar=ID) desde cotizaciones.html
+  let modoActualizacion = false; // true cuando se llega vía "Actualizar cotización" (?actualizar=ID) desde una cotización Vencida
+  let actualizacionId = null; // ID de la cotización vencida que se está actualizando (se sobrescribe en lugar de crear una nueva)
 
   // Se inicializa temprano para que esté listo cuando el usuario presione "Mostrar planes"
   await initSupabase();
@@ -1677,7 +1679,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const nombreUsuario = session.fullName || session.email || (session.role === 'Visitante' ? 'Visitante' : '—');
 
-    return {
+    const payload = {
       nombre_solicitante: applicantNameInput.value.trim(),
       elaborado_por: elaboradoPorActual || getElaboradoPorValue(),
       tipo_tarifa: tarifaTipoActual || 'Emisión',
@@ -1690,6 +1692,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       usuario_modificador_nombre: nombreUsuario,
       cotizacion_origen_id: origenEdicionId || null,
     };
+
+    // Modo "Actualizar cotización" (venía Vencida, ?actualizar=ID): se
+    // recalculan los montos con las tarifas vigentes y se renueva la
+    // vigencia de la cotización, sobrescribiendo el mismo registro en
+    // lugar de crear uno nuevo (ver finalizeQuoteBtn más abajo).
+    if (modoActualizacion) {
+      payload.fecha_creacion = new Date().toISOString();
+      payload.cotizacion_origen_id = null;
+      payload.pdf_url = null; // el PDF guardado corresponde a las tarifas anteriores
+    }
+
+    return payload;
   }
 
   // Igual que computeVencimiento() pero en formato ISO (AAAA-MM-DD), que es
@@ -1722,7 +1736,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     comparisonSaveFeedback.textContent = '';
 
     const payload = buildCotizacionPayload();
-    const { data, error } = await supabaseClient.from(TABLE_COTIZACIONES).insert(payload).select('id').single();
+    const { data, error } = modoActualizacion
+      ? await supabaseClient.from(TABLE_COTIZACIONES).update(payload).eq('id', actualizacionId).select('id').single()
+      : await supabaseClient.from(TABLE_COTIZACIONES).insert(payload).select('id').single();
 
     if (error) {
       finalizeQuoteBtn.disabled = false;
@@ -1739,7 +1755,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     newQuoteBtn.style.display = '';
     closeQuoteBtn.style.display = (getSession().role === 'Visitante') ? 'none' : '';
     comparisonSaveFeedback.style.color = '#2E7D32';
-    comparisonSaveFeedback.textContent = 'Cotización guardada correctamente.';
+    comparisonSaveFeedback.textContent = modoActualizacion
+      ? 'Cotización actualizada correctamente con las tarifas vigentes.'
+      : 'Cotización guardada correctamente.';
   });
 
   viewComparisonBtn.addEventListener('click', () => {
@@ -1891,12 +1909,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   /* =========================================================
-     MODO EDICIÓN DE PLANES (llegada vía cotizador.html?editar=ID
-     desde el botón "✏️ Editar planes" en cotizaciones.html).
-     Solo permite volver a elegir planes: el solicitante, "Elaborado
-     por", tarifa y grupo familiar quedan bloqueados con los datos de
-     la cotización original. Al finalizar se crea una cotización NUEVA
-     (cotizacion_origen_id apunta a la original, que se conserva intacta).
+     MODO EDICIÓN / ACTUALIZACIÓN DE PLANES
+     - "Editar planes" (?editar=ID, desde cotizaciones.html): solo permite
+       volver a elegir planes; solicitante, "Elaborado por", tarifa y grupo
+       familiar quedan bloqueados con los datos de la cotización original.
+       Al finalizar se crea una cotización NUEVA (cotizacion_origen_id
+       apunta a la original, que se conserva intacta).
+     - "Actualizar cotización" (?actualizar=ID, desde una cotización
+       Vencida en cotizaciones.html): mismo formulario bloqueado, pero al
+       finalizar se SOBRESCRIBE la misma cotización (mismo id) con los
+       planes recalculados según las tarifas vigentes, renovando
+       fecha_creacion y vencimiento (ver buildCotizacionPayload/finalizeQuoteBtn).
      ========================================================= */
 
   // Reconstruye las filas del grupo familiar a partir del arreglo guardado
@@ -1944,25 +1967,33 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function initEditMode() {
     const params = new URLSearchParams(window.location.search);
     const editarId = params.get('editar');
-    if (!editarId) return;
+    const actualizarId = params.get('actualizar');
+    if (!editarId && !actualizarId) return;
+
+    modoActualizacion = !!actualizarId;
+    const targetId = editarId || actualizarId;
 
     if (!supabaseClient) {
-      window.alert('No se pudo conectar con Supabase para cargar la cotización a editar.');
+      window.alert('No se pudo conectar con Supabase para cargar la cotización.');
       return;
     }
 
     const { data: original, error } = await supabaseClient
       .from(TABLE_COTIZACIONES)
       .select('*')
-      .eq('id', editarId)
+      .eq('id', targetId)
       .single();
 
     if (error || !original) {
-      window.alert(`No se pudo cargar la cotización a editar: ${error ? getErrorMessage(error) : 'no encontrada'}`);
+      window.alert(`No se pudo cargar la cotización: ${error ? getErrorMessage(error) : 'no encontrada'}`);
       return;
     }
 
-    origenEdicionId = original.id;
+    if (modoActualizacion) {
+      actualizacionId = original.id;
+    } else {
+      origenEdicionId = original.id;
+    }
 
     // Solicitante y tarifa: se muestran fijos, no editables.
     applicantNameInput.value = original.nombre_solicitante || '';
@@ -1993,7 +2024,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const banner = document.getElementById('editModeBanner');
     if (banner) {
       banner.style.display = 'block';
-      banner.innerHTML = `✏️ Editando planes de la cotización de <strong>${escapeHtmlLocal(original.nombre_solicitante || '')}</strong>. El solicitante, "Elaborado por", la tarifa y el grupo familiar no se pueden modificar aquí. Al finalizar se creará una <strong>cotización nueva</strong>; la original se conserva.`;
+      banner.innerHTML = modoActualizacion
+        ? `🔄 Actualizando la cotización <strong>vencida</strong> de <strong>${escapeHtmlLocal(original.nombre_solicitante || '')}</strong>. Los planes se recalculan con las tarifas vigentes; el solicitante, "Elaborado por", la tarifa y el grupo familiar no se pueden modificar aquí. Al finalizar se <strong>sobrescribe esta misma cotización</strong>, renovando su fecha de creación y vencimiento.`
+        : `✏️ Editando planes de la cotización de <strong>${escapeHtmlLocal(original.nombre_solicitante || '')}</strong>. El solicitante, "Elaborado por", la tarifa y el grupo familiar no se pueden modificar aquí. Al finalizar se creará una <strong>cotización nueva</strong>; la original se conserva.`;
     }
 
     // Dispara el mismo flujo de "Mostrar planes" ya validado.
