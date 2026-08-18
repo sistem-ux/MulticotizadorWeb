@@ -1553,7 +1553,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       },
       { section: 'Total Estimado a Pagar Anual · No incluye IGTF' },
       ...(hayAdvertenciasCobertura ? [{
-        label: '⚠ Aviso de Cobertura',
+        label: '⚠ Aviso',
         warningCheck: (p) => (cotizaciones.get(p.id).sinCobertura || []).length > 0,
         get: (p) => {
           const advertencias = cotizaciones.get(p.id).sinCobertura || [];
