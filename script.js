@@ -106,7 +106,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const finalizeQuoteBtn = document.getElementById('finalizeQuoteBtn');
   const comparisonSaveFeedback = document.getElementById('comparisonSaveFeedback');
 
-  const MAX_PLANES_COMPARACION = 5;
+  const MAX_PLANES_COMPARACION = 3;
 
   let childCount = 0;
   let currentSelectedPlanId = null; // Para saber a qué plan le estamos agregando adicionales
@@ -1544,7 +1544,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       { label: 'Producto', get: (p) => p.producto_nombre || '—', rowClass: 'row-shaded' },
       { label: 'Suma Asegurada', get: (p) => `$${formatCurrencyThousands(p.suma_asegurada)}`, cellClass: 'comparison-suma-asegurada' },
       {
-        label: 'Coberturas Opcionales', rowClass: 'row-shaded', cellClass: 'comparison-detalle-adicionales', get: (p) => {
+        label: 'Opcionales', rowClass: 'row-shaded', cellClass: 'comparison-detalle-adicionales', get: (p) => {
           const seleccionados = coberturasSeleccionadasPorPlan[p.id] || [];
           return seleccionados.length > 0
             ? seleccionados.map((s) => s.porServicio ? s.nombre : `${s.nombre} `).join(', ')
@@ -1562,8 +1562,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             : 'Sin novedades';
         },
       }] : []),
-      { label: 'Total Cobertura Básica', get: (p) => `$${formatMoney(cotizaciones.get(p.id).basica)}` },
-      { label: 'Total Cob. Adicionales', get: (p) => `$${formatMoney(cotizaciones.get(p.id).adicionales)}`, rowClass: 'row-shaded' },
+      { label: 'Total Básica', get: (p) => `$${formatMoney(cotizaciones.get(p.id).basica)}` },
+      { label: 'Total Opcionales', get: (p) => `$${formatMoney(cotizaciones.get(p.id).adicionales)}`, rowClass: 'row-shaded' },
 
       { label: 'Maternidad', get: (p) => `$${formatMoney(cotizaciones.get(p.id).maternidad)}` },
       {
