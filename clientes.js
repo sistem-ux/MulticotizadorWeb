@@ -78,16 +78,23 @@ function toTitleCaseLive(value) {
 }
 
 function attachTitleCaseFormatter(inputEl) {
-  inputEl.addEventListener('input', () => {
+  function reformat() {
     const start = inputEl.selectionStart;
     const end = inputEl.selectionEnd;
     const original = inputEl.value;
     const formatted = toTitleCaseLive(original);
     if (formatted !== original) {
       inputEl.value = formatted;
-      inputEl.setSelectionRange(start, end);
+      if (start !== null && end !== null) {
+        inputEl.setSelectionRange(start, end);
+      }
     }
-  });
+  }
+  inputEl.addEventListener('input', reformat);
+  // En pegado (Ctrl+V o menú contextual), algunos navegadores disparan
+  // 'input' antes de que el valor pegado esté completamente asentado en
+  // el campo, por lo que reformateamos de nuevo en el siguiente tick.
+  inputEl.addEventListener('paste', () => setTimeout(reformat, 0));
 }
 
 /* =============================================================
