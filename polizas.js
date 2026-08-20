@@ -1031,7 +1031,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       aplicarBloqueoFrecuencia();
 
       // Modo Ver siempre por defecto; "Editar" lo reactiva
-      setPolizaFormDisabled(true);
+      setPolizaFormDisabled(readOnly);
       editPolizaBtn.style.display = readOnly && item.status !== 'Anulado' ? 'inline-flex' : 'none';
       submitPolizaBtn.style.display = readOnly ? 'none' : 'inline-flex';
       submitPolizaBtn.textContent = 'Guardar Cambios';
