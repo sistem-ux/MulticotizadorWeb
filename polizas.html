@@ -781,7 +781,7 @@
         </div>
 
         <div class="modal__field" id="fieldPolizaPrima">
-          <label for="polizaPrima" class="form-label">Prima</label>
+          <label for="polizaPrima" class="form-label">Prima de cada Recibo</label>
           <div class="input-currency"><span class="input-currency__prefix">$</span><input type="text" inputmode="decimal" id="polizaPrima" class="text-input"></div>
           <span class="field-error">Ingresa la prima de la póliza.</span>
         </div>
@@ -796,6 +796,7 @@
             <label class="freq-option" data-value="Bimestral"><input type="checkbox" data-value="Bimestral"> Bimestral (6)</label>
             <label class="freq-option" data-value="Mensual"><input type="checkbox" data-value="Mensual"> Mensual</label>
           </div>
+          <span class="form-hint" id="polizaFrecuenciaBloqueadaHint" style="display:none; color:#B45309;">No se puede modificar la frecuencia de pago: ya existen fracciones cobradas para esta póliza.</span>
           <span class="field-error">Selecciona una frecuencia de pago.</span>
         </div>
 
