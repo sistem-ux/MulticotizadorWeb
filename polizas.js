@@ -34,9 +34,10 @@ async function initSupabase() {
 
   NOTA DE DISEÑO (fracciones): se generan en el front (no con triggers de
   base de datos) al registrar la póliza, siguiendo la tabla de frecuencias
-  documentada en 23_schema_polizas_fracciones.sql. La prima de CADA fracción
-  es igual a la prima total de la póliza (no se divide entre la cantidad de
-  fracciones). Las fechas de inicio de cada fracción se calculan sumando meses a la fecha
+  documentada en 23_schema_polizas_fracciones.sql. La prima se reparte en
+  partes iguales redondeadas a 2 decimales, y la última fracción absorbe la
+  diferencia de redondeo para que la suma cuadre exacto con la prima total.
+  Las fechas de inicio de cada fracción se calculan sumando meses a la fecha
   de inicio de vigencia, respetando el día del mes y ajustando al último día
   del mes destino cuando ese día no existe (ej. 31 de enero + 1 mes = 28/29
   de febrero).
@@ -156,6 +157,8 @@ function generarFracciones({ inicioVigencia, finVigencia, prima, frecuencia, men
   if (!config) return [];
 
   const { fracciones: cantidad, intervaloMeses } = config;
+  const primaBase = Math.round((prima / cantidad) * 100) / 100;
+  const primaUltima = Math.round((prima - primaBase * (cantidad - 1)) * 100) / 100;
 
   const resultado = [];
   for (let i = 0; i < cantidad; i++) {
@@ -169,7 +172,7 @@ function generarFracciones({ inicioVigencia, finVigencia, prima, frecuencia, men
       numero_fraccion: i + 1,
       fecha_inicio: fechaInicio,
       fecha_fin: fechaFin,
-      prima,
+      prima: esUltima ? primaUltima : primaBase,
     });
   }
   return resultado;
@@ -467,6 +470,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const polizaPrima = document.getElementById('polizaPrima');
 
   const polizaFrecuenciaGroup = document.getElementById('polizaFrecuenciaGroup');
+  const polizaFrecuenciaBloqueadaHint = document.getElementById('polizaFrecuenciaBloqueadaHint');
   const fieldPolizaMensualFracciones = document.getElementById('fieldPolizaMensualFracciones');
   const polizaMensualFracciones = document.getElementById('polizaMensualFracciones');
   const polizaFraccionesPreview = document.getElementById('polizaFraccionesPreview');
@@ -508,6 +512,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const filtroPolizaMes = document.getElementById('filtroPolizaMes');
   const resetFiltroPoliza = document.getElementById('resetFiltroPoliza');
   let polizaOrigenRenovacion = null;
+  // true cuando la póliza en edición tiene al menos una fracción "Cobrado":
+  // en ese caso no se permite modificar la frecuencia de pago (ni, por lo
+  // tanto, regenerar las fracciones al guardar).
+  let frecuenciaBloqueadaPorCobro = false;
+  let frecuenciaOriginalPoliza = '';
 
   /* ---- Panel lateral "Filtros avanzados" ---- */
   const openPolizaFiltrosBtn = document.getElementById('openPolizaFiltrosBtn');
@@ -955,20 +964,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       .forEach((f) => setFieldError(f, false));
   }
 
-  /* Prima Total / Prima Devengada: se calculan en el front (no se persisten
-     en la BD, solo son de lectura y únicamente se muestran en el detalle de
-     la póliza). Como cada fracción guarda la prima total de la póliza (no
-     dividida), la Prima Total es la prima de la póliza tal cual, y la Prima
-     Devengada se prorratea según la cantidad de fracciones ya cobradas
-     respecto al total de fracciones. */
-  function refrescarPrimaResumen(polizaId, primaPoliza) {
+  /* Prima Total / Prima Devengada: se calculan en el front a partir de las
+     fracciones asociadas (no se persisten en la BD, solo son de lectura y
+     únicamente se muestran en el detalle de la póliza). */
+  function refrescarPrimaResumen(polizaId) {
     const fraccionesPoliza = allFracciones.filter((f) => f.poliza_id === polizaId);
-    const primaTotal = Number(primaPoliza || 0);
-    const cantidadTotal = fraccionesPoliza.length;
-    const cantidadCobradas = fraccionesPoliza.filter((f) => f.status === 'Cobrado').length;
-    const primaDevengada = cantidadTotal
-      ? Math.round((primaTotal * cantidadCobradas / cantidadTotal) * 100) / 100
-      : 0;
+    const primaTotal = fraccionesPoliza.reduce((sum, f) => sum + Number(f.prima || 0), 0);
+    const primaDevengada = fraccionesPoliza
+      .filter((f) => f.status === 'Cobrado')
+      .reduce((sum, f) => sum + Number(f.prima || 0), 0);
     polizaPrimaTotal.value = formatMoney(primaTotal);
     polizaPrimaDevengada.value = formatMoney(primaDevengada);
   }
@@ -1016,6 +1020,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       refrescarPreviewFracciones();
 
+      // Frecuencia de pago: solo se puede modificar si NINGUNA fracción
+      // asociada está "Cobrado". Si hay al menos una cobrada, se bloquea
+      // (aunque el resto del formulario esté en modo edición).
+      frecuenciaOriginalPoliza = item.frecuencia_pago;
+      {
+        const fraccionesPolizaLock = allFracciones.filter((f) => f.poliza_id === item.id);
+        frecuenciaBloqueadaPorCobro = fraccionesPolizaLock.some((f) => f.status === 'Cobrado');
+      }
+      aplicarBloqueoFrecuencia();
+
       // Modo Ver siempre por defecto; "Editar" lo reactiva
       setPolizaFormDisabled(true);
       editPolizaBtn.style.display = readOnly && item.status !== 'Anulado' ? 'inline-flex' : 'none';
@@ -1024,9 +1038,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       polizaModalOverlay.querySelector('.modal').classList.toggle('modal--readonly', readOnly);
       if (!readOnly) polizaModalTitle.textContent = 'Editar Póliza';
 
+      // "Prima de cada Recibo" solo se muestra al registrar/editar; en el
+      // detalle (Ver) se reemplaza por Prima Total / Prima Devengada.
+      fieldPolizaPrima.style.display = readOnly ? 'none' : 'block';
+
       // Prima Total / Prima Devengada + accesos rápidos: solo en el detalle (Ver)
       polizaPrimaResumenBox.style.display = readOnly ? 'grid' : 'none';
-      if (readOnly) refrescarPrimaResumen(item.id, item.prima);
+      if (readOnly) refrescarPrimaResumen(item.id);
       verFraccionesPolizaBtn.style.display = readOnly ? 'inline-flex' : 'none';
       {
         const statusEfectivo = getPolizaStatusEfectivo(item);
@@ -1063,6 +1081,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       polizaAccionesTitle.style.display = 'none';
       polizaAccionesBox.style.display = 'none';
       polizaPrimaResumenBox.style.display = 'none';
+      fieldPolizaPrima.style.display = 'block';
+      frecuenciaBloqueadaPorCobro = false;
+      frecuenciaOriginalPoliza = '';
+      aplicarBloqueoFrecuencia();
       submitPolizaBtn.style.display = 'inline-flex';
       polizaModalOverlay.querySelector('.modal').classList.remove('modal--readonly');
 
@@ -1126,14 +1148,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     openPolizaModal({ edit: false, renewFrom: item });
   }
 
+  let polizaFormDisabledActual = true;
+
+  // Aplica el estado visual/interactivo del grupo de Frecuencia de Pago,
+  // combinando el estado general del formulario (disabled) con el bloqueo
+  // específico por fracciones ya cobradas (frecuenciaBloqueadaPorCobro).
+  function aplicarBloqueoFrecuencia() {
+    const bloqueado = polizaFormDisabledActual || frecuenciaBloqueadaPorCobro;
+    polizaFrecuenciaGroup.style.pointerEvents = bloqueado ? 'none' : 'auto';
+    polizaFrecuenciaGroup.style.opacity = bloqueado ? '0.7' : '1';
+    fieldPolizaMensualFracciones.style.pointerEvents = frecuenciaBloqueadaPorCobro ? 'none' : 'auto';
+    polizaFrecuenciaBloqueadaHint.style.display = (!polizaFormDisabledActual && frecuenciaBloqueadaPorCobro) ? 'block' : 'none';
+  }
+
   function setPolizaFormDisabled(disabled) {
+    polizaFormDisabledActual = disabled;
     [polizaClienteInput, polizaAsesorInput, polizaAseguradoraInput, polizaRamoInput, polizaTipoPoliza,
      polizaNroPoliza, polizaSumaAsegurada, polizaInicioVigencia, polizaPrima, polizaMensualFracciones]
       .forEach((el) => { el.disabled = disabled; });
     btnNuevoClienteDesdePoliza.disabled = disabled;
     polizaSucursal.disabled = disabled ? true : !sesionEsAdministrador();
-    polizaFrecuenciaGroup.style.pointerEvents = disabled ? 'none' : 'auto';
-    polizaFrecuenciaGroup.style.opacity = disabled ? '0.7' : '1';
+    aplicarBloqueoFrecuencia();
   }
 
   function submitPolizaBtnIdleLabel() {
@@ -1249,11 +1284,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       ? allPlanes.find((p) => p.id === polizaSumaAsegurada.value)
       : null;
 
-    const fracciones = generarFracciones({
+    // Si la póliza tiene fracciones cobradas, la frecuencia queda bloqueada
+    // en la UI: se conserva la frecuencia/cantidad de fracciones original y
+    // NO se regeneran las fracciones. Si no está bloqueada (registro nuevo,
+    // o edición sin fracciones cobradas), se usa lo seleccionado en el
+    // formulario y se regeneran las fracciones acorde a la frecuencia.
+    const bloqueado = isEditModePoliza && frecuenciaBloqueadaPorCobro;
+    const frecuenciaFinal = bloqueado ? frecuenciaOriginalPoliza : frecuenciaSeleccionada;
+    const mensualFraccionesFinal = bloqueado
+      ? (currentPolizaItem?.mensual_fracciones ?? null)
+      : (frecuenciaSeleccionada === 'Mensual' ? Number(polizaMensualFracciones.value) : null);
+
+    const fracciones = bloqueado ? [] : generarFracciones({
       inicioVigencia: inicio,
       finVigencia: fin,
       prima,
-      frecuencia: frecuenciaSeleccionada,
+      frecuencia: frecuenciaFinal,
       mensualFracciones: polizaMensualFracciones.value,
     });
 
@@ -1269,9 +1315,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       suma_asegurada: planSeleccionado ? planSeleccionado.suma_asegurada : null,
       inicio_vigencia: inicio,
       prima,
-      frecuencia_pago: frecuenciaSeleccionada,
-      mensual_fracciones: frecuenciaSeleccionada === 'Mensual' ? Number(polizaMensualFracciones.value) : null,
-      cantidad_fracciones: fracciones.length,
+      frecuencia_pago: frecuenciaFinal,
+      mensual_fracciones: mensualFraccionesFinal,
+      cantidad_fracciones: bloqueado ? (currentPolizaItem?.cantidad_fracciones ?? 0) : fracciones.length,
     };
 
     if (isEditModePoliza) {
@@ -1288,12 +1334,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (isEditModePoliza) {
         polizaId = polizaIdInput.value;
         ({ error } = await supabaseClient.from(TABLE_POLIZAS).update(payloadPoliza).eq('id', polizaId));
-        // Al editar, se regeneran las fracciones desde cero para reflejar
-        // los nuevos datos (vigencia, prima o frecuencia pudieron cambiar).
-        // ASUNCIÓN A CONFIRMAR: esto reemplaza fracciones aunque ya tengan
-        // pagos registrados. Ajustar si se requiere bloquear la edición
-        // cuando existan fracciones con status "Pagada".
-        if (!error) {
+        // Al editar, se regeneran las fracciones desde cero solo cuando la
+        // frecuencia no está bloqueada (ninguna fracción "Cobrado"). Si está
+        // bloqueada, las fracciones existentes se conservan intactas.
+        if (!error && !bloqueado) {
           ({ error } = await supabaseClient.from(TABLE_FRACCIONES).delete().eq('poliza_id', polizaId));
         }
       } else {
@@ -1307,6 +1351,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         submitPolizaBtn.textContent = submitPolizaBtnIdleLabel();
         const prefix = error.code === '23505' ? 'Ya existe una póliza con ese número para esta aseguradora.' : 'No se pudo guardar la póliza.';
         showFeedback('polizaFormFeedback', `${prefix} ${getErrorMessage(error)}`, 'error');
+        return;
+      }
+
+      // Si está bloqueado, no se tocan las fracciones existentes.
+      if (bloqueado) {
+        submitPolizaBtn.disabled = false;
+        submitPolizaBtn.textContent = submitPolizaBtnIdleLabel();
+        showFeedback('polizaFormFeedback', 'Póliza actualizada correctamente.', 'success');
+        await Promise.all([loadPolizas(), loadFracciones()]);
+        setTimeout(closePolizaModal, 700);
         return;
       }
 
