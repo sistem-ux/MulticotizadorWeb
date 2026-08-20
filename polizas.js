@@ -34,9 +34,9 @@ async function initSupabase() {
 
   NOTA DE DISEÑO (fracciones): se generan en el front (no con triggers de
   base de datos) al registrar la póliza, siguiendo la tabla de frecuencias
-  documentada en 23_schema_polizas_fracciones.sql. La prima se reparte en
-  partes iguales redondeadas a 2 decimales, y la última fracción absorbe la
-  diferencia de redondeo para que la suma cuadre exacto con la prima total.
+  documentada en 23_schema_polizas_fracciones.sql. La "Prima" registrada en
+  la póliza es la Prima de cada Recibo: cada fracción se genera con ese
+  mismo monto completo (no se divide entre fracciones).
   Las fechas de inicio de cada fracción se calculan sumando meses a la fecha
   de inicio de vigencia, respetando el día del mes y ajustando al último día
   del mes destino cuando ese día no existe (ej. 31 de enero + 1 mes = 28/29
@@ -157,9 +157,8 @@ function generarFracciones({ inicioVigencia, finVigencia, prima, frecuencia, men
   if (!config) return [];
 
   const { fracciones: cantidad, intervaloMeses } = config;
-  const primaBase = Math.round((prima / cantidad) * 100) / 100;
-  const primaUltima = Math.round((prima - primaBase * (cantidad - 1)) * 100) / 100;
-
+  // La prima ingresada es la "Prima de cada Recibo": cada fracción se genera
+  // con ese mismo monto completo (no se reparte/divide entre fracciones).
   const resultado = [];
   for (let i = 0; i < cantidad; i++) {
     const fechaInicio = addMonthsClamped(inicioVigencia, i * intervaloMeses);
@@ -172,7 +171,7 @@ function generarFracciones({ inicioVigencia, finVigencia, prima, frecuencia, men
       numero_fraccion: i + 1,
       fecha_inicio: fechaInicio,
       fecha_fin: fechaFin,
-      prima: esUltima ? primaUltima : primaBase,
+      prima,
     });
   }
   return resultado;
