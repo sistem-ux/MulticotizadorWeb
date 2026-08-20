@@ -34,10 +34,9 @@ async function initSupabase() {
 
   NOTA DE DISEÑO (fracciones): se generan en el front (no con triggers de
   base de datos) al registrar la póliza, siguiendo la tabla de frecuencias
-  documentada en 23_schema_polizas_fracciones.sql. La prima se reparte en
-  partes iguales redondeadas a 2 decimales, y la última fracción absorbe la
-  diferencia de redondeo para que la suma cuadre exacto con la prima total.
-  Las fechas de inicio de cada fracción se calculan sumando meses a la fecha
+  documentada en 23_schema_polizas_fracciones.sql. La prima de CADA fracción
+  es igual a la prima total de la póliza (no se divide entre la cantidad de
+  fracciones). Las fechas de inicio de cada fracción se calculan sumando meses a la fecha
   de inicio de vigencia, respetando el día del mes y ajustando al último día
   del mes destino cuando ese día no existe (ej. 31 de enero + 1 mes = 28/29
   de febrero).
@@ -157,8 +156,6 @@ function generarFracciones({ inicioVigencia, finVigencia, prima, frecuencia, men
   if (!config) return [];
 
   const { fracciones: cantidad, intervaloMeses } = config;
-  const primaBase = Math.round((prima / cantidad) * 100) / 100;
-  const primaUltima = Math.round((prima - primaBase * (cantidad - 1)) * 100) / 100;
 
   const resultado = [];
   for (let i = 0; i < cantidad; i++) {
@@ -172,7 +169,7 @@ function generarFracciones({ inicioVigencia, finVigencia, prima, frecuencia, men
       numero_fraccion: i + 1,
       fecha_inicio: fechaInicio,
       fecha_fin: fechaFin,
-      prima: esUltima ? primaUltima : primaBase,
+      prima,
     });
   }
   return resultado;
@@ -958,15 +955,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       .forEach((f) => setFieldError(f, false));
   }
 
-  /* Prima Total / Prima Devengada: se calculan en el front a partir de las
-     fracciones asociadas (no se persisten en la BD, solo son de lectura y
-     únicamente se muestran en el detalle de la póliza). */
-  function refrescarPrimaResumen(polizaId) {
+  /* Prima Total / Prima Devengada: se calculan en el front (no se persisten
+     en la BD, solo son de lectura y únicamente se muestran en el detalle de
+     la póliza). Como cada fracción guarda la prima total de la póliza (no
+     dividida), la Prima Total es la prima de la póliza tal cual, y la Prima
+     Devengada se prorratea según la cantidad de fracciones ya cobradas
+     respecto al total de fracciones. */
+  function refrescarPrimaResumen(polizaId, primaPoliza) {
     const fraccionesPoliza = allFracciones.filter((f) => f.poliza_id === polizaId);
-    const primaTotal = fraccionesPoliza.reduce((sum, f) => sum + Number(f.prima || 0), 0);
-    const primaDevengada = fraccionesPoliza
-      .filter((f) => f.status === 'Cobrado')
-      .reduce((sum, f) => sum + Number(f.prima || 0), 0);
+    const primaTotal = Number(primaPoliza || 0);
+    const cantidadTotal = fraccionesPoliza.length;
+    const cantidadCobradas = fraccionesPoliza.filter((f) => f.status === 'Cobrado').length;
+    const primaDevengada = cantidadTotal
+      ? Math.round((primaTotal * cantidadCobradas / cantidadTotal) * 100) / 100
+      : 0;
     polizaPrimaTotal.value = formatMoney(primaTotal);
     polizaPrimaDevengada.value = formatMoney(primaDevengada);
   }
@@ -1024,7 +1026,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       // Prima Total / Prima Devengada + accesos rápidos: solo en el detalle (Ver)
       polizaPrimaResumenBox.style.display = readOnly ? 'grid' : 'none';
-      if (readOnly) refrescarPrimaResumen(item.id);
+      if (readOnly) refrescarPrimaResumen(item.id, item.prima);
       verFraccionesPolizaBtn.style.display = readOnly ? 'inline-flex' : 'none';
       {
         const statusEfectivo = getPolizaStatusEfectivo(item);
