@@ -1347,8 +1347,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else if (esHijo && plan.modo_tarifa_hijos === 'Por cantidad de hijos') {
         hijosIncluidos.push(miembro);
       } else {
-        // Cónyuge, Madre, Padre, o Hijos en modo "Por hijo"
-        const { valor, definido } = tarifaPorEdad(tarifa.tarifas_familiares, edad);
+        // Cónyuge, Madre, Padre, o Hijos en modo "Por hijo": se cotizan con
+        // la misma tarifa de Titular (tarifas_familiares fue eliminada del
+        // modal de tarifa; ya no existe una tabla propia para familiares).
+        const { valor, definido } = tarifaPorEdad(tarifa.tarifas_titular, edad);
         total += valor;
         if (!definido) sinCobertura.push({ parentesco: miembro.parentesco, edad });
       }
@@ -1886,12 +1888,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 2. Edad del Titular, para compararla contra el rango de edad de
     //    Titular configurado en cada plan (edad_min_titular / edad_max_titular).
+    //    Edades de los Familiares (todos los integrantes salvo el Titular),
+    //    para compararlas contra el rango de edad de Familiares configurado
+    //    en cada plan (edad_min_familiares / edad_max_familiares). La tarifa
+    //    que se les aplica es la de Titular; este rango solo decide qué
+    //    planes quedan disponibles para cotizar.
     const titular = integrantesActuales.find(miembro => miembro.parentesco === 'Titular');
     const edadTitular = titular ? getNumericAge(titular.fechaNacimiento) : -1;
+    const edadesFamiliares = integrantesActuales
+      .filter(miembro => miembro.parentesco !== 'Titular')
+      .map(miembro => getNumericAge(miembro.fechaNacimiento));
 
     const planesDisponibles = planesCotizables.filter(plan => {
       if (plan.edad_min_titular != null && edadTitular < plan.edad_min_titular) return false;
       if (plan.edad_max_titular != null && edadTitular > plan.edad_max_titular) return false;
+      const familiarFueraDeRango = edadesFamiliares.some((edad) => (
+        (plan.edad_min_familiares != null && edad < plan.edad_min_familiares) ||
+        (plan.edad_max_familiares != null && edad > plan.edad_max_familiares)
+      ));
+      if (familiarFueraDeRango) return false;
       if (plan.tipo_tarifa && plan.tipo_tarifa !== tarifaTipoActual) return false;
       return true;
     });

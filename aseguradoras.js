@@ -1896,8 +1896,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   /* ---------------------------------------------------------------------
      Tarifas por rango etario: se generan dinámicamente según la edad
-     mínima/máxima de Titular y de Familiares configuradas en el Plan
-     seleccionado, replicando los mismos rangos para ambos grupos.
+     mínima/máxima de Titular configuradas en el Plan seleccionado. Los
+     familiares se cotizan con esta misma tarifa de Titular (ver
+     calcularCoberturaBasica en el cotizador), por lo que ya no existe una
+     sección de tarifas propia para Familiares; las edades mínima/máxima de
+     Familiares del Plan solo se usan para filtrar planes disponibles.
      --------------------------------------------------------------------- */
   const HIJOS_CANTIDAD_KEYS = [
     { key: '1', label: '1 Hijo' },
@@ -1906,11 +1909,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     { key: '4+', label: '+4 Hijos' },
   ];
 
-  let tarifaRangeInputs = { titular: {}, familiares: {}, hijosCantidad: {} };
+  let tarifaRangeInputs = { titular: {}, hijosCantidad: {} };
 
   function renderTarifaRangos(plan) {
     tarifaRangosContainer.innerHTML = '';
-    tarifaRangeInputs = { titular: {}, familiares: {}, hijosCantidad: {} };
+    tarifaRangeInputs = { titular: {}, hijosCantidad: {} };
 
     if (!plan) {
       tarifaRangosContainer.innerHTML = '<p class="age-range-empty">Selecciona un plan para ver los rangos etarios disponibles.</p>';
@@ -1918,7 +1921,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const titularRanges = rangesForAges(plan.edad_min_titular, plan.edad_max_titular);
-    const familiaresRanges = rangesForAges(plan.edad_min_familiares, plan.edad_max_familiares);
 
     function buildGroup(title, ranges, storeKey) {
       const groupTitle = document.createElement('div');
@@ -1952,7 +1954,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     buildGroup('Titular', titularRanges, 'titular');
-    buildGroup('Familiares', familiaresRanges, 'familiares');
 
     // Tarifa por Cantidad de Hijos: solo aplica cuando el plan tiene
     // configurado modo_tarifa_hijos = "Por cantidad de hijos". Se ubica
@@ -1981,12 +1982,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  function setTarifaRangosData(titularData = {}, familiaresData = {}, hijosCantidadData = {}) {
+  function setTarifaRangosData(titularData = {}, hijosCantidadData = {}) {
     Object.entries(tarifaRangeInputs.titular).forEach(([key, input]) => {
       setDecimalThousandsValue(input, titularData && titularData[key] != null ? titularData[key] : '');
-    });
-    Object.entries(tarifaRangeInputs.familiares).forEach(([key, input]) => {
-      setDecimalThousandsValue(input, familiaresData && familiaresData[key] != null ? familiaresData[key] : '');
     });
     Object.entries(tarifaRangeInputs.hijosCantidad).forEach(([key, input]) => {
       setDecimalThousandsValue(input, hijosCantidadData && hijosCantidadData[key] != null ? hijosCantidadData[key] : '');
@@ -1995,29 +1993,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function getTarifaRangosData() {
     const titular = {};
-    const familiares = {};
     const hijosCantidad = {};
     Object.entries(tarifaRangeInputs.titular).forEach(([key, input]) => {
       const val = getDecimalThousandsValue(input);
       if (val !== null) titular[key] = val;
     });
-    Object.entries(tarifaRangeInputs.familiares).forEach(([key, input]) => {
-      const val = getDecimalThousandsValue(input);
-      if (val !== null) familiares[key] = val;
-    });
     Object.entries(tarifaRangeInputs.hijosCantidad).forEach(([key, input]) => {
       const val = getDecimalThousandsValue(input);
       if (val !== null) hijosCantidad[key] = val;
     });
-    return { titular, familiares, hijosCantidad };
+    return { titular, hijosCantidad };
   }
 
-  // Todos los campos de tarifas por rango etario (titular, familiares e
-  // hijos por cantidad, cuando aplique) son obligatorios.
+  // Todos los campos de tarifas por rango etario (titular e hijos por
+  // cantidad, cuando aplique) son obligatorios.
   function validateTarifaRangos() {
     const allInputs = [
       ...Object.values(tarifaRangeInputs.titular),
-      ...Object.values(tarifaRangeInputs.familiares),
       ...Object.values(tarifaRangeInputs.hijosCantidad),
     ];
     return allInputs.every((input) => getDecimalThousandsValue(input) !== null);
@@ -2054,7 +2046,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       tarifaModalTitle.textContent = readOnly ? 'Ver Tarifa' : 'Editar Tarifa';
       submitTarifaBtn.textContent = 'Guardar Cambios';
       tarifaIdInput.value = item.id;
-      setTarifaRangosData(item.tarifas_titular || {}, item.tarifas_familiares || {}, item.tarifas_hijos_cantidad || {});
+      setTarifaRangosData(item.tarifas_titular || {}, item.tarifas_hijos_cantidad || {});
 
       const cob = item.coberturas || {};
       COVERAGE_LIST.forEach((def) => tarifaCoverageControls[def.key].setData(cob[def.key]));
@@ -2157,14 +2149,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const coberturas = {};
     COVERAGE_LIST.forEach((def) => { coberturas[def.key] = tarifaCoverageControls[def.key].getData(); });
     const maternidad = tarifaMaternidadControl.getData();
-    const { titular, familiares, hijosCantidad } = getTarifaRangosData();
+    const { titular, hijosCantidad } = getTarifaRangosData();
 
     const payload = {
       plan_id: tarifaPlanIdInput.value,
       coberturas,
       maternidad,
       tarifas_titular: titular,
-      tarifas_familiares: familiares,
+      // La sección Familiares ya no existe en este formulario: los
+      // familiares se cotizan con tarifas_titular (ver script.js del
+      // cotizador). Se conserva la columna en {} por si el esquema aún
+      // la exige NOT NULL.
+      tarifas_familiares: {},
       tarifas_hijos_cantidad: hijosCantidad,
     };
 
