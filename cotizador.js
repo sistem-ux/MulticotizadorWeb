@@ -84,6 +84,31 @@ document.addEventListener('DOMContentLoaded', async () => {
   const modifyDataBtn = document.getElementById('modifyDataBtn');
   const plansContainer = document.getElementById('plansContainer'); 
 
+  // Referencias a la ventana modal de mensajes de error/validación (reemplaza window.alert)
+  const errorModal = document.getElementById('errorModal');
+  const errorModalTitle = document.getElementById('errorModalTitle');
+  const errorModalMessage = document.getElementById('errorModalMessage');
+  const closeErrorModalBtn = document.getElementById('closeErrorModalBtn');
+  const errorModalOkBtn = document.getElementById('errorModalOkBtn');
+
+  function mostrarErrorModal(mensaje, titulo) {
+    errorModalTitle.textContent = titulo || 'Atención';
+    // Los mensajes son generados internamente (no provienen de entrada del
+    // usuario), por lo que es seguro convertir saltos de línea en <br>.
+    errorModalMessage.innerHTML = String(mensaje).split('\n').join('<br>');
+    errorModal.classList.add('active');
+  }
+
+  function cerrarErrorModal() {
+    errorModal.classList.remove('active');
+  }
+
+  closeErrorModalBtn.addEventListener('click', cerrarErrorModal);
+  errorModalOkBtn.addEventListener('click', cerrarErrorModal);
+  errorModal.addEventListener('click', (e) => {
+    if (e.target === errorModal) cerrarErrorModal();
+  });
+
   // Referencias a la ventana modal
   const coveragesModal = document.getElementById('coveragesModal');
   const closeModalBtn = document.getElementById('closeModalBtn');
@@ -120,7 +145,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const coberturasSeleccionadasPorPlan = {}; // { [planId]: string[] } — persiste al re-renderizar tarjetas (filtro, etc.)
   let isFamilyLocked = false;
   let cotizacionGuardadaId = null; // ID de la cotización ya guardada en Supabase para esta comparación (habilita "Exportar a PDF")
-  let familyFormHasRelativeAgeError = false; // true si Madre/Padre/Hijos incumplen el rango mínimo de 10 años vs. el Titular
+  let familyFormRelativeAgeErrorTypes = new Set(); // subconjunto de 'conyuge' | 'padre_madre' | 'hijo' con errores de edad
   let origenEdicionId = null; // ID de la cotización original cuando se llega vía "Editar planes" (?editar=ID) desde cotizaciones.html
   let modoActualizacion = false; // true cuando se llega vía "Actualizar cotización" (?actualizar=ID) desde una cotización Vencida
   let actualizacionId = null; // ID de la cotización vencida que se está actualizando (se sobrescribe en lugar de crear una nueva)
@@ -443,21 +468,31 @@ document.addEventListener('DOMContentLoaded', async () => {
   //    (fecha de nacimiento igual o anterior a la del Titular menos 10 años).
   //  - Hijos deben ser al menos 10 años MENORES que el Titular
   //    (fecha de nacimiento igual o posterior a la del Titular más 10 años).
+  //  - Cónyuge debe ser mayor de edad (18 años o más), sin depender de la
+  //    fecha del Titular.
   // Esta función es de solo lectura (no modifica el DOM); la aplicación
   // visual del resultado se hace en validateRowFull().
+  const EDAD_MINIMA_CONYUGE = 18;
+
   function addYearsToDate(date, years) {
     const result = new Date(date.getTime());
     result.setFullYear(result.getFullYear() + years);
     return result;
   }
 
+  // Devuelve el tipo de regla de edad aplicable a la relación de la fila:
+  // 'conyuge' | 'padre_madre' | 'hijo' | null (no aplica).
+  function relativeAgeRuleTypeForRelation(relation) {
+    if (relation === 'Cónyuge') return 'conyuge';
+    if (relation === 'Madre' || relation === 'Padre') return 'padre_madre';
+    if (relation.startsWith('Hijo ')) return 'hijo';
+    return null;
+  }
+
   function validateRelativeAgeForRow(row) {
     const relation = row.dataset.relation || '';
-    const isParentRelation = relation === 'Madre' || relation === 'Padre';
-    const isChildRelation = relation.startsWith('Hijo ');
-
-    // La regla solo aplica a Madre, Padre e Hijos.
-    if (!isParentRelation && !isChildRelation) return true;
+    const ruleType = relativeAgeRuleTypeForRelation(relation);
+    if (!ruleType) return true;
 
     const checkbox = row.querySelector('.row-checkbox');
     const dateInput = row.querySelector('.date-input');
@@ -469,26 +504,36 @@ document.addEventListener('DOMContentLoaded', async () => {
     const currentDate = parseDateValue(dateInput.value);
     if (!currentDate) return true; // La obligatoriedad de la fecha la valida validateDateForRow
 
+    if (ruleType === 'conyuge') {
+      // El Cónyuge debe ser mayor de edad; esta regla es independiente de
+      // la fecha del Titular.
+      return getNumericAge(dateInput.value) >= EDAD_MINIMA_CONYUGE;
+    }
+
     const titularRow = tableBody.querySelector('.family-row[data-relation="Titular"]');
     const titularDateInput = titularRow ? titularRow.querySelector('.date-input') : null;
     const titularDate = titularDateInput ? parseDateValue(titularDateInput.value) : null;
     if (!titularDate) return true; // Sin fecha del Titular aún no se puede comparar
 
-    if (isParentRelation) {
+    if (ruleType === 'padre_madre') {
       const limiteMasReciente = addYearsToDate(titularDate, -10);
       return currentDate <= limiteMasReciente;
     }
-    // isChildRelation
+    // ruleType === 'hijo'
     const limiteMasAntiguo = addYearsToDate(titularDate, 10);
     return currentDate >= limiteMasAntiguo;
   }
 
   function relativeAgeErrorMessageForRow(row) {
     const relation = row.dataset.relation || '';
-    if (relation === 'Madre' || relation === 'Padre') {
+    const ruleType = relativeAgeRuleTypeForRelation(relation);
+    if (ruleType === 'conyuge') {
+      return 'El cónyuge debe ser mayor de edad, verifique la fecha de nacimiento.';
+    }
+    if (ruleType === 'padre_madre') {
       return `La fecha de nacimiento de "${relation}" debe ser al menos 10 años anterior a la del Titular.`;
     }
-    if (relation.startsWith('Hijo ')) {
+    if (ruleType === 'hijo') {
       return `La fecha de nacimiento de "${relation}" debe ser al menos 10 años posterior a la del Titular.`;
     }
     return '';
@@ -527,13 +572,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   function validateFamilyForm() {
     const rows = Array.from(tableBody.querySelectorAll('.family-row'));
     let allValid = true;
-    let hasRelativeAgeError = false;
+    const relativeAgeErrorTypes = new Set();
     rows.forEach((row) => {
-      if (!validateRelativeAgeForRow(row)) hasRelativeAgeError = true;
+      if (!validateRelativeAgeForRow(row)) {
+        const relation = row.dataset.relation || '';
+        const ruleType = relativeAgeRuleTypeForRelation(relation);
+        if (ruleType) relativeAgeErrorTypes.add(ruleType);
+      }
       const rowValid = validateRowFull(row);
       allValid = allValid && rowValid;
     });
-    familyFormHasRelativeAgeError = hasRelativeAgeError;
+    familyFormRelativeAgeErrorTypes = relativeAgeErrorTypes;
     return allValid;
   }
 
@@ -857,7 +906,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // VALIDACIÓN: Si el checkbox está marcado, el select NO puede estar vacío
         if (!sel || !sel.value) {
           const nombreCobertura = row.querySelector('span')?.textContent.trim() || 'la cobertura';
-          alert(`Por favor selecciona una suma asegurada para la cobertura: ${nombreCobertura}`);
+          mostrarErrorModal(`Por favor selecciona una suma asegurada para la cobertura: ${nombreCobertura}`);
           validacionExitosa = false;
           break; // Detenemos el bucle
         }
@@ -1208,7 +1257,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if (planSelectionOrder.length >= MAX_PLANES_COMPARACION) {
-          window.alert(`Puedes comparar un máximo de ${MAX_PLANES_COMPARACION} planes. Quita uno para agregar otro.`);
+          mostrarErrorModal(`Puedes comparar un máximo de ${MAX_PLANES_COMPARACION} planes. Quita uno para agregar otro.`);
           return;
         }
 
@@ -1722,7 +1771,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   finalizeQuoteBtn.addEventListener('click', async () => {
     if (planSelectionOrder.length === 0) {
-      window.alert('Selecciona al menos un plan para poder finalizar la cotización.');
+      mostrarErrorModal('Selecciona al menos un plan para poder finalizar la cotización.');
       return;
     }
 
@@ -1818,7 +1867,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   showPlansBtn.addEventListener('click', async () => {
     if (!validateApplicantName()) {
       applicantNameInput.focus();
-      window.alert('El nombre del solicitante es obligatorio y debe tener al menos 3 letras.');
+      mostrarErrorModal('El nombre del solicitante es obligatorio y debe tener al menos 3 letras.');
       return;
     }
 
@@ -1826,15 +1875,25 @@ document.addEventListener('DOMContentLoaded', async () => {
       const session = getSession();
       const target = (esPerfilAdministrador(session.role) || session.role === 'Colaborador') ? elaboradoPorSelect : elaboradoPorInput;
       target.focus();
-      window.alert('Indica quién elabora la cotización.');
+      mostrarErrorModal('Indica quién elabora la cotización.');
       return;
     }
 
     if (!validateFamilyForm()) {
-      if (familyFormHasRelativeAgeError) {
-        window.alert('Verifica las fechas de nacimiento: la Madre y el Padre deben tener al menos 10 años más que el Titular, y los Hijos deben tener al menos 10 años menos que el Titular.');
+      if (familyFormRelativeAgeErrorTypes.size > 0) {
+        const mensajes = [];
+        if (familyFormRelativeAgeErrorTypes.has('conyuge')) {
+          mensajes.push('El cónyuge debe ser mayor de edad, verifique la fecha de nacimiento.');
+        }
+        if (familyFormRelativeAgeErrorTypes.has('padre_madre')) {
+          mensajes.push('Verifica la fecha de nacimiento de la Madre y/o el Padre: debe ser al menos 10 años anterior a la del Titular.');
+        }
+        if (familyFormRelativeAgeErrorTypes.has('hijo')) {
+          mensajes.push('Verifica la fecha de nacimiento de los Hijos: debe ser al menos 10 años posterior a la del Titular.');
+        }
+        mostrarErrorModal(mensajes.join('\n'));
       } else {
-        window.alert('Completa las fechas y géneros obligatorios de los integrantes incluidos.');
+        mostrarErrorModal('Completa las fechas y géneros obligatorios de los integrantes incluidos.');
       }
       return;
     }
@@ -1989,7 +2048,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const targetId = editarId || actualizarId;
 
     if (!supabaseClient) {
-      window.alert('No se pudo conectar con Supabase para cargar la cotización.');
+      mostrarErrorModal('No se pudo conectar con Supabase para cargar la cotización.');
       return;
     }
 
@@ -2000,7 +2059,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       .single();
 
     if (error || !original) {
-      window.alert(`No se pudo cargar la cotización: ${error ? getErrorMessage(error) : 'no encontrada'}`);
+      mostrarErrorModal(`No se pudo cargar la cotización: ${error ? getErrorMessage(error) : 'no encontrada'}`);
       return;
     }
 

@@ -868,6 +868,22 @@
 
   </div>
 
+  <!-- VENTANA EMERGENTE (MODAL) DE MENSAJES DE ERROR / VALIDACIÓN -->
+  <div id="errorModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 420px;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="errorModalTitle">Atención</h3>
+        <button type="button" id="closeErrorModalBtn" class="modal-close-btn">&times;</button>
+      </div>
+      <div class="modal-body" style="max-height: none;">
+        <p id="errorModalMessage" style="margin:0; color:#333; font-family:'Inter', sans-serif; font-size:14px; line-height:1.5;"></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="errorModalOkBtn" class="btn btn--primary" style="padding: 8px 16px; font-size: 14px;">Entendido</button>
+      </div>
+    </div>
+  </div>
+
   <!-- VENTANA EMERGENTE (MODAL) PARA SELECCIONAR ADICIONALES -->
   <div id="coveragesModal" class="modal-overlay">
     <div class="modal-content">
