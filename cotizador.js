@@ -531,10 +531,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       return 'El cónyuge debe ser mayor de edad, verifique la fecha de nacimiento.';
     }
     if (ruleType === 'padre_madre') {
-      return `La fecha de nacimiento de "${relation}" debe ser al menos 10 años anterior a la del Titular.`;
+      return `Verifique la fecha de nacimiento de "${relation}". Debe ser al menos 10 años anterior a la del Titular.`;
     }
     if (ruleType === 'hijo') {
-      return `La fecha de nacimiento de "${relation}" debe ser al menos 10 años posterior a la del Titular.`;
+      return `Verifique la fecha de nacimiento de "${relation}". Debe ser al menos 10 años posterior a la del Titular.`;
     }
     return '';
   }
