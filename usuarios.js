@@ -8,7 +8,6 @@ const SUPABASE_ANON_KEY = 'sb_publishable_zlp4_HGpTeAQKW55c_pZQA_2HEXRpaC';
 const TABLE_USUARIOS = 'usuarios';
 const TABLE_PERFILES = 'perfiles';
 const TABLE_SUCURSALES = 'sucursales';
-const TABLE_MODULOS = 'modulos';
 
 let supabaseClient = null;
 
@@ -467,25 +466,41 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   /* =========================================================
      MÓDULOS DEL SISTEMA (permisos de menú por usuario)
-     La tabla `modulos` es la fuente única de verdad: agregar un registro ahí
-     (nuevo menú o submenú) hace que aparezca aquí automáticamente, sin tocar
-     este archivo.
+     Fuente única de verdad: sidebar.html. Se lee directamente ese archivo y
+     se extrae cada enlace con `data-modulo`, así que agregar un módulo o
+     submenú nuevo en el sidebar (con su atributo data-modulo) lo hace
+     aparecer aquí automáticamente, sin tocar este archivo ni la base de datos.
      ========================================================= */
   async function loadModulos() {
-    if (!supabaseClient) return;
     try {
-      const { data, error } = await supabaseClient
-        .from(TABLE_MODULOS)
-        .select('id, key, nombre, grupo, orden')
-        .eq('status', 'Activo')
-        .order('orden', { ascending: true });
-      if (error) {
-        console.error('Error al cargar módulos:', error);
-        return;
-      }
-      allModulos = data || [];
+      const response = await fetch('sidebar.html');
+      if (!response.ok) throw new Error('No se pudo cargar sidebar.html');
+      const html = await response.text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+
+      const modulos = [];
+      let orden = 0;
+      doc.querySelectorAll('.menu-link[data-modulo]').forEach((link) => {
+        const key = (link.dataset.modulo || '').trim();
+        if (!key) return;
+        const nombre = link.textContent.trim();
+        const grupoEl = link.closest('.menu-group');
+        const grupoTitulo = grupoEl ? grupoEl.querySelector('.menu-group__title span') : null;
+        const grupo = grupoTitulo ? grupoTitulo.textContent.trim() : null;
+        modulos.push({ key, nombre, grupo, orden: orden++ });
+      });
+
+      // Por si un mismo data-modulo aparece más de una vez en el sidebar,
+      // se conserva solo la primera aparición.
+      const vistos = new Set();
+      allModulos = modulos.filter((m) => {
+        if (vistos.has(m.key)) return false;
+        vistos.add(m.key);
+        return true;
+      });
     } catch (err) {
-      console.error('Excepción al cargar módulos:', err);
+      console.error('Error al cargar módulos desde sidebar.html:', err);
+      allModulos = [];
     }
   }
 
