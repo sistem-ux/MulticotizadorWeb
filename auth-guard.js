@@ -22,10 +22,10 @@
    Ajusta este objeto para cambiar quién puede ver cada pantalla.
    ----------------------------------------------------------------------- */
 const ROLES = {
-  ADMIN1: 'Administrador Nacional',
-  ADMIN2: 'Administrador Sucursal',
-  COLABORADOR: 'Colaborador',
-  ASESOR: 'Asesor',
+  ADMIN1: 'Usuario Master',
+  ADMIN2: 'Gerente de Sucursal',
+  COLABORADOR: 'Ejecutivo Comercial',
+  ASESOR: 'Aliado Comercial',
   VISITANTE: 'Visitante',
 };
 
@@ -62,6 +62,7 @@ const PAGE_MODULO_KEY = {
   'polizas.html': 'polizas',
   'fracciones.html': 'polizas',
   'cotizaciones.html': 'cotizaciones_salud',
+  'cotizador.html': 'cotizador_salud',
 };
 
 /* -----------------------------------------------------------------------
@@ -148,12 +149,26 @@ function esPerfilAdministrador(perfilNombre) {
 // -----------------------------------------------------------------------
 function getRoleScope(perfilNombre) {
   const p = (perfilNombre || '').trim().toLowerCase();
-  if (p.startsWith('administrador')) {
-    return p.includes('sucursal') ? 'admin_sucursal' : 'admin_nacional';
+
+  // Alcance de sucursal (ve solo lo de su sucursal): cualquier perfil que
+  // incluya "sucursal" en el nombre. Cubre tanto el perfil viejo
+  // "Administrador Sucursal" como el nuevo "Gerente de Sucursal".
+  if (p.includes('sucursal')) return 'admin_sucursal';
+
+  // Alcance nacional (ve todo, sin filtrar). Cubre "Administrador" a secas
+  // (retrocompatibilidad) y los nuevos "Usuario Master" / "Gerente Nacional".
+  if (p.startsWith('administrador') || p === 'usuario master' || p === 'gerente nacional') {
+    return 'admin_nacional';
   }
-  if (p === 'colaborador') return 'colaborador';
-  if (p === 'asesor') return 'asesor';
-  return 'asesor'; // fallback más restrictivo ante un perfil no reconocido
+
+  // Alcance de ejecutivo (ve lo propio + lo de los asesores que lo tienen a
+  // él como ejecutivo). Cubre "Colaborador" (viejo) y "Ejecutivo Comercial" (nuevo).
+  if (p === 'colaborador' || p === 'ejecutivo comercial') return 'colaborador';
+
+  // Alcance propio (solo lo suyo). Cubre "Asesor" (viejo) y los nuevos
+  // "Aliado Comercial" / "Usuario de Sektor", y es el fallback ante
+  // cualquier perfil no reconocido (el más restrictivo).
+  return 'asesor';
 }
 
 function requireAccess(pageName) {
