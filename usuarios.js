@@ -8,6 +8,7 @@ const SUPABASE_ANON_KEY = 'sb_publishable_zlp4_HGpTeAQKW55c_pZQA_2HEXRpaC';
 const TABLE_USUARIOS = 'usuarios';
 const TABLE_PERFILES = 'perfiles';
 const TABLE_SUCURSALES = 'sucursales';
+const TABLE_MODULOS = 'modulos';
 
 let supabaseClient = null;
 
@@ -53,15 +54,24 @@ async function initSupabase() {
   ahora guarda tanto `perfil_id` (nueva fuente de verdad normalizada) como
   `perfil` (el nombre en texto), en cada alta/edición de usuario.
 
-  NOTA DE SEGURIDAD:
-  Guardar contraseñas en texto plano y consultarlas desde el cliente (anon key)
-  no es una práctica segura para producción. Lo ideal es:
-    1) Activar Row Level Security (RLS) en esta tabla.
-    2) Mover la validación de login a una función RPC de Postgres que reciba
-       email/password y devuelva solo el perfil, sin exponer la contraseña.
-    3) O migrar por completo a Supabase Auth + una tabla `profiles` con el perfil.
-  Este ejemplo las guarda y consulta directamente para mantener el alcance
-  original del requerimiento.
+  SEGURIDAD DE LOGIN (implementado, ver 18_seguridad_login_y_permisos_modulos.sql):
+  - `usuarios.password` es un campo de ENTRADA transitorio: un trigger en
+    Postgres lo hashea (bcrypt/pgcrypto) hacia `password_hash` y lo deja en
+    NULL de inmediato. Nunca se persiste en texto plano.
+  - El login (principal.html) llama a la función RPC `login_usuario`, que
+    compara el hash dentro de la base y no expone `password_hash` al cliente.
+  - El cliente (este archivo) NUNCA hace SELECT de password ni password_hash;
+    esas columnas también tienen SELECT revocado para anon/authenticated.
+
+  PERMISOS DE MENÚ (por usuario individual):
+  - `usuarios.modulos_permitidos` (jsonb, array de `modulos.key`) define a
+    qué módulos/submenús tiene acceso ESE usuario. Se edita desde el modal
+    de Usuarios ("Menús Permitidos"), con checkboxes generados dinámicamente
+    desde la tabla `modulos` (agregar un módulo nuevo ahí lo refleja aquí
+    automáticamente, sin tocar código).
+  - `perfiles.es_administrador` (boolean) da acceso total, independiente del
+    nombre del perfil: renombrar un perfil no afecta el acceso de los
+    usuarios que lo tienen asignado.
 */
 
 /* =============================================================
@@ -135,6 +145,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let allUsers = [];
   let allPerfiles = [];
   let allSucursales = [];
+  let allModulos = [];
   let confirmResolve = null;
   const notificationTimers = {};
 
@@ -289,6 +300,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const fieldTelefono = document.getElementById('fieldTelefono');
   const fieldPerfil = document.getElementById('fieldPerfil');
   const fieldPassword = document.getElementById('fieldPassword');
+  const modulosPermitidosContainer = document.getElementById('modulosPermitidosContainer');
+  const modulosSelectAll = document.getElementById('modulosSelectAll');
 
   const userViewDetail = document.getElementById('userViewDetail');
   const userViewId = document.getElementById('userViewId');
@@ -305,12 +318,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentSort = { key: 'full_name', direction: 'asc' };
 
   // El catálogo de Perfiles es de texto libre (pestaña "Perfiles"), así que
-  // pueden existir variantes como "Administrador Nacional" o "Administrador
-  // Sucursal" además de "Administrador" a secas. Para la lógica de
-  // "Ejecutivo" (auto-referencia), cualquier perfil que EMPIECE con
-  // "Administrador" se trata igual que "Colaborador": es su propio ejecutivo.
-  function esPerfilAdministrador(perfilNombre) {
-    return (perfilNombre || '').trim().toLowerCase().startsWith('administrador');
+  // el nombre puede ser cualquier cosa (p. ej. "Usuario Master", "Gerente
+  // Nacional"). Por eso el acceso total ya NO se detecta por nombre: se usa
+  // la columna `perfiles.es_administrador` (checkbox en el modal de Perfil),
+  // que es independiente del nombre y no se rompe si el perfil se renombra.
+  // Se mantiene el fallback por nombre ("empieza con Administrador") solo
+  // por retrocompatibilidad con perfiles antiguos que aún no tienen el
+  // checkbox marcado.
+  function esPerfilAdministrador(perfil) {
+    if (perfil && typeof perfil === 'object') {
+      return !!perfil.es_administrador || (perfil.perfil || '').trim().toLowerCase().startsWith('administrador');
+    }
+    return (perfil || '').trim().toLowerCase().startsWith('administrador');
   }
   function esPerfilColaborador(perfilNombre) {
     return (perfilNombre || '').trim().toLowerCase() === 'colaborador';
@@ -328,7 +347,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   fullNameInput.addEventListener('input', () => {
     const perfilSeleccionado = allPerfiles.find((p) => p.id === perfilInput.value);
     const perfilNombre = perfilSeleccionado ? perfilSeleccionado.perfil : '';
-    if (esPerfilAdministrador(perfilNombre) || esPerfilColaborador(perfilNombre)) {
+    if (esPerfilAdministrador(perfilSeleccionado) || esPerfilColaborador(perfilNombre)) {
       refreshEjecutivoField();
     }
   });
@@ -418,7 +437,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       setFieldError(fieldEjecutivo, false);
     }
 
-    const passwordOk = PASSWORD_REGEX.test(passwordInput.value);
+    // En edición, la contraseña es opcional: dejarla vacía significa "no
+    // cambiar la contraseña actual". Si se escribe algo, debe cumplir el
+    // formato. En registro, siempre es obligatoria.
+    const passwordValue = passwordInput.value;
+    const passwordOk = isEditMode
+      ? (passwordValue === '' || PASSWORD_REGEX.test(passwordValue))
+      : PASSWORD_REGEX.test(passwordValue);
     setFieldError(fieldPassword, !passwordOk);
     if (!passwordOk) valid = false;
 
@@ -438,6 +463,89 @@ document.addEventListener('DOMContentLoaded', async () => {
         sucursalSelect.appendChild(opt);
       });
     if (previous) sucursalSelect.value = previous;
+  }
+
+  /* =========================================================
+     MÓDULOS DEL SISTEMA (permisos de menú por usuario)
+     La tabla `modulos` es la fuente única de verdad: agregar un registro ahí
+     (nuevo menú o submenú) hace que aparezca aquí automáticamente, sin tocar
+     este archivo.
+     ========================================================= */
+  async function loadModulos() {
+    if (!supabaseClient) return;
+    try {
+      const { data, error } = await supabaseClient
+        .from(TABLE_MODULOS)
+        .select('id, key, nombre, grupo, orden')
+        .eq('status', 'Activo')
+        .order('orden', { ascending: true });
+      if (error) {
+        console.error('Error al cargar módulos:', error);
+        return;
+      }
+      allModulos = data || [];
+    } catch (err) {
+      console.error('Excepción al cargar módulos:', err);
+    }
+  }
+
+  function renderModulosCheckboxes(selectedKeys) {
+    const selected = new Set(selectedKeys || []);
+    modulosPermitidosContainer.innerHTML = '';
+
+    if (!allModulos.length) {
+      modulosPermitidosContainer.textContent = 'No hay módulos configurados.';
+      return;
+    }
+
+    // Agrupa por `grupo` (null = acceso directo, ej. Dashboard) respetando
+    // el orden ya traído de la base.
+    const grupos = new Map();
+    allModulos.forEach((m) => {
+      const key = m.grupo || '';
+      if (!grupos.has(key)) grupos.set(key, []);
+      grupos.get(key).push(m);
+    });
+
+    grupos.forEach((items, grupoNombre) => {
+      if (grupoNombre) {
+        const titulo = document.createElement('div');
+        titulo.textContent = grupoNombre;
+        titulo.style.cssText = 'font-weight:700; font-size:0.78rem; letter-spacing:0.03em; color:var(--color-navy); margin:0.5rem 0 0.25rem;';
+        modulosPermitidosContainer.appendChild(titulo);
+      }
+      items.forEach((m) => {
+        const label = document.createElement('label');
+        label.style.cssText = 'display:flex; align-items:center; gap:0.4rem; padding:0.15rem 0; font-size:0.85rem; cursor:pointer;';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = m.key;
+        cb.checked = selected.has(m.key);
+        cb.addEventListener('change', syncModulosSelectAllState);
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(m.nombre));
+        modulosPermitidosContainer.appendChild(label);
+      });
+    });
+
+    syncModulosSelectAllState();
+  }
+
+  function getModulosCheckboxes() {
+    return Array.from(modulosPermitidosContainer.querySelectorAll('input[type="checkbox"]'));
+  }
+
+  function syncModulosSelectAllState() {
+    const checkboxes = getModulosCheckboxes();
+    modulosSelectAll.checked = checkboxes.length > 0 && checkboxes.every((cb) => cb.checked);
+  }
+
+  modulosSelectAll.addEventListener('change', () => {
+    getModulosCheckboxes().forEach((cb) => { cb.checked = modulosSelectAll.checked; });
+  });
+
+  function getSelectedModulos() {
+    return getModulosCheckboxes().filter((cb) => cb.checked).map((cb) => cb.value);
   }
 
   function populatePerfilSelect(selectedId) {
@@ -471,7 +579,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     ejecutivoSelect.innerHTML = '';
     setFieldError(fieldEjecutivo, false);
 
-    if (esPerfilAdministrador(perfilNombre) || esPerfilColaborador(perfilNombre)) {
+    if (esPerfilAdministrador(perfilSeleccionado) || esPerfilColaborador(perfilNombre)) {
       const opt = document.createElement('option');
       opt.value = 'self';
       opt.textContent = fullNameInput.value.trim() || '(Nombre del propio usuario)';
@@ -547,7 +655,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       emailInput.value = user.email;
       telefonoInput.value = user.telefono || '';
       perfilInput.value = user.perfil_id || '';
-      passwordInput.value = user.password;
+      // La contraseña nunca se lee de vuelta (se guarda como hash): el campo
+      // queda vacío y solo se actualiza si el usuario escribe una nueva.
+      passwordInput.value = '';
+      passwordInput.placeholder = 'Dejar en blanco para no cambiar la contraseña';
+      document.getElementById('passwordHint').textContent = 'Déjala vacía para conservar la contraseña actual.';
 
       userViewId.textContent = user.id;
       userViewStatus.textContent = user.status || 'Activo';
@@ -561,7 +673,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       userIdInput.value = '';
       sucursalSelect.value = '';
       perfilInput.value = '';
+      passwordInput.placeholder = 'Mínimo 8 caracteres';
+      document.getElementById('passwordHint').textContent = 'La contraseña se guarda cifrada (hash), nunca en texto plano.';
     }
+
+    renderModulosCheckboxes(user ? user.modulos_permitidos : []);
 
     // El campo "Ejecutivo" depende del perfil (y de la sucursal, si es
     // Asesor), así que se calcula siempre después de fijar esos valores.
@@ -572,6 +688,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const fields = [sucursalSelect, fullNameInput, emailInput, telefonoInput, perfilInput, passwordInput];
     fields.forEach((field) => { field.disabled = viewOnly; });
     if (viewOnly) ejecutivoSelect.disabled = true;
+    modulosSelectAll.disabled = viewOnly;
+    modulosPermitidosContainer.querySelectorAll('input[type="checkbox"]').forEach((cb) => { cb.disabled = viewOnly; });
 
     userViewDetail.style.display = viewOnly ? 'flex' : 'none';
     submitBtn.style.display = viewOnly ? 'none' : 'inline-flex';
@@ -701,9 +819,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     try {
+      // Select explícito (sin `*`): nunca se piden password/password_hash
+      // desde el cliente, y esas columnas además tienen SELECT revocado
+      // para anon/authenticated a nivel de base de datos.
       const { data, error } = await supabaseClient
         .from(TABLE_USUARIOS)
-        .select('*, perfiles:perfil_id(perfil), sucursales:sucursal_id(sucursal)')
+        .select(`
+          id, full_name, email, telefono, sucursal_id, perfil, perfil_id,
+          ejecutivo_id, status, modulos_permitidos,
+          fecha_creacion, usuario_creacion, fecha_modificacion, usuario_modificacion,
+          perfiles:perfil_id(perfil, es_administrador),
+          sucursales:sucursal_id(sucursal)
+        `)
         .order('full_name', { ascending: true });
 
       usersLoading.style.display = 'none';
@@ -754,7 +881,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // "Ejecutivo": Administrador/Colaborador son su propio ejecutivo
     // (se autorreferencia); Asesor usa el colaborador elegido en el select;
     // cualquier otro perfil no aplica y queda en null.
-    const esAutoEjecutivo = esPerfilAdministrador(perfilNombreSeleccionado) || esPerfilColaborador(perfilNombreSeleccionado);
+    const esAutoEjecutivo = esPerfilAdministrador(perfilSeleccionado) || esPerfilColaborador(perfilNombreSeleccionado);
     let ejecutivoIdPayload = null;
     if (esAutoEjecutivo) {
       // En edición ya conocemos el id propio; en registro se completa
@@ -774,8 +901,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       // auth-guard.js / el login, que leen "perfil" como texto plano.
       perfil: perfilSeleccionado ? perfilSeleccionado.perfil : null,
       ejecutivo_id: ejecutivoIdPayload,
-      password: passwordInput.value,
+      modulos_permitidos: getSelectedModulos(),
     };
+
+    // La contraseña solo se envía si el usuario escribió una nueva: un
+    // trigger en la base la hashea (bcrypt) y limpia este campo de
+    // inmediato. En edición, dejarla vacía conserva la contraseña actual.
+    if (passwordInput.value !== '') {
+      payload.password = passwordInput.value;
+    }
 
     if (isEditMode) {
       payload.usuario_modificacion = currentUser;
@@ -936,6 +1070,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const perfilViewUsuarioCreacion = document.getElementById('perfilViewUsuarioCreacion');
   const perfilViewFechaModificacion = document.getElementById('perfilViewFechaModificacion');
   const perfilViewUsuarioModificacion = document.getElementById('perfilViewUsuarioModificacion');
+  const perfilEsAdministradorInput = document.getElementById('perfilEsAdministrador');
+  const perfilViewEsAdministrador = document.getElementById('perfilViewEsAdministrador');
 
   let isEditModePerfil = false;
   let isReadOnlyPerfil = false;
@@ -956,9 +1092,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       submitPerfilBtn.textContent = 'Guardar Cambios';
       perfilIdInput.value = item.id;
       perfilNombreInput.value = item.perfil || '';
+      perfilEsAdministradorInput.checked = !!item.es_administrador;
 
       perfilViewId.textContent = item.id;
       perfilViewStatus.textContent = item.status;
+      perfilViewEsAdministrador.textContent = item.es_administrador ? 'Sí' : 'No';
       perfilViewFechaCreacion.textContent = formatDateTime(item.fecha_creacion);
       perfilViewUsuarioCreacion.textContent = item.usuario_creacion || '—';
       perfilViewFechaModificacion.textContent = formatDateTime(item.fecha_modificacion);
@@ -967,9 +1105,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       perfilModalTitle.textContent = 'Registrar Perfil';
       submitPerfilBtn.textContent = 'Registrar';
       perfilIdInput.value = '';
+      perfilEsAdministradorInput.checked = false;
     }
 
     perfilNombreInput.disabled = viewOnly;
+    perfilEsAdministradorInput.disabled = viewOnly;
     perfilViewDetail.style.display = viewOnly ? 'flex' : 'none';
     submitPerfilBtn.style.display = viewOnly ? 'none' : 'inline-flex';
 
@@ -981,6 +1121,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     perfilModalOverlay.classList.remove('is-open');
     perfilForm.reset();
     perfilNombreInput.disabled = false;
+    perfilEsAdministradorInput.disabled = false;
     perfilViewDetail.style.display = 'none';
     submitPerfilBtn.style.display = 'inline-flex';
   }
@@ -1118,7 +1259,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     submitPerfilBtn.textContent = isEditModePerfil ? 'Guardando...' : 'Registrando...';
 
     const currentUser = getCurrentUserLabel();
-    const payload = { perfil: perfilNombreInput.value.trim() };
+    const payload = {
+      perfil: perfilNombreInput.value.trim(),
+      es_administrador: perfilEsAdministradorInput.checked,
+    };
 
     if (isEditModePerfil) {
       payload.usuario_modificacion = currentUser;
@@ -1502,8 +1646,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateSortIndicators(sortableHeadersSucursales, currentSortSucursales);
 
   await initSupabase();
-  // Perfiles y Sucursales primero, para poder poblar los <select> del
-  // modal de Usuarios y mostrar los nombres embebidos en su listado.
-  await Promise.all([loadPerfiles(), loadSucursales()]);
+  // Perfiles, Sucursales y Módulos primero, para poder poblar los <select> /
+  // checkboxes del modal de Usuarios y mostrar los nombres embebidos en su listado.
+  await Promise.all([loadPerfiles(), loadSucursales(), loadModulos()]);
   await loadUsers();
 });

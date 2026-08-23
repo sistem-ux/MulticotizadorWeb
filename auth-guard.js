@@ -43,16 +43,47 @@ const PAGE_PERMISSIONS = {
   'cotizaciones.html': [ROLES.ADMIN1,ROLES.ADMIN2, ROLES.COLABORADOR, ROLES.ASESOR],
 };
 
+// -----------------------------------------------------------------------
+// Acceso por MÓDULO (nueva vía, independiente del nombre del perfil).
+// Cada página se asocia a la `key` de un registro de la tabla `modulos`.
+// El acceso real se decide en requireAccess() usando la lista
+// `modulos_permitidos` guardada por usuario (ver login_usuario RPC), no el
+// nombre del perfil. Así, renombrar un perfil en la pestaña "Perfiles" no
+// rompe el acceso de los usuarios ya logueados ni de los nuevos.
+// PAGE_PERMISSIONS (arriba) se conserva solo como respaldo retrocompatible
+// para perfiles antiguos que aún no tienen `modulos_permitidos` configurado.
+// -----------------------------------------------------------------------
+const PAGE_MODULO_KEY = {
+  'dashboard.html': 'dashboard',
+  'usuarios.html': 'usuarios',
+  'aseguradoras.html': 'aseguradoras',
+  'ramos.html': 'ramos',
+  'clientes.html': 'clientes',
+  'polizas.html': 'polizas',
+  'fracciones.html': 'polizas',
+  'cotizaciones.html': 'cotizaciones_salud',
+};
+
 /* -----------------------------------------------------------------------
    2. SESIÓN (localStorage)
    ----------------------------------------------------------------------- */
 function getSession() {
+  let modulosPermitidos = [];
+  try {
+    modulosPermitidos = JSON.parse(localStorage.getItem('userModulosPermitidos') || '[]');
+  } catch { modulosPermitidos = []; }
+
   return {
     id: localStorage.getItem('userId') || null,
     email: localStorage.getItem('userEmail') || null,
     fullName: localStorage.getItem('userFullName') || null,
     role: localStorage.getItem('userRole') || null,
     sucursalId: localStorage.getItem('userSucursalId') || null,
+    perfilId: localStorage.getItem('userPerfilId') || null,
+    // Flag independiente del nombre del perfil (columna perfiles.es_administrador):
+    // renombrar el perfil no afecta este valor ni el acceso del usuario.
+    esAdministrador: localStorage.getItem('userEsAdministrador') === 'true',
+    modulosPermitidos,
   };
 }
 
@@ -60,12 +91,17 @@ function getSession() {
 // tabla usuarios) al hacer login, además de id/email/fullName/role. Sin este
 // dato, el filtrado por sucursal en cotizaciones.js (perfil "Administrador
 // Sucursal") no puede aplicarse.
-function saveSession({ id, email, fullName, role, sucursalId }) {
+// `esAdministrador` y `modulosPermitidos` vienen de la función RPC segura
+// login_usuario() (ver SQL de seguridad de login y permisos de módulos).
+function saveSession({ id, email, fullName, role, sucursalId, perfilId, esAdministrador, modulosPermitidos }) {
   if (id) localStorage.setItem('userId', id); else localStorage.removeItem('userId');
   if (email) localStorage.setItem('userEmail', email); else localStorage.removeItem('userEmail');
   if (fullName) localStorage.setItem('userFullName', fullName); else localStorage.removeItem('userFullName');
   if (sucursalId) localStorage.setItem('userSucursalId', sucursalId); else localStorage.removeItem('userSucursalId');
+  if (perfilId) localStorage.setItem('userPerfilId', perfilId); else localStorage.removeItem('userPerfilId');
   localStorage.setItem('userRole', role);
+  localStorage.setItem('userEsAdministrador', esAdministrador ? 'true' : 'false');
+  localStorage.setItem('userModulosPermitidos', JSON.stringify(modulosPermitidos || []));
 }
 
 function clearSession() {
@@ -74,6 +110,9 @@ function clearSession() {
   localStorage.removeItem('userFullName');
   localStorage.removeItem('userRole');
   localStorage.removeItem('userSucursalId');
+  localStorage.removeItem('userPerfilId');
+  localStorage.removeItem('userEsAdministrador');
+  localStorage.removeItem('userModulosPermitidos');
 }
 
 function logout() {
@@ -126,8 +165,17 @@ function requireAccess(pageName) {
     return null;
   }
 
-  const tieneAcceso = allowedRoles.includes(session.role)
+  const esAdmin = session.esAdministrador || esPerfilAdministrador(session.role);
+  const moduloKey = PAGE_MODULO_KEY[pageName];
+
+  // Vía legado: nombre de rol en PAGE_PERMISSIONS (perfiles ya existentes).
+  const accesoPorRolLegado = allowedRoles.includes(session.role)
     || (esPerfilAdministrador(session.role) && allowedRoles.includes(ROLES.ADMIN));
+  // Vía nueva: módulo permitido por usuario, o administrador total. No
+  // depende del nombre del perfil, así que sobrevive a un renombre.
+  const accesoPorModulo = esAdmin || (!!moduloKey && session.modulosPermitidos.includes(moduloKey));
+
+  const tieneAcceso = accesoPorRolLegado || accesoPorModulo;
 
   if (!tieneAcceso) {
     alert('No tienes permisos para acceder a esta sección con tu perfil actual.');
@@ -144,16 +192,36 @@ function requireAccess(pageName) {
    solo se muestran si el rol de la sesión está en esa lista.
    Un enlace sin data-roles se muestra siempre.
    ----------------------------------------------------------------------- */
-function filterSidebarByRole(sidebarElement, role) {
+// El Visitante no inicia sesión como usuario registrado (no tiene fila en
+// `usuarios` ni `modulos_permitidos`), así que sigue controlado por
+// data-roles. Todos los demás perfiles se filtran por `data-modulo`, que
+// se compara contra `session.modulosPermitidos` (independiente del nombre
+// del perfil). Si mañana se agrega un módulo/submenú nuevo, basta con
+// insertarlo en la tabla `modulos` y asignarlo a los usuarios que
+// corresponda desde el modal de Usuarios: no requiere tocar este archivo.
+function filterSidebarByAccess(sidebarElement, session) {
   if (!sidebarElement) return;
 
-  sidebarElement.querySelectorAll('.menu-link[data-roles]').forEach((link) => {
-    const allowedRoles = link.dataset.roles.split(',').map((r) => r.trim());
-    // El contenedor a ocultar puede ser un <li> (dentro de un submenú) o el
-    // propio wrapper .menu-single (enlaces sueltos como "Dashboard").
+  const esAdmin = session.esAdministrador || esPerfilAdministrador(session.role);
+  const modulos = session.modulosPermitidos || [];
+
+  sidebarElement.querySelectorAll('.menu-link').forEach((link) => {
     const container = link.closest('li') || link.closest('.menu-single') || link;
-    const puedeVer = allowedRoles.includes(role)
-      || (esPerfilAdministrador(role) && allowedRoles.includes(ROLES.ADMIN));
+
+    if (session.role === ROLES.VISITANTE) {
+      const allowedRoles = (link.dataset.roles || '').split(',').map((r) => r.trim());
+      container.style.display = allowedRoles.includes(ROLES.VISITANTE) ? '' : 'none';
+      return;
+    }
+
+    const moduloKey = link.dataset.modulo;
+    if (!moduloKey) {
+      // Enlace sin módulo asociado: se muestra siempre a usuarios logueados.
+      container.style.display = '';
+      return;
+    }
+
+    const puedeVer = esAdmin || modulos.includes(moduloKey);
     container.style.display = puedeVer ? '' : 'none';
   });
 
@@ -271,7 +339,7 @@ async function initAppShell({ pageName }) {
       const response = await fetch('sidebar.html');
       if (response.ok) {
         sidebarElement.innerHTML = await response.text();
-        filterSidebarByRole(sidebarElement, session.role);
+        filterSidebarByAccess(sidebarElement, session);
         const activeGroup = highlightActiveSidebarLink(sidebarElement, pageName);
         setupSidebarAccordion(sidebarElement, activeGroup);
       } else {

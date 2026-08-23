@@ -89,16 +89,18 @@
     const TABLE_NAME = 'usuarios';
 
     /*
-      NOTA DE SEGURIDAD:
-      Esta pantalla consulta la tabla `usuarios` con la clave anónima (anon key)
-      y compara la contraseña en el propio navegador. Esto solo es aceptable en un
-      entorno de práctica/demo. Para producción se recomienda:
-        1) Activar Row Level Security (RLS) en la tabla `usuarios`.
-        2) Mover la validación a una función RPC de Postgres (o Edge Function) que
-           reciba email/password y devuelva únicamente el perfil, sin exponer la
-           columna password al cliente.
-        3) Migrar la autenticación a Supabase Auth (supabase.auth.signInWithPassword)
-           y guardar el perfil en una tabla `profiles` enlazada por auth.uid().
+      SEGURIDAD DEL LOGIN (implementado):
+      La validación de credenciales ocurre DENTRO de Postgres, en la función
+      RPC `login_usuario(p_email, p_password)`:
+        - Las contraseñas se guardan con hash bcrypt (pgcrypto) en la columna
+          `usuarios.password_hash`; nunca en texto plano.
+        - La función compara el hash internamente (crypt(...) = password_hash)
+          y solo devuelve id, nombre, email, perfil, perfil_id, sucursal_id,
+          es_administrador y modulos_permitidos — nunca el hash.
+        - El cliente (este archivo) no lee ni compara contraseñas directamente.
+      Ver el script SQL "18_seguridad_login_y_permisos_modulos.sql" para la
+      definición completa (extensión pgcrypto, trigger de hasheo, función RPC
+      y revocación de SELECT sobre password/password_hash para anon).
     */
 
     async function initLogin() {
@@ -143,6 +145,9 @@
           localStorage.removeItem('userId');
           localStorage.removeItem('userFullName');
           localStorage.removeItem('userSucursalId');
+          localStorage.removeItem('userPerfilId');
+          localStorage.removeItem('userEsAdministrador');
+          localStorage.removeItem('userModulosPermitidos');
           localStorage.setItem('userRole', 'Visitante');
           localStorage.setItem('userEmail', '');
           window.location.href = 'cotizador.html';
@@ -166,35 +171,46 @@
         accessBtn.textContent = 'Verificando...';
 
         try {
-          // Buscamos al usuario por correo en la tabla `usuarios`
+          // Login seguro: la contraseña se valida DENTRO de Postgres (función
+          // RPC login_usuario), comparando contra el hash bcrypt guardado en
+          // password_hash. El cliente nunca lee ni compara contraseñas.
           const { data, error } = await supabase
-            .from(TABLE_NAME)
-            .select('id, full_name, email, perfil, password, sucursal_id')
-            .eq('email', userEmail)
-            .maybeSingle();
+            .rpc('login_usuario', { p_email: userEmail, p_password: userPassword });
 
           if (error) {
-            console.error('Error consultando usuarios:', error);
+            console.error('Error validando credenciales:', error);
             alert('No se pudo validar tus credenciales. Intenta de nuevo.');
             return;
           }
 
-          // Validamos que exista y que la contraseña coincida
-          if (!data || data.password !== userPassword) {
+          const usuario = Array.isArray(data) ? data[0] : data;
+
+          // Sin coincidencia: correo inexistente, contraseña incorrecta o usuario Inactivo
+          if (!usuario) {
             alert('Correo o contraseña incorrectos, o el usuario no está registrado.');
             return;
           }
 
           // Identificamos el perfil real del usuario (Asesor / Colaborador / Administrador)
-          localStorage.setItem('userId', data.id);
-          localStorage.setItem('userFullName', data.full_name);
-          localStorage.setItem('userEmail', data.email);
-          localStorage.setItem('userRole', data.perfil);
+          localStorage.setItem('userId', usuario.id);
+          localStorage.setItem('userFullName', usuario.full_name);
+          localStorage.setItem('userEmail', usuario.email);
+          localStorage.setItem('userRole', usuario.perfil);
+          if (usuario.perfil_id) {
+            localStorage.setItem('userPerfilId', usuario.perfil_id);
+          } else {
+            localStorage.removeItem('userPerfilId');
+          }
+          // Acceso total (independiente del nombre del perfil) y módulos
+          // habilitados para ESTE usuario; usados por auth-guard.js para
+          // decidir qué páginas y enlaces del sidebar puede ver.
+          localStorage.setItem('userEsAdministrador', usuario.es_administrador ? 'true' : 'false');
+          localStorage.setItem('userModulosPermitidos', JSON.stringify(usuario.modulos_permitidos || []));
           // Necesario para el filtrado por sucursal en cotizaciones.js/dashboard.js
           // (perfil "Administrador Sucursal"). Si el usuario no tiene sucursal
           // asignada, se limpia la clave en vez de guardar la cadena "null".
-          if (data.sucursal_id) {
-            localStorage.setItem('userSucursalId', data.sucursal_id);
+          if (usuario.sucursal_id) {
+            localStorage.setItem('userSucursalId', usuario.sucursal_id);
           } else {
             localStorage.removeItem('userSucursalId');
           }

@@ -544,10 +544,10 @@
               class="text-input"
               placeholder="Mínimo 8 caracteres"
               autocomplete="new-password"
-              required
             >
             <button type="button" class="password-toggle" id="togglePasswordBtn" aria-label="Mostrar contraseña">👁</button>
           </div>
+          <span class="field-hint" id="passwordHint">La contraseña se guarda cifrada (hash), nunca en texto plano.</span>
           <span class="field-error">Alfanumérica, puede incluir caracteres especiales, mínimo 8 caracteres.</span>
         </div>
 
@@ -579,6 +579,18 @@
           </select>
           <span class="field-hint" id="ejecutivoHint">El ejecutivo se determina automáticamente según el perfil seleccionado.</span>
           <span class="field-error">Selecciona el colaborador al que estará adscrito este asesor.</span>
+        </div>
+
+        <!-- Menús permitidos: se genera dinámicamente desde la tabla `modulos`,
+             así que se actualiza solo cuando se agregue un módulo/submenú nuevo,
+             sin tocar este HTML. Permiso por usuario individual. -->
+        <div class="modal__field" id="fieldModulos">
+          <label class="form-label">Menús Permitidos</label>
+          <div id="modulosPermitidosHint" class="field-hint">Selecciona a qué módulos del sistema tendrá acceso este usuario.</div>
+          <label style="display:flex; align-items:center; gap:0.4rem; margin:0.35rem 0; font-size:0.85rem; cursor:pointer;">
+            <input type="checkbox" id="modulosSelectAll"> Seleccionar todos
+          </label>
+          <div id="modulosPermitidosContainer" style="max-height:220px; overflow-y:auto; border:1px solid var(--color-border, #d9dee5); border-radius:8px; padding:0.6rem 0.75rem;"></div>
         </div>
 
         <!-- Detalle de solo lectura (visible únicamente en modo "Ver") -->
@@ -627,10 +639,21 @@
           <span class="field-error">Ingresa el nombre del perfil (mínimo 3 caracteres).</span>
         </div>
 
+        <!-- Acceso total: independiente del nombre del perfil, así que
+             renombrar el perfil no afecta el acceso de los usuarios que ya
+             tienen sesión iniciada ni de los que inicien sesión después. -->
+        <div class="modal__field" id="fieldPerfilEsAdministrador">
+          <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+            <input type="checkbox" id="perfilEsAdministrador">
+            Perfil con acceso total (ve todos los módulos del sistema, sin restricción)
+          </label>
+        </div>
+
         <!-- Detalle de solo lectura (visible únicamente en modo "Ver") -->
         <div class="view-detail" id="perfilViewDetail" style="display:none;">
           <div class="view-detail__row"><span>Id</span><span id="perfilViewId"></span></div>
           <div class="view-detail__row"><span>Status</span><span id="perfilViewStatus"></span></div>
+          <div class="view-detail__row"><span>Acceso total</span><span id="perfilViewEsAdministrador"></span></div>
           <div class="view-detail__row"><span>Fecha de creación</span><span id="perfilViewFechaCreacion"></span></div>
           <div class="view-detail__row"><span>Usuario de creación</span><span id="perfilViewUsuarioCreacion"></span></div>
           <div class="view-detail__row"><span>Fecha última modificación</span><span id="perfilViewFechaModificacion"></span></div>
