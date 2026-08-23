@@ -1117,6 +1117,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const planEdadMaxTitularInput = document.getElementById('planEdadMaxTitular');
   const planEdadMinFamiliaresInput = document.getElementById('planEdadMinFamiliares');
   const planEdadMaxFamiliaresInput = document.getElementById('planEdadMaxFamiliares');
+  const planEdadMinHijosInput = document.getElementById('planEdadMinHijos');
+  const planEdadMaxHijosInput = document.getElementById('planEdadMaxHijos');
   const planModoTarifaHijosSelect = document.getElementById('planModoTarifaHijos');
 
   const planGastosFraccionamientoCheck = document.getElementById('planGastosFraccionamientoCheck');
@@ -1142,6 +1144,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const fieldPlanEdadMaxTitular = document.getElementById('fieldPlanEdadMaxTitular');
   const fieldPlanEdadMinFamiliares = document.getElementById('fieldPlanEdadMinFamiliares');
   const fieldPlanEdadMaxFamiliares = document.getElementById('fieldPlanEdadMaxFamiliares');
+  const fieldPlanEdadMinHijos = document.getElementById('fieldPlanEdadMinHijos');
+  const fieldPlanEdadMaxHijos = document.getElementById('fieldPlanEdadMaxHijos');
   const fieldPlanModoTarifaHijos = document.getElementById('fieldPlanModoTarifaHijos');
 
   attachThousandsFormatter(planSumaAseguradaInput);
@@ -1227,7 +1231,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     clearFeedback('planFormFeedback');
     [fieldPlanAseguradora, fieldPlanProducto, fieldPlanTipoTarifa, fieldPlanSumaAsegurada, fieldPlanDeducibleVzla,
       fieldPlanDeducibleExterior, fieldPlanEdadMinTitular,
-      fieldPlanEdadMaxTitular, fieldPlanEdadMinFamiliares, fieldPlanEdadMaxFamiliares, fieldPlanModoTarifaHijos]
+      fieldPlanEdadMaxTitular, fieldPlanEdadMinFamiliares, fieldPlanEdadMaxFamiliares,
+      fieldPlanEdadMinHijos, fieldPlanEdadMaxHijos, fieldPlanModoTarifaHijos]
       .forEach((f) => setFieldError(f, false));
 
     populatePlanAseguradoraSelect();
@@ -1253,6 +1258,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       planEdadMaxTitularInput.value = item.edad_max_titular ?? '';
       planEdadMinFamiliaresInput.value = item.edad_min_familiares ?? '';
       planEdadMaxFamiliaresInput.value = item.edad_max_familiares ?? '';
+      planEdadMinHijosInput.value = item.edad_min_hijos ?? '';
+      planEdadMaxHijosInput.value = item.edad_max_hijos ?? '';
       planModoTarifaHijosSelect.value = item.modo_tarifa_hijos || '';
 
       planGastosFraccionamientoCheck.checked = !!item.gastos_fraccionamiento_activo;
@@ -1320,6 +1327,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const maxFam = Number(planEdadMaxFamiliaresInput.value);
     check(fieldPlanEdadMinFamiliares, planEdadMinFamiliaresInput.value !== '' && minFam >= 0 && minFam <= 120);
     check(fieldPlanEdadMaxFamiliares, planEdadMaxFamiliaresInput.value !== '' && maxFam >= 0 && maxFam <= 120 && maxFam >= minFam);
+
+    const minHij = Number(planEdadMinHijosInput.value);
+    const maxHij = Number(planEdadMaxHijosInput.value);
+    check(fieldPlanEdadMinHijos, planEdadMinHijosInput.value !== '' && minHij >= 0 && minHij <= 120);
+    check(fieldPlanEdadMaxHijos, planEdadMaxHijosInput.value !== '' && maxHij >= 0 && maxHij <= 120 && maxHij >= minHij);
 
     if (planGastosFraccionamientoCheck.checked && getThousandsValue(planGastosFraccionamientoMontoInput) === null) valid = false;
     if (planDescuentoDivisasCheck.checked && planDescuentoDivisasPorcentajeInput.value === '') valid = false;
@@ -1474,6 +1486,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       edad_max_titular: Number(planEdadMaxTitularInput.value),
       edad_min_familiares: Number(planEdadMinFamiliaresInput.value),
       edad_max_familiares: Number(planEdadMaxFamiliaresInput.value),
+      edad_min_hijos: Number(planEdadMinHijosInput.value),
+      edad_max_hijos: Number(planEdadMaxHijosInput.value),
       modo_tarifa_hijos: planModoTarifaHijosSelect.value,
       gastos_fraccionamiento_activo: planGastosFraccionamientoCheck.checked,
       gastos_fraccionamiento_monto: planGastosFraccionamientoCheck.checked ? getThousandsValue(planGastosFraccionamientoMontoInput) : null,

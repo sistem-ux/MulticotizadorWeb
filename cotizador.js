@@ -473,6 +473,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Esta función es de solo lectura (no modifica el DOM); la aplicación
   // visual del resultado se hace en validateRowFull().
   const EDAD_MINIMA_CONYUGE = 18;
+  const EDAD_MIN_HIJO = 0;
+  const EDAD_MAX_HIJO = 24;
 
   function addYearsToDate(date, years) {
     const result = new Date(date.getTime());
@@ -510,6 +512,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       return getNumericAge(dateInput.value) >= EDAD_MINIMA_CONYUGE;
     }
 
+    if (ruleType === 'hijo') {
+      // Límite absoluto de edad para Hijos (0 a 24 años), independiente de
+      // la fecha del Titular. Se evalúa primero para que aplique aunque el
+      // Titular todavía no tenga fecha cargada.
+      const edadHijo = getNumericAge(dateInput.value);
+      if (edadHijo < EDAD_MIN_HIJO || edadHijo > EDAD_MAX_HIJO) return false;
+    }
+
     const titularRow = tableBody.querySelector('.family-row[data-relation="Titular"]');
     const titularDateInput = titularRow ? titularRow.querySelector('.date-input') : null;
     const titularDate = titularDateInput ? parseDateValue(titularDateInput.value) : null;
@@ -519,9 +529,33 @@ document.addEventListener('DOMContentLoaded', async () => {
       const limiteMasReciente = addYearsToDate(titularDate, -10);
       return currentDate <= limiteMasReciente;
     }
-    // ruleType === 'hijo'
+    // ruleType === 'hijo' (ya pasó la validación de límite absoluto arriba)
     const limiteMasAntiguo = addYearsToDate(titularDate, 10);
     return currentDate >= limiteMasAntiguo;
+  }
+
+  // Para Hijos existen dos reglas independientes: el límite absoluto (0 a
+  // 24 años) y la relativa al Titular (al menos 10 años menor). Esta función
+  // identifica cuál de las dos falló, para mostrar el mensaje correcto en el
+  // modal de error.
+  function hijoFailureReason(row) {
+    const checkbox = row.querySelector('.row-checkbox');
+    const dateInput = row.querySelector('.date-input');
+    if (!checkbox.checked || dateInput.disabled) return null;
+    const currentDate = parseDateValue(dateInput.value);
+    if (!currentDate) return null;
+
+    const edadHijo = getNumericAge(dateInput.value);
+    if (edadHijo < EDAD_MIN_HIJO || edadHijo > EDAD_MAX_HIJO) return 'edad_limite';
+
+    const titularRow = tableBody.querySelector('.family-row[data-relation="Titular"]');
+    const titularDateInput = titularRow ? titularRow.querySelector('.date-input') : null;
+    const titularDate = titularDateInput ? parseDateValue(titularDateInput.value) : null;
+    if (!titularDate) return null;
+
+    const limiteMasAntiguo = addYearsToDate(titularDate, 10);
+    if (currentDate < limiteMasAntiguo) return 'relativo_titular';
+    return null;
   }
 
   function relativeAgeErrorMessageForRow(row) {
@@ -534,6 +568,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       return `Verifique la fecha de nacimiento de "${relation}". Debe ser al menos 10 años anterior a la del Titular.`;
     }
     if (ruleType === 'hijo') {
+      if (hijoFailureReason(row) === 'edad_limite') {
+        return `Verifique la fecha de nacimiento de "${relation}". La edad debe estar entre 0 y 24 años.`;
+      }
       return `Verifique la fecha de nacimiento de "${relation}". Debe ser al menos 10 años posterior a la del Titular.`;
     }
     return '';
@@ -577,7 +614,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!validateRelativeAgeForRow(row)) {
         const relation = row.dataset.relation || '';
         const ruleType = relativeAgeRuleTypeForRelation(relation);
-        if (ruleType) relativeAgeErrorTypes.add(ruleType);
+        if (ruleType === 'hijo') {
+          relativeAgeErrorTypes.add(hijoFailureReason(row) === 'edad_limite' ? 'hijo_edad_limite' : 'hijo');
+        } else if (ruleType) {
+          relativeAgeErrorTypes.add(ruleType);
+        }
       }
       const rowValid = validateRowFull(row);
       allValid = allValid && rowValid;
@@ -1891,6 +1932,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (familyFormRelativeAgeErrorTypes.has('hijo')) {
           mensajes.push('Verifica la fecha de nacimiento de los Hijos: debe ser al menos 10 años posterior a la del Titular.');
         }
+        if (familyFormRelativeAgeErrorTypes.has('hijo_edad_limite')) {
+          mensajes.push('Verifica la fecha de nacimiento de los Hijos: la edad debe estar entre 0 y 24 años.');
+        }
         mostrarErrorModal(mensajes.join('\n'));
       } else {
         mostrarErrorModal('Completa las fechas y géneros obligatorios de los integrantes incluidos.');
@@ -1947,15 +1991,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 2. Edad del Titular, para compararla contra el rango de edad de
     //    Titular configurado en cada plan (edad_min_titular / edad_max_titular).
-    //    Edades de los Familiares (todos los integrantes salvo el Titular),
-    //    para compararlas contra el rango de edad de Familiares configurado
-    //    en cada plan (edad_min_familiares / edad_max_familiares). La tarifa
-    //    que se les aplica es la de Titular; este rango solo decide qué
-    //    planes quedan disponibles para cotizar.
+    //    Edades de los Familiares (Cónyuge/Madre/Padre), para compararlas
+    //    contra el rango de edad de Familiares configurado en cada plan
+    //    (edad_min_familiares / edad_max_familiares). Edades de los Hijos,
+    //    para compararlas contra su propio rango (edad_min_hijos /
+    //    edad_max_hijos), independiente del de Familiares. Esto aplica
+    //    también cuando el plan tarifica "Por cantidad de hijos": el rango
+    //    de edad de Hijos sigue decidiendo qué planes quedan disponibles,
+    //    aunque el monto salga de la tabla por cantidad y no por edad. La
+    //    tarifa que se les aplica (Titular para Familiares/Hijos "Por hijo",
+    //    o la tabla por cantidad para Hijos) no cambia; estos rangos solo
+    //    deciden qué planes quedan disponibles para cotizar.
     const titular = integrantesActuales.find(miembro => miembro.parentesco === 'Titular');
     const edadTitular = titular ? getNumericAge(titular.fechaNacimiento) : -1;
     const edadesFamiliares = integrantesActuales
-      .filter(miembro => miembro.parentesco !== 'Titular')
+      .filter(miembro => miembro.parentesco !== 'Titular' && !(miembro.parentesco || '').startsWith('Hijo '))
+      .map(miembro => getNumericAge(miembro.fechaNacimiento));
+    const edadesHijos = integrantesActuales
+      .filter(miembro => (miembro.parentesco || '').startsWith('Hijo '))
       .map(miembro => getNumericAge(miembro.fechaNacimiento));
 
     const planesDisponibles = planesCotizables.filter(plan => {
@@ -1966,6 +2019,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         (plan.edad_max_familiares != null && edad > plan.edad_max_familiares)
       ));
       if (familiarFueraDeRango) return false;
+      const hijoFueraDeRango = edadesHijos.some((edad) => (
+        (plan.edad_min_hijos != null && edad < plan.edad_min_hijos) ||
+        (plan.edad_max_hijos != null && edad > plan.edad_max_hijos)
+      ));
+      if (hijoFueraDeRango) return false;
       if (plan.tipo_tarifa && plan.tipo_tarifa !== tarifaTipoActual) return false;
       return true;
     });
