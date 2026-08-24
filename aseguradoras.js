@@ -1662,11 +1662,11 @@ document.addEventListener('DOMContentLoaded', async () => {
           <label>Prima</label>
           <div class="input-currency"><span class="input-currency__prefix">$</span><input type="text" inputmode="decimal" class="cov-prima"></div>
         </div>
-        <div class="coverage-card__field cov-edad-field" style="display:none; width:80px;">
+        <div class="coverage-card__field cov-edad-field" style="display:none;">
           <label>Edad mín.</label>
           <input type="number" min="0" max="120" step="1" class="cov-edad-min text-input">
         </div>
-        <div class="coverage-card__field cov-edad-field" style="display:none; width:80px;">
+        <div class="coverage-card__field cov-edad-field" style="display:none;">
           <label>Edad máx.</label>
           <input type="number" min="0" max="120" step="1" class="cov-edad-max text-input">
         </div>

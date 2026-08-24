@@ -458,8 +458,9 @@
       color: #5B6472;
       margin-bottom: 0.25rem;
     }
-    .sum-row { display: flex; gap: 0.6rem; align-items: end; margin-bottom: 0.5rem; }
-    .sum-row .coverage-card__field { flex: 1; }
+    .sum-row { display: flex; gap: 0.6rem; align-items: end; margin-bottom: 0.5rem; flex-wrap: wrap; }
+    .sum-row .coverage-card__field { flex: 1; min-width: 110px; }
+    .sum-row .cov-edad-field { flex: 0 0 100px; min-width: 100px; }
     .btn-remove-sum {
       background: none; border: 1px solid var(--color-gray-border); border-radius: 6px;
       color: #C0392B; cursor: pointer; padding: 0.5rem 0.6rem; font-size: 0.85rem; flex-shrink: 0;
