@@ -953,13 +953,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const sumaValue = Number(sel.value);
-        const sumaObj = adicional.sumas.find((s) => Number(s.suma_asegurada) === sumaValue);
+
+        let primaCalculada;
+        if (adicional.porEdadFamiliar) {
+          // Se suma, por cada integrante activo de la cotización, la prima
+          // de la fila cuyo edad_min/edad_max contiene su edad actual, para
+          // la suma asegurada elegida. Un integrante fuera de todos los
+          // rangos configurados simplemente no aporta prima (no debería
+          // pasar si los rangos cubren 0–99, pero se evita romper el cálculo).
+          primaCalculada = integrantesActuales.reduce((total, miembro) => {
+            const edadMiembro = getNumericAge(miembro.fechaNacimiento);
+            const fila = adicional.sumas.find((s) => (
+              Number(s.suma_asegurada) === sumaValue &&
+              s.edad_min != null && s.edad_max != null &&
+              edadMiembro >= s.edad_min && edadMiembro <= s.edad_max
+            ));
+            return total + (fila ? Number(fila.prima) || 0 : 0);
+          }, 0);
+        } else {
+          const sumaObj = adicional.sumas.find((s) => Number(s.suma_asegurada) === sumaValue);
+          primaCalculada = sumaObj ? Number(sumaObj.prima) : 0;
+        }
 
         seleccionados.push({
           key: adicional.key,
           nombre: adicional.nombre,
           sumaAsegurada: sumaValue,
-          prima: sumaObj ? Number(sumaObj.prima) : 0,
+          prima: primaCalculada,
           porServicio: false,
           isMaternidad: !!adicional.isMaternidad,
         });
@@ -1038,7 +1058,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const sumas = (cov.sumas || []).filter((s) => s.suma_asegurada != null && s.prima != null);
       if (!sumas.length) return;
-      adicionales.push({ key: def.key, nombre: def.label, sumas, porServicio: false, isMaternidad: false });
+      // Funerarios + Mercantil Seguros: cada suma trae también edad_min/edad_max,
+      // así que la prima no es un valor fijo por cotización, sino que se calcula
+      // sumando por cada familiar según el tramo etario que le corresponde.
+      const porEdadFamiliar = sumas.some((s) => s.edad_min != null && s.edad_max != null);
+      adicionales.push({ key: def.key, nombre: def.label, sumas, porServicio: false, isMaternidad: false, porEdadFamiliar });
     });
 
     // La Maternidad se mantiene disponible en el mismo modal de "+ Adicionales"
@@ -1351,7 +1375,10 @@ document.addEventListener('DOMContentLoaded', async () => {
               </div>
               <select class="text-input modal-cov-sum" data-index="${index}" style="width: 130px; padding: 4px 8px; font-size: 13px;" ${!isChecked || disabled ? 'disabled' : ''}>
                 <option value="">Suma...</option>
-                ${adicional.sumas.map(s => `<option value="${s.suma_asegurada}" ${seleccionPrevia && Number(seleccionPrevia.sumaAsegurada) === Number(s.suma_asegurada) ? 'selected' : ''}>$${formatCurrencyThousands(s.suma_asegurada)}</option>`).join('')}
+                ${(adicional.porEdadFamiliar
+                  ? Array.from(new Map(adicional.sumas.map((s) => [Number(s.suma_asegurada), s])).values())
+                  : adicional.sumas
+                ).map(s => `<option value="${s.suma_asegurada}" ${seleccionPrevia && Number(seleccionPrevia.sumaAsegurada) === Number(s.suma_asegurada) ? 'selected' : ''}>$${formatCurrencyThousands(s.suma_asegurada)}</option>`).join('')}
               </select>
             `;
           }

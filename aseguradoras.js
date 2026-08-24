@@ -1643,7 +1643,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const sumsContainer = wrap.querySelector('.cov-sums');
     const addBtn = wrap.querySelector('.btn-add-sum');
 
-    function addSumRow(sumaVal = '', primaVal = '') {
+    // Edad mínima/máxima por suma asegurada: solo aplica cuando se activa
+    // explícitamente con setEdadFieldsEnabled(true). Hoy se usa únicamente
+    // para "Funerarios" cuando la aseguradora del plan es Mercantil Seguros
+    // (ver openTarifaModal), para poder tarifar por rango etario del
+    // familiar en vez de una prima única para toda la cotización.
+    let edadFieldsEnabled = false;
+
+    function addSumRow(sumaVal = '', primaVal = '', edadMinVal = '', edadMaxVal = '') {
       const row = document.createElement('div');
       row.className = 'sum-row';
       row.innerHTML = `
@@ -1655,6 +1662,14 @@ document.addEventListener('DOMContentLoaded', async () => {
           <label>Prima</label>
           <div class="input-currency"><span class="input-currency__prefix">$</span><input type="text" inputmode="decimal" class="cov-prima"></div>
         </div>
+        <div class="coverage-card__field cov-edad-field" style="display:none; width:80px;">
+          <label>Edad mín.</label>
+          <input type="number" min="0" max="120" step="1" class="cov-edad-min text-input">
+        </div>
+        <div class="coverage-card__field cov-edad-field" style="display:none; width:80px;">
+          <label>Edad máx.</label>
+          <input type="number" min="0" max="120" step="1" class="cov-edad-max text-input">
+        </div>
         <button type="button" class="btn-remove-sum" title="Quitar esta suma">🗑️</button>
       `;
       const sumaInput = row.querySelector('.cov-suma');
@@ -1663,6 +1678,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       const primaInput = row.querySelector('.cov-prima');
       attachDecimalThousandsFormatter(primaInput);
       setDecimalThousandsValue(primaInput, primaVal);
+      row.querySelector('.cov-edad-min').value = (edadMinVal === '' || edadMinVal == null) ? '' : edadMinVal;
+      row.querySelector('.cov-edad-max').value = (edadMaxVal === '' || edadMaxVal == null) ? '' : edadMaxVal;
       row.querySelector('.btn-remove-sum').addEventListener('click', () => {
         if (sumsContainer.children.length > 1) row.remove();
         applyState();
@@ -1685,6 +1702,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           first.querySelector('.cov-prima').disabled = true;
           first.querySelector('.cov-prima').value = '';
           first.querySelector('.cov-prima-field').style.display = 'none';
+          first.querySelectorAll('.cov-edad-field').forEach((el) => { el.style.display = 'none'; });
+          first.querySelector('.cov-edad-min').value = '';
+          first.querySelector('.cov-edad-max').value = '';
           first.querySelector('.btn-remove-sum').style.display = 'none';
         }
         return;
@@ -1699,6 +1719,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!isOpcional || serviciosCheck.checked) {
         Array.from(sumsContainer.children).forEach((row, idx) => { if (idx > 0) row.remove(); });
       }
+      // Los campos de Edad mín./máx. solo se muestran cuando la cobertura
+      // los tiene habilitados (Funerarios + Mercantil Seguros), está en
+      // "Opcional" y no es por "Servicios" (ahí la prima es fija, sin
+      // variar por edad).
+      const edadVisible = edadFieldsEnabled && isOpcional && !serviciosCheck.checked;
       Array.from(sumsContainer.children).forEach((row) => {
         const sumaInput = row.querySelector('.cov-suma');
         const primaInput = row.querySelector('.cov-prima');
@@ -1719,6 +1744,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         primaInput.disabled = !isOpcional;
         if (!isOpcional) primaInput.value = '';
 
+        const edadMinInput = row.querySelector('.cov-edad-min');
+        const edadMaxInput = row.querySelector('.cov-edad-max');
+        row.querySelectorAll('.cov-edad-field').forEach((el) => { el.style.display = edadVisible ? '' : 'none'; });
+        edadMinInput.disabled = !edadVisible;
+        edadMaxInput.disabled = !edadVisible;
+        if (!edadVisible) { edadMinInput.value = ''; edadMaxInput.value = ''; }
+
         row.querySelector('.btn-remove-sum').style.display = (isOpcional && sumsContainer.children.length > 1) ? 'inline-flex' : 'none';
       });
     }
@@ -1732,24 +1764,40 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     return {
       element: wrap,
+      setEdadFieldsEnabled(enabled) {
+        edadFieldsEnabled = !!enabled;
+        applyState();
+      },
       setData(data) {
         estadoSelect.value = data?.estado || 'No contempla';
         serviciosCheck.checked = !!data?.servicios;
         sumsContainer.innerHTML = '';
         const sums = (data?.sumas && data.sumas.length) ? data.sumas : [{ suma_asegurada: '', prima: '' }];
-        sums.forEach((s) => addSumRow(s.suma_asegurada, s.prima));
+        sums.forEach((s) => addSumRow(s.suma_asegurada, s.prima, s.edad_min, s.edad_max));
         applyState();
       },
       getData() {
-        const sums = Array.from(sumsContainer.children).map((row) => ({
-          suma_asegurada: getThousandsValue(row.querySelector('.cov-suma')),
-          prima: getDecimalThousandsValue(row.querySelector('.cov-prima')),
-        })).filter((s) => s.suma_asegurada !== null || s.prima !== null);
+        const sums = Array.from(sumsContainer.children).map((row) => {
+          const base = {
+            suma_asegurada: getThousandsValue(row.querySelector('.cov-suma')),
+            prima: getDecimalThousandsValue(row.querySelector('.cov-prima')),
+          };
+          if (edadFieldsEnabled) {
+            const eMin = row.querySelector('.cov-edad-min').value;
+            const eMax = row.querySelector('.cov-edad-max').value;
+            base.edad_min = eMin === '' ? null : Number(eMin);
+            base.edad_max = eMax === '' ? null : Number(eMax);
+          }
+          return base;
+        }).filter((s) => s.suma_asegurada !== null || s.prima !== null);
         return { estado: estadoSelect.value, servicios: serviciosCheck.checked, sumas: sums };
       },
       // Reglas de obligatoriedad:
       // - Incluido + Servicios desmarcado: Suma Asegurada obligatoria.
       // - Opcional + Servicios desmarcado: Suma Asegurada y Prima obligatorias.
+      //   Si además tiene Edad habilitada (Funerarios + Mercantil Seguros),
+      //   Edad mínima y máxima también son obligatorias y deben ser un
+      //   rango válido (0–120, mínima ≤ máxima).
       // - Servicios marcado (Incluido u Opcional): sin validación (campos deshabilitados).
       validate() {
         const estado = estadoSelect.value;
@@ -1765,6 +1813,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             const primaVal = getDecimalThousandsValue(row.querySelector('.cov-prima'));
             if (primaVal === null) {
               return { valid: false, message: `${def.label}: la Prima es obligatoria.` };
+            }
+            if (edadFieldsEnabled) {
+              const eMinRaw = row.querySelector('.cov-edad-min').value;
+              const eMaxRaw = row.querySelector('.cov-edad-max').value;
+              if (eMinRaw === '' || eMaxRaw === '') {
+                return { valid: false, message: `${def.label}: la Edad mínima y máxima son obligatorias para cada suma asegurada.` };
+              }
+              const eMin = Number(eMinRaw);
+              const eMax = Number(eMaxRaw);
+              if (eMin < 0 || eMax > 120 || eMin > eMax) {
+                return { valid: false, message: `${def.label}: el rango de edad ingresado no es válido.` };
+              }
             }
           }
         }
@@ -2049,6 +2109,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     tarifaForm.reset();
     clearFeedback('tarifaFormFeedback');
     setFormControlsForcedDisabled(tarifaForm, false);
+
+    // Funerarios con edad por rango: solo cuando la aseguradora del plan es
+    // Mercantil Seguros. Debe fijarse ANTES de resetTarifaCoverageControls()
+    // (que llama setData) para que las filas se dibujen ya con los campos
+    // de Edad mínima/máxima visibles u ocultos según corresponda.
+    const aseguradoraNombrePlan = (allAseguradoras.find((a) => a.id === plan.aseguradora_id)?.nombre || '').trim().toLowerCase();
+    tarifaCoverageControls.funerarios.setEdadFieldsEnabled(aseguradoraNombrePlan === 'mercantil seguros');
 
     resetTarifaCoverageControls();
     renderTarifaRangos(plan);
