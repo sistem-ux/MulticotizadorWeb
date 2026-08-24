@@ -109,12 +109,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (e.target === errorModal) cerrarErrorModal();
   });
 
-  // Referencias a la ventana modal
-  const coveragesModal = document.getElementById('coveragesModal');
-  const closeModalBtn = document.getElementById('closeModalBtn');
-  const modalCoveragesBody = document.getElementById('modalCoveragesBody');
-  const saveCoveragesBtn = document.getElementById('saveCoveragesBtn');
-
   // Referencias al filtro de aseguradoras y a la comparación de planes
   const insurerFilterBar = document.getElementById('insurerFilterBar');
   const comparisonBar = document.getElementById('comparisonBar');
@@ -134,7 +128,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const MAX_PLANES_COMPARACION = 3;
 
   let childCount = 0;
-  let currentSelectedPlanId = null; // Para saber a qué plan le estamos agregando adicionales
   let planSelectionOrder = []; // IDs de los planes marcados para comparar, en orden de selección
   let planesDisponiblesActuales = []; // Últimos planes traídos de Supabase (sin filtrar por aseguradora)
   let integrantesActuales = []; // Últimos integrantes usados para calcular la cotización
@@ -885,7 +878,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   modifyDataBtn.addEventListener('click', () => {
     planSelectionOrder = [];
-    currentSelectedPlanId = null;
     planesDisponiblesActuales = [];
     integrantesActuales = [];
     activeInsurerFilters.clear();
@@ -902,107 +894,99 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   /* =========================================================
-     4. FUNCIONAMIENTO DE LA VENTANA MODAL 
+     4. COBERTURAS ADICIONALES EMBEBIDAS EN LA TARJETA DEL PLAN
+     (antes vivían en una ventana modal aparte; ahora se muestran y
+     seleccionan directamente dentro de cada tarjeta mediante
+     interruptores, con la misma configuración/validación de siempre)
      ========================================================= */
-  
-  // Cerrar modal al hacer clic en la "X"
-  closeModalBtn.addEventListener('click', () => {
-    coveragesModal.classList.remove('active');
-  });
 
-  // Guardar adicionales (incluyendo suma y prima) y mostrarlos en el plan
-  // correspondiente. Se guarda el objeto completo (no solo el texto) para
-  // que el motor de cálculo pueda sumar las primas reales.
-  saveCoveragesBtn.addEventListener('click', () => {
-    const rows = modalCoveragesBody.querySelectorAll('div[style*="display: flex"]');
+  // Recorre las filas de adicionales de UNA tarjeta (su propio
+  // .plan-adicionales-list) y reconstruye, a partir de lo que el usuario
+  // tiene activado en los interruptores, el arreglo de selección (con suma
+  // y prima ya calculadas) que el motor de cotización necesita. Si un
+  // interruptor está encendido pero le falta la suma asegurada, esa
+  // cobertura simplemente no se incluye todavía (se marca visualmente con
+  // "has-error") hasta que el usuario la complete.
+  function recalcularSeleccionTarjeta(plan, listContainer) {
+    const rows = listContainer.querySelectorAll('.plan-adicional-row');
     const seleccionados = [];
-    let validacionExitosa = true;
-    const plan = planesDisponiblesActuales.find((p) => p.id === currentSelectedPlanId);
 
-    // Usamos un bucle for tradicional para poder detener la ejecución si falta una suma
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
+    rows.forEach((row) => {
       const chk = row.querySelector('.modal-cov-checkbox');
-      const sel = row.querySelector('.modal-cov-sum');
+      const sel = row.querySelector('.plan-adicional-sum');
 
-      if (chk && chk.checked) {
-        const index = Number(chk.dataset.index);
-        const adicional = plan?.coberturasAdicionales?.[index];
-        if (!adicional) continue;
+      if (!chk || !chk.checked) {
+        if (sel) sel.classList.remove('has-error');
+        return;
+      }
 
-        if (adicional.porServicio) {
-          // Cobertura "por Servicio": no requiere seleccionar suma, la prima
-          // ya viene fija desde la configuración de la tarifa.
-          seleccionados.push({
-            key: adicional.key,
-            nombre: adicional.nombre,
-            sumaAsegurada: null,
-            prima: Number(adicional.prima) || 0,
-            porServicio: true,
-            isMaternidad: !!adicional.isMaternidad,
-          });
-          continue;
-        }
+      const index = Number(chk.dataset.index);
+      const adicional = plan?.coberturasAdicionales?.[index];
+      if (!adicional) return;
 
-        // VALIDACIÓN: Si el checkbox está marcado, el select NO puede estar vacío
-        if (!sel || !sel.value) {
-          const nombreCobertura = row.querySelector('span')?.textContent.trim() || 'la cobertura';
-          mostrarErrorModal(`Por favor selecciona una suma asegurada para la cobertura: ${nombreCobertura}`);
-          validacionExitosa = false;
-          break; // Detenemos el bucle
-        }
-
-        const sumaValue = Number(sel.value);
-
-        let primaCalculada;
-        if (adicional.porEdadFamiliar) {
-          // Se suma, por cada integrante activo de la cotización, la prima
-          // de la fila cuyo edad_min/edad_max contiene su edad actual, para
-          // la suma asegurada elegida. Un integrante fuera de todos los
-          // rangos configurados simplemente no aporta prima (no debería
-          // pasar si los rangos cubren 0–99, pero se evita romper el cálculo).
-          primaCalculada = integrantesActuales.reduce((total, miembro) => {
-            const edadMiembro = getNumericAge(miembro.fechaNacimiento);
-            const fila = adicional.sumas.find((s) => (
-              Number(s.suma_asegurada) === sumaValue &&
-              s.edad_min != null && s.edad_max != null &&
-              edadMiembro >= s.edad_min && edadMiembro <= s.edad_max
-            ));
-            return total + (fila ? Number(fila.prima) || 0 : 0);
-          }, 0);
-        } else {
-          const sumaObj = adicional.sumas.find((s) => Number(s.suma_asegurada) === sumaValue);
-          primaCalculada = sumaObj ? Number(sumaObj.prima) : 0;
-        }
-
+      if (adicional.porServicio) {
+        // Cobertura "por Servicio": no requiere seleccionar suma, la prima
+        // ya viene fija desde la configuración de la tarifa.
         seleccionados.push({
           key: adicional.key,
           nombre: adicional.nombre,
-          sumaAsegurada: sumaValue,
-          prima: primaCalculada,
-          porServicio: false,
+          sumaAsegurada: null,
+          prima: Number(adicional.prima) || 0,
+          porServicio: true,
           isMaternidad: !!adicional.isMaternidad,
         });
+        return;
       }
-    }
 
-    // Si la validación falló (falta alguna suma), detenemos la función aquí
-    if (!validacionExitosa) {
-      return; 
-    }
+      // Si el interruptor está encendido, el select de suma NO puede estar
+      // vacío para poder calcular la prima; mientras tanto se marca el error
+      // visualmente y se valida de forma definitiva al presionar "Comparar".
+      if (!sel || !sel.value) {
+        if (sel) sel.classList.add('has-error');
+        return;
+      }
+      sel.classList.remove('has-error');
 
-    // Si todo está correcto, guardamos en el estado persistente (sobrevive a
-    // que las tarjetas se vuelvan a dibujar, p. ej. al cambiar el filtro de
-    // aseguradora) y actualizamos la vista antes de cerrar el modal.
-    coberturasSeleccionadasPorPlan[currentSelectedPlanId] = seleccionados;
-    aplicarTextoCoberturasEnTarjeta(currentSelectedPlanId);
+      const sumaValue = Number(sel.value);
+      let primaCalculada;
+      if (adicional.porEdadFamiliar) {
+        // Se suma, por cada integrante activo de la cotización, la prima
+        // de la fila cuyo edad_min/edad_max contiene su edad actual, para
+        // la suma asegurada elegida. Un integrante fuera de todos los
+        // rangos configurados simplemente no aporta prima (no debería
+        // pasar si los rangos cubren 0–99, pero se evita romper el cálculo).
+        primaCalculada = integrantesActuales.reduce((total, miembro) => {
+          const edadMiembro = getNumericAge(miembro.fechaNacimiento);
+          const fila = adicional.sumas.find((s) => (
+            Number(s.suma_asegurada) === sumaValue &&
+            s.edad_min != null && s.edad_max != null &&
+            edadMiembro >= s.edad_min && edadMiembro <= s.edad_max
+          ));
+          return total + (fila ? Number(fila.prima) || 0 : 0);
+        }, 0);
+      } else {
+        const sumaObj = adicional.sumas.find((s) => Number(s.suma_asegurada) === sumaValue);
+        primaCalculada = sumaObj ? Number(sumaObj.prima) : 0;
+      }
 
-    coveragesModal.classList.remove('active');
-  });
+      seleccionados.push({
+        key: adicional.key,
+        nombre: adicional.nombre,
+        sumaAsegurada: sumaValue,
+        prima: primaCalculada,
+        porServicio: false,
+        isMaternidad: !!adicional.isMaternidad,
+      });
+    });
 
-  // Pinta (o limpia) el texto de adicionales de una tarjeta a partir del
-  // estado persistente. Se usa tanto al guardar en el modal como al volver
-  // a renderizar las tarjetas (por ejemplo, tras cambiar el filtro).
+    coberturasSeleccionadasPorPlan[plan.id] = seleccionados;
+    aplicarTextoCoberturasEnTarjeta(plan.id);
+  }
+
+  // Pinta (o limpia) el resumen de adicionales seleccionados de una tarjeta
+  // a partir del estado persistente. Se usa tanto al cambiar un interruptor
+  // como al volver a renderizar las tarjetas (por ejemplo, tras cambiar el
+  // filtro de aseguradora).
   function aplicarTextoCoberturasEnTarjeta(planId) {
     const targetDiv = document.getElementById(`selected_cov_text_${planId}`);
     if (!targetDiv) return;
@@ -1014,6 +998,98 @@ document.addEventListener('DOMContentLoaded', async () => {
       targetDiv.style.display = 'none';
       targetDiv.textContent = '';
     }
+  }
+
+  // Construye, dentro del contenedor .plan-adicionales-list de una tarjeta,
+  // una fila por cada cobertura adicional del plan, con exactamente la
+  // misma configuración que antes tenía el modal: interruptor (antes
+  // checkbox) + nombre, y si aplica, el desplegable de suma asegurada.
+  function renderAdicionalesEnTarjeta(plan, listContainer, aplicaMaternidad, seleccionActualPlan) {
+    listContainer.innerHTML = '';
+    const adicionales = plan.coberturasAdicionales || [];
+
+    if (adicionales.length === 0) {
+      listContainer.innerHTML = '<p class="plan-adicionales-empty">Sin adicionales disponibles</p>';
+      return;
+    }
+
+    adicionales.forEach((adicional, index) => {
+      let disabled = '';
+      let tachadoAttr = '';
+
+      if (adicional.isMaternidad && !aplicaMaternidad) {
+        disabled = 'disabled';
+        tachadoAttr = 'data-disabled="true" style="color:#A6A9B0; text-decoration:line-through;"';
+      }
+
+      // Verificar si ya estaba seleccionado previamente (estado persistente)
+      const seleccionPrevia = seleccionActualPlan.find((s) => s.key === adicional.key);
+      const isChecked = seleccionPrevia ? 'checked' : '';
+
+      const row = document.createElement('div');
+      row.className = 'plan-adicional-row';
+
+      if (adicional.porServicio) {
+        // Cobertura "por Servicio": no hay Suma Asegurada que elegir,
+        // solo se enciende o no el interruptor (la Prima ya está fija en el plan).
+        row.innerHTML = `
+          <label class="plan-adicional-label" ${tachadoAttr}>
+            <span class="switch">
+              <input type="checkbox" class="modal-cov-checkbox" data-key="${adicional.key}" data-index="${index}" ${disabled} ${isChecked}>
+              <span class="slider"></span>
+            </span>
+            <span class="plan-adicional-name">${adicional.nombre} ${disabled ? '(No aplica)' : ''}</span>
+          </label>
+        `;
+      } else {
+        row.innerHTML = `
+          <label class="plan-adicional-label" ${tachadoAttr}>
+            <span class="switch">
+              <input type="checkbox" class="modal-cov-checkbox" data-key="${adicional.key}" data-index="${index}" ${disabled} ${isChecked}>
+              <span class="slider"></span>
+            </span>
+            <span class="plan-adicional-name">${adicional.nombre} ${disabled ? '(No aplica)' : ''}</span>
+          </label>
+          <select class="text-input plan-adicional-sum" data-index="${index}" ${!isChecked || disabled ? 'disabled' : ''}>
+            <option value="">Suma...</option>
+            ${(adicional.porEdadFamiliar
+              ? Array.from(new Map(adicional.sumas.map((s) => [Number(s.suma_asegurada), s])).values())
+              : adicional.sumas
+            ).map(s => `<option value="${s.suma_asegurada}" ${seleccionPrevia && Number(seleccionPrevia.sumaAsegurada) === Number(s.suma_asegurada) ? 'selected' : ''}>$${formatCurrencyThousands(s.suma_asegurada)}</option>`).join('')}
+          </select>
+        `;
+      }
+
+      listContainer.appendChild(row);
+
+      // Lógica interactiva: al encender/apagar el interruptor, se
+      // habilita/deshabilita su propio desplegable y se recalcula la
+      // selección completa de la tarjeta (misma función que antes tenía el
+      // botón "Aceptar" del modal).
+      const chk = row.querySelector('.modal-cov-checkbox');
+      const sel = row.querySelector('.plan-adicional-sum');
+
+      chk.addEventListener('change', () => {
+        if (sel) {
+          sel.disabled = !chk.checked;
+          if (!chk.checked) {
+            sel.value = '';
+            sel.classList.remove('has-error');
+          }
+        }
+        recalcularSeleccionTarjeta(plan, listContainer);
+      });
+
+      if (sel) {
+        sel.addEventListener('change', () => {
+          recalcularSeleccionTarjeta(plan, listContainer);
+        });
+      }
+    });
+
+    // Recalcula de una vez la selección inicial (por si hay adicionales
+    // restaurados desde el estado persistente, p. ej. al cambiar el filtro).
+    recalcularSeleccionTarjeta(plan, listContainer);
   }
 
   /* =========================================================
@@ -1261,6 +1337,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   /* =========================================================
      5.2 RENDERIZADO DE TARJETAS DE PLANES (grid de 3 en 3)
      ========================================================= */
+
+  // Al cambiar el tamaño de la ventana el texto puede reacomodarse (menos
+  // columnas, saltos de línea distintos), así que se vuelve a igualar la
+  // altura de las tarjetas sin necesidad de reconstruirlas.
+  let resizeAlturaTarjetasTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeAlturaTarjetasTimer);
+    resizeAlturaTarjetasTimer = setTimeout(() => {
+      if (typeof igualarAlturaTarjetas === 'function') igualarAlturaTarjetas();
+    }, 150);
+  });
+
   function renderPlanCards(planes) {
     plansContainer.innerHTML = '';
     plansContainer.className = 'plans-grid';
@@ -1294,20 +1382,30 @@ document.addEventListener('DOMContentLoaded', async () => {
           <p class="plan-details">Ded. Ext: $${formatCurrencyThousands(plan.deducible_exterior)}</p>
         </div>
 
-        <div class="plan-actions-row">
-          <button type="button" class="btn btn--secondary open-modal-btn" style="padding: 6px 12px; font-size: 13px;">+ Adicionales</button>
-          <div class="plan-selection-badge">Sin seleccionar</div>
+        <div class="plan-adicionales-section">
+          <p class="plan-adicionales-title">Coberturas Adicionales</p>
+          <div class="plan-adicionales-list"></div>
         </div>
 
-        <!-- Aquí aparecerán los adicionales seleccionados -->
+        <!-- Aquí aparece el resumen de los adicionales seleccionados -->
         <div id="selected_cov_text_${plan.id}" class="selected-coverages-text" style="display: none;"></div>
 
-        <button type="button" class="btn btn--primary select-plan-btn" style="width: 100%;">Comparar</button>
+        <div class="plan-footer">
+          <div class="plan-selection-badge">Sin seleccionar</div>
+          <button type="button" class="btn btn--primary select-plan-btn" style="width: 100%;">Comparar</button>
+        </div>
       `;
 
       plansContainer.appendChild(card);
       applyPlanSelectionState(card, plan.id);
-      aplicarTextoCoberturasEnTarjeta(plan.id); // Restaura adicionales guardados previamente (persisten entre filtros)
+
+      // Construye, dentro de la propia tarjeta, las filas de adicionales
+      // con interruptores (misma configuración que antes tenía el modal) y
+      // restaura la selección guardada previamente (persiste entre filtros).
+      const aplicaMaternidad = aplicaMaternidadParaPlan(plan);
+      const seleccionActualPlan = coberturasSeleccionadasPorPlan[plan.id] || [];
+      const listContainer = card.querySelector('.plan-adicionales-list');
+      renderAdicionalesEnTarjeta(plan, listContainer, aplicaMaternidad, seleccionActualPlan);
 
       const selectPlanBtn = card.querySelector('.select-plan-btn');
       selectPlanBtn.addEventListener('click', () => {
@@ -1321,6 +1419,21 @@ document.addEventListener('DOMContentLoaded', async () => {
           return;
         }
 
+        // Validación: si algún interruptor de adicional está encendido pero
+        // le falta la suma asegurada, no se permite comparar ese plan
+        // todavía (misma validación que antes hacía el botón "Aceptar").
+        const filaPendiente = Array.from(listContainer.querySelectorAll('.plan-adicional-row')).find((row) => {
+          const chk = row.querySelector('.modal-cov-checkbox');
+          const sel = row.querySelector('.plan-adicional-sum');
+          return chk && chk.checked && sel && !sel.value;
+        });
+        if (filaPendiente) {
+          const nombreCobertura = filaPendiente.querySelector('.plan-adicional-name')?.textContent.trim() || 'la cobertura';
+          filaPendiente.querySelector('.plan-adicional-sum')?.classList.add('has-error');
+          mostrarErrorModal(`Por favor selecciona una suma asegurada para la cobertura: ${nombreCobertura}`);
+          return;
+        }
+
         if (planSelectionOrder.length >= MAX_PLANES_COMPARACION) {
           mostrarErrorModal(`Puedes comparar un máximo de ${MAX_PLANES_COMPARACION} planes. Quita uno para agregar otro.`);
           return;
@@ -1331,79 +1444,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateComparisonBar();
         resetFinalizeState();
       });
-
-      // Evento para abrir el modal y pintar los checkboxes dinámicamente
-      const btnOpenModal = card.querySelector('.open-modal-btn');
-      btnOpenModal.addEventListener('click', () => {
-        currentSelectedPlanId = plan.id;
-        modalCoveragesBody.innerHTML = ''; // Limpiar modal anterior
-
-        const aplicaMaternidad = aplicaMaternidadParaPlan(plan);
-        const seleccionActualPlan = coberturasSeleccionadasPorPlan[plan.id] || [];
-
-        plan.coberturasAdicionales.forEach((adicional, index) => {
-          let disabled = '';
-          let tachado = '';
-
-          if (adicional.isMaternidad && !aplicaMaternidad) {
-            disabled = 'disabled';
-            tachado = 'style="color:#A6A9B0; text-decoration:line-through;"';
-          }
-
-          // Verificar si ya estaba seleccionado previamente (estado persistente)
-          const seleccionPrevia = seleccionActualPlan.find((s) => s.key === adicional.key);
-          const isChecked = seleccionPrevia ? 'checked' : '';
-
-          // Contenedor por cada adicional (Fila: Checkbox + Nombre + Select de Suma)
-          const itemRow = document.createElement('div');
-          itemRow.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px;';
-
-          if (adicional.porServicio) {
-            // Cobertura "por Servicio": no hay Suma Asegurada que elegir,
-            // solo se selecciona o no (la Prima ya está fija en el plan).
-            itemRow.innerHTML = `
-              <div ${tachado} style="display:flex; align-items:center; gap:8px; cursor:pointer; flex: 1;">
-                <input type="checkbox" class="modal-cov-checkbox" data-key="${adicional.key}" data-index="${index}" ${disabled} ${isChecked}>
-                <span style="font-size: 14px;">${adicional.nombre} ${disabled ? '(No aplica)' : ''}</span>
-              </div>
-            `;
-          } else {
-            itemRow.innerHTML = `
-              <div ${tachado} style="display:flex; align-items:center; gap:8px; cursor:pointer; flex: 1;">
-                <input type="checkbox" class="modal-cov-checkbox" data-key="${adicional.key}" data-index="${index}" ${disabled} ${isChecked}>
-                <span style="font-size: 14px;">${adicional.nombre} ${disabled ? '(No aplica)' : ''}</span>
-              </div>
-              <select class="text-input modal-cov-sum" data-index="${index}" style="width: 130px; padding: 4px 8px; font-size: 13px;" ${!isChecked || disabled ? 'disabled' : ''}>
-                <option value="">Suma...</option>
-                ${(adicional.porEdadFamiliar
-                  ? Array.from(new Map(adicional.sumas.map((s) => [Number(s.suma_asegurada), s])).values())
-                  : adicional.sumas
-                ).map(s => `<option value="${s.suma_asegurada}" ${seleccionPrevia && Number(seleccionPrevia.sumaAsegurada) === Number(s.suma_asegurada) ? 'selected' : ''}>$${formatCurrencyThousands(s.suma_asegurada)}</option>`).join('')}
-              </select>
-            `;
-          }
-
-          modalCoveragesBody.appendChild(itemRow);
-
-          // Lógica interactiva: al tildar el checkbox, se habilita/deshabilita su propio desplegable
-          const chk = itemRow.querySelector('.modal-cov-checkbox');
-          const sel = itemRow.querySelector('.modal-cov-sum');
-
-          if (sel) {
-            chk.addEventListener('change', () => {
-              if (chk.checked) {
-                sel.disabled = false;
-              } else {
-                sel.disabled = true;
-                sel.value = '';
-              }
-            });
-          }
-        });
-
-        coveragesModal.classList.add('active');
-      });
     });
+
+    // Todas las tarjetas deben verse del mismo tamaño, con el botón
+    // "Comparar" siempre al final: se mide la altura natural de cada una
+    // (la más alta será, por construcción, la de la aseguradora con más
+    // adicionales) y esa medida se fija como alto para todas.
+    igualarAlturaTarjetas();
+  }
+
+  // Iguala la altura de todas las tarjetas de planes visibles a la de la
+  // tarjeta más alta (la del plan con más coberturas adicionales define,
+  // en la práctica, esa medida).
+  function igualarAlturaTarjetas() {
+    const cards = plansContainer.querySelectorAll('.plan-item');
+    if (cards.length === 0) return;
+
+    // Se libera cualquier alto fijo previo para medir el alto natural real.
+    cards.forEach((c) => { c.style.height = 'auto'; });
+
+    let maxHeight = 0;
+    cards.forEach((c) => {
+      maxHeight = Math.max(maxHeight, c.getBoundingClientRect().height);
+    });
+
+    cards.forEach((c) => { c.style.height = `${Math.ceil(maxHeight)}px`; });
   }
 
   /* =========================================================

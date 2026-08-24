@@ -274,6 +274,118 @@
       border-color: #C0392B;
       box-shadow: 0 0 0 2px rgba(192, 57, 43, 0.15);
     }
+
+    /* Sección de Coberturas Adicionales embebida dentro de la tarjeta del
+       plan (reemplaza el antiguo modal "+ Adicionales"). */
+    .plan-adicionales-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 6px;
+      padding-top: 10px;
+      border-top: 1px dashed #cbd5e1;
+    }
+    .plan-adicionales-title {
+      font-family: 'Poppins', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #64748b;
+      margin: 0;
+    }
+    .plan-adicionales-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .plan-adicionales-empty {
+      font-size: 12px;
+      color: #A6A9B0;
+      margin: 0;
+    }
+    .plan-adicional-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .plan-adicional-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      min-width: 0;
+      cursor: pointer;
+    }
+    .plan-adicional-name {
+      font-size: 13px;
+      color: #334155;
+      line-height: 1.25;
+    }
+    .plan-adicional-sum {
+      width: 118px;
+      flex-shrink: 0;
+      padding: 4px 6px;
+      font-size: 12px;
+    }
+    /* Interruptor (switch) que reemplaza el checkbox de selección de
+       adicionales, con exactamente el mismo comportamiento (marcar /
+       desmarcar la cobertura). */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .switch .slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background-color: #cbd5e1;
+      transition: background-color 0.2s ease;
+      border-radius: 999px;
+    }
+    .switch .slider::before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: #ffffff;
+      transition: transform 0.2s ease;
+      border-radius: 50%;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.25);
+    }
+    .switch input:checked + .slider {
+      background-color: #2C7D3C;
+    }
+    .switch input:checked + .slider::before {
+      transform: translateX(16px);
+    }
+    .switch input:disabled + .slider {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .plan-adicional-label[data-disabled="true"] {
+      cursor: not-allowed;
+    }
+    /* Pie de la tarjeta (badge + botón "Comparar"): siempre anclado al
+       final de la tarjeta, sin importar cuántos adicionales tenga. */
+    .plan-footer {
+      margin-top: auto;
+      padding-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
     /* Estilos del Modal (Ventana Emergente) */
     .modal-overlay {
       display: none;
@@ -395,11 +507,9 @@
       .plans-grid { grid-template-columns: 1fr; }
     }
     .plans-grid .plan-item {
-      height: 100%;
       justify-content: flex-start;
-    }
-    .plans-grid .select-plan-btn {
-      margin-top: auto;
+      /* La altura final (fija, igual para todas las tarjetas) la asigna
+         el JS en función de la tarjeta con más adicionales. */
     }
     .plan-insurer-tag {
       display: inline-block;
@@ -880,22 +990,6 @@
       </div>
       <div class="modal-footer">
         <button type="button" id="errorModalOkBtn" class="btn btn--primary" style="padding: 8px 16px; font-size: 14px;">Entendido</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- VENTANA EMERGENTE (MODAL) PARA SELECCIONAR ADICIONALES -->
-  <div id="coveragesModal" class="modal-overlay">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 class="modal-title">Seleccionar Coberturas Adicionales</h3>
-        <button type="button" id="closeModalBtn" class="modal-close-btn">&times;</button>
-      </div>
-      <div id="modalCoveragesBody" class="modal-body">
-        <!-- Los checkboxes de adicionales se cargarán aquí dinámicamente -->
-      </div>
-      <div class="modal-footer">
-        <button type="button" id="saveCoveragesBtn" class="btn btn--primary" style="padding: 8px 16px; font-size: 14px;">Aceptar</button>
       </div>
     </div>
   </div>
