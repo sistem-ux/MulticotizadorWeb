@@ -980,24 +980,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     coberturasSeleccionadasPorPlan[plan.id] = seleccionados;
-    aplicarTextoCoberturasEnTarjeta(plan.id);
-  }
-
-  // Pinta (o limpia) el resumen de adicionales seleccionados de una tarjeta
-  // a partir del estado persistente. Se usa tanto al cambiar un interruptor
-  // como al volver a renderizar las tarjetas (por ejemplo, tras cambiar el
-  // filtro de aseguradora).
-  function aplicarTextoCoberturasEnTarjeta(planId) {
-    const targetDiv = document.getElementById(`selected_cov_text_${planId}`);
-    if (!targetDiv) return;
-    const seleccionados = coberturasSeleccionadasPorPlan[planId] || [];
-    if (seleccionados.length > 0) {
-      targetDiv.style.display = 'block';
-      targetDiv.textContent = `Adicionales: ${seleccionados.map((s) => s.porServicio ? s.nombre : `${s.nombre} ($${formatCurrencyThousands(s.sumaAsegurada)})`).join(', ')}`;
-    } else {
-      targetDiv.style.display = 'none';
-      targetDiv.textContent = '';
-    }
+    // Cualquier interacción (encender/apagar un adicional, elegir una
+    // suma) puede, en teoría, cambiar el contenido visible de la tarjeta;
+    // se vuelve a igualar la altura de todas para que ninguna quede más
+    // alta que las demás y el botón "Comparar"/"Quitar de comparación"
+    // permanezca siempre visible dentro de la tarjeta.
+    igualarAlturaTarjetas();
   }
 
   // Construye, dentro del contenedor .plan-adicionales-list de una tarjeta,
@@ -1386,9 +1374,6 @@ document.addEventListener('DOMContentLoaded', async () => {
           <p class="plan-adicionales-title">Coberturas Adicionales</p>
           <div class="plan-adicionales-list"></div>
         </div>
-
-        <!-- Aquí aparece el resumen de los adicionales seleccionados -->
-        <div id="selected_cov_text_${plan.id}" class="selected-coverages-text" style="display: none;"></div>
 
         <div class="plan-footer">
           <div class="plan-selection-badge">Sin seleccionar</div>

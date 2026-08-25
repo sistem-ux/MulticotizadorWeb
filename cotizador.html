@@ -261,15 +261,6 @@
       gap: 10px;
       flex-wrap: wrap;
     }
-    .selected-coverages-text {
-      font-size: 13px;
-      color: #2C7D3C;
-      font-weight: 600;
-      background: #e2f8eb;
-      padding: 6px 10px;
-      border-radius: 4px;
-      margin-top: 4px;
-    }
     .text-input.has-error {
       border-color: #C0392B;
       box-shadow: 0 0 0 2px rgba(192, 57, 43, 0.15);
@@ -491,6 +482,15 @@
       background: var(--color-navy);
       color: #FFFFFF;
       border-color: var(--color-navy);
+    }
+
+    /* El cuadro principal de fondo (definido en styles.css) se amplía solo
+       en esta página para que quepan cómodamente las 3 columnas de
+       tarjetas de planes sin que sobresalgan por la derecha. No se toca el
+       tamaño ni el diseño de las tarjetas, solo el ancho del contenedor
+       que las envuelve. */
+    .card {
+      max-width: 1360px;
     }
 
     /* Grid de tarjetas de planes (3 en 3) */
