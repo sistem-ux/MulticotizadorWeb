@@ -113,6 +113,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const insurerFilterBar = document.getElementById('insurerFilterBar');
   const comparisonBar = document.getElementById('comparisonBar');
   const comparisonCountText = document.getElementById('comparisonCountText');
+  const clearComparisonBtn = document.getElementById('clearComparisonBtn');
   const viewComparisonBtn = document.getElementById('viewComparisonBtn');
   const comparisonModal = document.getElementById('comparisonModal');
   const closeComparisonModalBtn = document.getElementById('closeComparisonModalBtn');
@@ -983,8 +984,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Cualquier interacción (encender/apagar un adicional, elegir una
     // suma) puede, en teoría, cambiar el contenido visible de la tarjeta;
     // se vuelve a igualar la altura de todas para que ninguna quede más
-    // alta que las demás y el botón "Comparar"/"Quitar de comparación"
-    // permanezca siempre visible dentro de la tarjeta.
+    // alta que las demás y ninguna tarjeta empuje su contenido fuera del
+    // área visible.
     igualarAlturaTarjetas();
   }
 
@@ -1206,35 +1207,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     return age;
   }
 
-  // Actualiza el estado visual (tarjeta, título, insignia y botón) según si
-  // el plan está marcado o no para comparación. La insignia solo indica
-  // "Seleccionado", sin número de orden ni fecha/hora.
+  // Actualiza el estado visual (tarjeta, título, insignia e interruptor)
+  // según si el plan está marcado o no para comparación. La insignia solo
+  // indica "Seleccionado" / "No Seleccionado", sin número de orden ni
+  // fecha/hora.
   function applyPlanSelectionState(card, planId) {
     const isSelected = planSelectionOrder.includes(planId);
     const title = card.querySelector('.plan-title');
     const badge = card.querySelector('.plan-selection-badge');
-    const button = card.querySelector('.select-plan-btn');
+    const toggle = card.querySelector('.plan-compare-toggle');
+
+    if (toggle) toggle.checked = isSelected;
 
     if (isSelected) {
       card.classList.add('is-selected');
       title.classList.add('is-selected');
       badge.classList.add('is-active');
       badge.textContent = 'Seleccionado';
-      button.textContent = 'Quitar de comparación';
-      button.classList.remove('btn--primary');
-      button.classList.add('btn--secondary');
     } else {
       card.classList.remove('is-selected');
       title.classList.remove('is-selected');
       badge.classList.remove('is-active');
-      badge.textContent = 'Sin seleccionar';
-      button.textContent = 'Comparar';
-      button.classList.remove('btn--secondary');
-      button.classList.add('btn--primary');
+      badge.textContent = 'No Seleccionado';
     }
   }
 
-  // Actualiza la barra flotante de comparación (contador + botón "Ver comparación")
+  // Actualiza la barra flotante de comparación (contador + botones
+  // "Limpiar" y "Ver comparación")
   function updateComparisonBar() {
     const count = planSelectionOrder.length;
     comparisonCountText.textContent = `${count} de ${MAX_PLANES_COMPARACION} planes seleccionados`;
@@ -1333,6 +1332,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.addEventListener('resize', () => {
     clearTimeout(resizeAlturaTarjetasTimer);
     resizeAlturaTarjetasTimer = setTimeout(() => {
+      if (typeof igualarAlturaAdicionales === 'function') igualarAlturaAdicionales();
       if (typeof igualarAlturaTarjetas === 'function') igualarAlturaTarjetas();
     }, 150);
   });
@@ -1359,6 +1359,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     planes.forEach(plan => {
       const card = document.createElement('div');
       card.className = 'plan-item';
+      card.dataset.planId = plan.id;
 
       card.innerHTML = `
         <div class="plan-header-row">
@@ -1375,9 +1376,12 @@ document.addEventListener('DOMContentLoaded', async () => {
           <div class="plan-adicionales-list"></div>
         </div>
 
-        <div class="plan-footer">
-          <div class="plan-selection-badge">Sin seleccionar</div>
-          <button type="button" class="btn btn--primary select-plan-btn" style="width: 100%;">Comparar</button>
+        <div class="plan-compare-row">
+          <label class="switch">
+            <input type="checkbox" class="plan-compare-toggle">
+            <span class="slider"></span>
+          </label>
+          <div class="plan-selection-badge">No Seleccionado</div>
         </div>
       `;
 
@@ -1392,21 +1396,27 @@ document.addEventListener('DOMContentLoaded', async () => {
       const listContainer = card.querySelector('.plan-adicionales-list');
       renderAdicionalesEnTarjeta(plan, listContainer, aplicaMaternidad, seleccionActualPlan);
 
-      const selectPlanBtn = card.querySelector('.select-plan-btn');
-      selectPlanBtn.addEventListener('click', () => {
+      // El interruptor de comparación reemplaza a los antiguos botones
+      // "Comparar" / "Quitar de comparación" (misma función, sin cambiar
+      // el tamaño de la tarjeta al alternar estado).
+      const compareToggle = card.querySelector('.plan-compare-toggle');
+      compareToggle.addEventListener('change', () => {
         const existingIndex = planSelectionOrder.indexOf(plan.id);
 
-        if (existingIndex >= 0) {
-          planSelectionOrder.splice(existingIndex, 1);
+        if (!compareToggle.checked) {
+          // El usuario está quitando el plan de la comparación
+          if (existingIndex >= 0) {
+            planSelectionOrder.splice(existingIndex, 1);
+          }
           applyPlanSelectionState(card, plan.id);
           updateComparisonBar();
           resetFinalizeState(); // la selección cambió: hay que volver a finalizar antes de exportar
           return;
         }
 
-        // Validación: si algún interruptor de adicional está encendido pero
-        // le falta la suma asegurada, no se permite comparar ese plan
-        // todavía (misma validación que antes hacía el botón "Aceptar").
+        // El usuario está agregando el plan a la comparación: validar que
+        // ningún adicional encendido se haya quedado sin su suma asegurada
+        // (misma validación que antes hacía el botón "Aceptar").
         const filaPendiente = Array.from(listContainer.querySelectorAll('.plan-adicional-row')).find((row) => {
           const chk = row.querySelector('.modal-cov-checkbox');
           const sel = row.querySelector('.plan-adicional-sum');
@@ -1416,11 +1426,13 @@ document.addEventListener('DOMContentLoaded', async () => {
           const nombreCobertura = filaPendiente.querySelector('.plan-adicional-name')?.textContent.trim() || 'la cobertura';
           filaPendiente.querySelector('.plan-adicional-sum')?.classList.add('has-error');
           mostrarErrorModal(`Por favor selecciona una suma asegurada para la cobertura: ${nombreCobertura}`);
+          compareToggle.checked = false;
           return;
         }
 
         if (planSelectionOrder.length >= MAX_PLANES_COMPARACION) {
           mostrarErrorModal(`Puedes comparar un máximo de ${MAX_PLANES_COMPARACION} planes. Quita uno para agregar otro.`);
+          compareToggle.checked = false;
           return;
         }
 
@@ -1431,11 +1443,31 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
     });
 
-    // Todas las tarjetas deben verse del mismo tamaño, con el botón
-    // "Comparar" siempre al final: se mide la altura natural de cada una
-    // (la más alta será, por construcción, la de la aseguradora con más
-    // adicionales) y esa medida se fija como alto para todas.
+    // Todas las tarjetas deben verse del mismo tamaño y la barra separadora
+    // debe caer siempre a la misma altura: primero se iguala la altura de
+    // la zona de adicionales (según la aseguradora que más tenga) y luego
+    // la altura total de la tarjeta, como respaldo ante cualquier otra
+    // diferencia de contenido (p. ej. nombres de producto más largos).
+    igualarAlturaAdicionales();
     igualarAlturaTarjetas();
+  }
+
+  // Iguala la altura del bloque "Coberturas Adicionales" de todas las
+  // tarjetas visibles a la del más alto (el de la aseguradora con más
+  // adicionales), para que la barra separadora que va justo debajo quede
+  // siempre a la misma altura en todas las tarjetas.
+  function igualarAlturaAdicionales() {
+    const listas = plansContainer.querySelectorAll('.plan-adicionales-list');
+    if (listas.length === 0) return;
+
+    listas.forEach((el) => { el.style.minHeight = 'auto'; });
+
+    let maxHeight = 0;
+    listas.forEach((el) => {
+      maxHeight = Math.max(maxHeight, el.getBoundingClientRect().height);
+    });
+
+    listas.forEach((el) => { el.style.minHeight = `${Math.ceil(maxHeight)}px`; });
   }
 
   // Iguala la altura de todas las tarjetas de planes visibles a la de la
@@ -1933,6 +1965,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderComparisonPrintHeader();
     renderComparisonModal();
     comparisonModal.classList.add('active');
+  });
+
+  // "Limpiar": reinicia todas las selecciones de comparación (pone todos
+  // los interruptores de las tarjetas visibles en "No Seleccionado"), sin
+  // afectar los adicionales que el usuario ya haya elegido en cada plan.
+  clearComparisonBtn.addEventListener('click', () => {
+    planSelectionOrder = [];
+    plansContainer.querySelectorAll('.plan-item').forEach((card) => {
+      const planId = card.dataset.planId;
+      if (planId) applyPlanSelectionState(card, planId);
+    });
+    updateComparisonBar();
+    resetFinalizeState();
   });
 
   closeComparisonModalBtn.addEventListener('click', () => {
