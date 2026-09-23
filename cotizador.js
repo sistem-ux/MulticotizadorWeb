@@ -1674,7 +1674,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const vencimiento = computeVencimiento();
     const grupoFamiliarTexto = buildGrupoFamiliarText(integrantesActuales);
 
-    const contactoPartes = [contacto.email, contacto.telefono].filter(Boolean).join(' · ');
+    const contactoPartes = [contacto.telefono].filter(Boolean).join(' · ');
 
     comparisonPrintHeader.innerHTML = `
       <div class="print-header__top">
